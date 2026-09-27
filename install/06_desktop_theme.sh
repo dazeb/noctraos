@@ -110,8 +110,11 @@ if [ -f "$DEFAULT_WP" ]; then
   log "Wallpaper set (cycle with: zom bg next)"
 fi
 
-log "Setting accent color (omarchy-style muted blue)..."
-gs org.gnome.desktop.interface accent-color 'teal'
+if as_user gsettings list-keys org.gnome.desktop.interface 2>/dev/null \
+  | grep '^accent-color$' >/dev/null; then
+  log "Setting desktop accent to purple..."
+  gs org.gnome.desktop.interface accent-color 'purple'
+fi
 
 if as_user gsettings list-schemas 2>/dev/null | grep -q '^org\.gnome\.shell\.extensions\.ding$'; then
   log "Ensuring desktop icons (DING) show Home and Trash..."

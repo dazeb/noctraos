@@ -28,26 +28,29 @@ install/
                             desktop_file_exists(). Modules MUST source it.
   00_preflight.sh           user/sudo/OS/network/25GB-disk/RAM checks
   01_system.sh              apt core + python build deps, Flathub, Nerd Font
-  02_mise.sh                mise binary, profile.d + bash.bashrc hooks, runtimes
+  02_mise.sh                mise binary, profile.d + bash.bashrc hooks, runtimes,
+                            Herdr, Starship, lazygit, lazydocker
   03_ai_core.sh             Ollama + qwen2.5-coder:7b + nomic-embed-text
   04_gui_apps.sh            VSCodium + extensions, Mission Center, Chatbox .deb
+  04_workstation_apps.sh    Omarchy-style Ubuntu/Flathub workstation app set
   05_mouse_ergonomics.sh    Nautilus right-click scripts
   06_desktop_theme.sh       gsettings ergonomics, wallpapers, Agents menu,
                             AI-first /etc/xdg/menus/gnome-applications.menu
   07_persistence.sh         /etc/skel defaults, zom + zom-menu install
-  08_shell_theme.sh         ZorinAI-Dark shell theme (derived, not shipped),
-                            white category icon overrides, GTK purple accent
+  08_shell_theme.sh         ZorinAI-Dark shell + GTK themes (derived, not
+                            shipped), white menu icons, terminal/app palette
 bin/
   zom                       CLI: update | doctor | models [list|pull|rm|gui] | bg [list|next|set]
   zom-menu                  zenity control panel
   zorin-ai-agent            agent launcher wrapper: installs npm package on
                             first use, then execs the agent
 configs/
-  mise/config.toml          node=lts, python=3.12, go=latest
+  mise/config.toml          node=lts, python=3.12, go=latest, terminal tools
   vscodium/                 settings.json, extensions.list, continue_config.yaml
   copyq/copyq.conf          clipboard history preseed (1000 entries, silent, tray)
   autostart/copyq.desktop   CopyQ session autostart (user + /etc/skel)
-  applications/             agent + Local-LLM .desktop launchers, .directory files
+  applications/             agent + Herdr + Local-LLM launchers, .directory files
+  theme/                    Herdr and btop palettes
   xdg/                      gnome-applications.menu (AI-first tree), agents merge
   nautilus-scripts/         Open_in_VSCodium, Ask_AI_to_Explain, Open_Terminal_Here
 assets/
@@ -219,4 +222,4 @@ tail -f /root/zai-build.log
   all green). It is the v0.3 reference install. VM 114 (192.168.8.187) is
   the v0.2 reference.
 - Roadmap ideas: Aider/Goose launchers (non-npm install paths), custom
-  branding assets, GTK corner-radius work, greeter-bug root cause.
+  branding assets, greeter-bug root cause.

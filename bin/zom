@@ -137,6 +137,14 @@ cmd_doctor() {
     [ -n "$node_v" ] && ok "node $node_v (mise)"   || bad "node: not resolving via mise"
     [ -n "$py_v" ]   && ok "$py_v (mise)"          || bad "python: not resolving via mise"
     [ -n "$go_v" ]   && ok "go $go_v (mise)"       || bad "go: not resolving via mise"
+    herdr_v="$(mise where herdr >/dev/null 2>&1 && mise exec herdr -- herdr --version 2>/dev/null | head -n 1 || true)"
+    [ -n "$herdr_v" ] && ok "Herdr: $herdr_v" || bad "Herdr: missing from mise"
+    starship_v="$(mise where starship >/dev/null 2>&1 && mise exec starship -- starship --version 2>/dev/null | head -n 1 || true)"
+    [ -n "$starship_v" ] && ok "Starship: $starship_v" || bad "Starship: missing from mise"
+    for tool in lazygit lazydocker; do
+      mise where "$tool" >/dev/null 2>&1 \
+        && ok "$tool: installed via mise" || bad "$tool: missing from mise"
+    done
   else
     bad "mise: not installed"
   fi

@@ -6,6 +6,10 @@
 node = "lts"
 python = "3.12"
 go = "latest"
+herdr = "latest"
+starship = "latest"
+lazygit = "latest"
+lazydocker = "latest"
 
 [settings]
 experimental = true

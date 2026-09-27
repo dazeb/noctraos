@@ -40,6 +40,29 @@ else
     "$TARGET_HOME/.config/VSCodium/User/settings.json"
 fi
 
+# Existing installs keep their editor preferences. Add only palette keys that
+# have not been customized by the user.
+if ! as_user python3 - "$REPO_ROOT/configs/vscodium/settings.json" \
+  "$TARGET_HOME/.config/VSCodium/User/settings.json" <<'PYEOF'; then
+import json
+import pathlib
+import sys
+
+template = json.loads(pathlib.Path(sys.argv[1]).read_text())
+path = pathlib.Path(sys.argv[2])
+settings = json.loads(path.read_text())
+colors = settings.setdefault("workbench.colorCustomizations", {})
+changed = False
+for key, value in template["workbench.colorCustomizations"].items():
+    if key not in colors:
+        colors[key] = value
+        changed = True
+if changed:
+    path.write_text(json.dumps(settings, indent=2) + "\n")
+PYEOF
+  warn "Could not merge Zorin AI colors into VSCodium settings"
+fi
+
 if as_user test -f "$TARGET_HOME/.continue/config.yaml"; then
   log "OK: Continue.dev config already present"
 else

@@ -63,7 +63,24 @@ else
     "$TARGET_HOME/.config/mise/config.toml"
 fi
 
-log "Installing runtimes (Node LTS, Python 3.12, Go). First Python install compiles from source — this can take several minutes..."
+log "Installing runtimes and terminal tools (Node LTS, Python 3.12, Go, Herdr, Starship, lazygit, lazydocker). First Python install compiles from source — this can take several minutes..."
 as_user mise install
+
+# Existing users may have a pre-Herdr config. Keep their overrides and ensure
+# the new tool still installs through mise's current Herdr registry entry.
+if ! as_user mise where herdr >/dev/null 2>&1; then
+  log "Installing Herdr through mise for the existing user config..."
+  as_user mise use -g herdr@latest
+fi
+if ! as_user mise where starship >/dev/null 2>&1; then
+  log "Installing Starship through mise for the existing user config..."
+  as_user mise use -g starship@latest
+fi
+for tool in lazygit lazydocker; do
+  if ! as_user mise where "$tool" >/dev/null 2>&1; then
+    log "Installing $tool through mise for the existing user config..."
+    as_user mise use -g "$tool@latest"
+  fi
+done
 
 log "mise setup complete."
