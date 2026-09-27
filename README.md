@@ -122,18 +122,41 @@ Installer flags: `--skip-ai` (no Ollama/model downloads), `--skip-gui`
    provisioner runs on the user's **first desktop login** after installation
    (it prefers a fresh clone from GitHub and falls back to the baked snapshot
    when offline)
-4. rebrands the boot menu to "Zorin-AI OS", resquashes with the original
+4. generates an unattended-install seed from `iso/preseed/zorin-ai.seed.in`
+   (baked at `/preseed/zorin-ai.seed`) and adds an **"Install Zorin-AI OS
+   (unattended)"** entry to the BIOS + UEFI boot menus
+5. rebrands the boot menu to "Zorin-AI OS", resquashes with the original
    compressor, and rewrites the ISO preserving BIOS + UEFI boot equipment
-5. prints the new sha256
+6. prints the new sha256
 
 ```bash
 sudo ./iso/build-zorin-ai-iso.sh Zorin-OS-18.1-Core-64-bit.iso zorin-ai-os-18.1-amd64.iso
-# needs: xorriso, squashfs-tools, git, root, ~25 GiB scratch (WORK_BASE=…)
+# needs: xorriso, squashfs-tools, git, openssl, root, ~25 GiB scratch (WORK_BASE=…)
 ```
 
-Install the resulting ISO like normal Zorin — same installer, same flow.
-On first login a terminal appears, asks once for your sudo password, and
-builds the workstation.
+Two ways to install the result:
+
+- **Interactive** — boot it like normal Zorin and click through the installer
+  ("Try or Install Zorin-AI OS"). On first login a terminal appears, asks once
+  for your sudo password, and builds the workstation.
+- **Fully unattended** — pick "Install Zorin-AI OS (unattended)" (or build with
+  `ZORIN_AI_UNATTENDED=1` to make it the default with a 5 s timeout). The OS
+  installs hands-off (locale, keyboard, whole-disk partitioning, user, GRUB —
+  all preseeded), reboots straight into the new system, and the provisioner
+  starts on its own.
+
+Unattended builds default to **autologin + passwordless sudo** for the created
+user (appliance semantics — the firstboot provisioning runs with zero
+interaction). Set `ZORIN_AI_AUTOLOGIN=0` to keep a locked-down first boot.
+
+Build-time knobs (all optional): `ZORIN_AI_UNATTENDED`, `ZORIN_AI_AUTOLOGIN`,
+`ZORIN_AI_USER` (default `zorin`), `ZORIN_AI_FULLNAME`, `ZORIN_AI_HOSTNAME`
+(default `zorin-ai`), `ZORIN_AI_PASSWORD` (default `zorin-ai`),
+`ZORIN_AI_LOCALE` (`en_US.UTF-8`), `ZORIN_AI_KEYMAP` (`us`),
+`ZORIN_AI_TIMEZONE` (`UTC`).
+
+> **Heads-up:** the baked seed contains the created user's password hash —
+> anyone holding the ISO can read it. Bake throwaway credentials only.
 
 ## Architecture
 
@@ -171,7 +194,7 @@ configs/                 mise, VSCodium, Continue.dev, .desktop launchers,
                          XDG menu tree, Nautilus scripts
 assets/wallpapers/       generator + 5 seeded 4K scenes
 assets/icons/            white SVG glyphs (+ overrides/ for stock icon names)
-iso/                     build-zorin-ai-iso.sh
+iso/                     build script + preseed template for unattended installs
 ```
 
 ## Troubleshooting
@@ -193,11 +216,11 @@ iso/                     build-zorin-ai-iso.sh
 ## Status & roadmap
 
 Tested end-to-end on Zorin OS 18.1 (clean VM, full install, idempotent re-runs,
-first-boot provisioning from the ISO). Current release: **v0.2.0**.
+first-boot provisioning from the ISO, unattended install from the custom ISO).
+Current release: **v0.3.0**.
 
-On the roadmap: unattended OS-install preseeding, more agent launchers
-(Aider, Goose — non-npm install paths), custom branding assets, GTK-level
-corner-radius work.
+On the roadmap: more agent launchers (Aider, Goose — non-npm install paths),
+custom branding assets, GTK-level corner-radius work.
 
 ## License
 

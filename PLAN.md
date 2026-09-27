@@ -292,6 +292,14 @@ Each module: **objective → actions → idempotence guard → acceptance check.
   unattended (modules 00–02 + ollama verified before the model pull hit
   CDN throttling — download speed is environment-dependent, not a pipeline issue).
   Remaining niceties: firmware/branding polish, unattended installer preseeding.
+  **Unattended installer preseeding — done 2026-09-26:** the build script bakes
+  a d-i/Ubiquity seed (`iso/preseed/zorin-ai.seed.in`) and an "Install
+  Zorin-AI OS (unattended)" entry into both boot menus; unattended builds also
+  default to autologin + NOPASSWD sudo so first-boot provisioning is fully
+  hands-off. Boot-test findings folded back as fixes: three unpreseeded keys on
+  Ubiquity's first page, a broken GDM greeter session on Zorin 18.1 (worked
+  around with autologin), casper's remove-medium wait (fixed with `noprompt`),
+  and expired sudo tickets mid-run (fixed with baked NOPASSWD sudoers).
 
 ## 8. GUI acceptance checklist (M3, on the target VM)
 

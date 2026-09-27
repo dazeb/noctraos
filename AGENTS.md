@@ -55,7 +55,10 @@ assets/
   icons/                    white SVG glyphs (agents, Local LLM, category tiles)
   icons/overrides/          white SVGs under STOCK icon names — these replace
                             the system category icons system-wide
-iso/build-zorin-ai-iso.sh   ISO remaster pipeline (runs on the Proxmox node)
+iso/build-zorin-ai-iso.sh   ISO remaster pipeline (runs on the Proxmox node);
+                            ZORIN_AI_UNATTENDED=1 + ZORIN_AI_USER/PASSWORD/…
+                            bake an unattended-install seed and boot entries
+iso/preseed/zorin-ai.seed.in  Ubiquity/d-i seed template for the above
 ```
 
 ## Non-negotiable rules
@@ -105,7 +108,13 @@ iso/build-zorin-ai-iso.sh   ISO remaster pipeline (runs on the Proxmox node)
   ssh dies with the session). ISOs live in `/var/lib/vz/template/iso/`.
 - **RAM pressure**: the node juggles 14 GiB of allocated VMs. Don't start
   extra VMs while builds run; builds peak ~2 GiB.
-- `xorriso`, `git`, `squashfs-tools` are installed on the node (2026-09-25).
+- **local-zfs is nearly full** (~17 GiB free, 2026-09-26): a build's scratch
+  (~15 GiB peak) fits, but delete `zorin-ai-iso-build.*` work dirs afterwards.
+- `xorriso`, `git`, `squashfs-tools`, `openssl` are available on the node.
+- **Unattended ISO build** (v0.3+): the build script clones the provisioner
+  from GitHub for the squashfs, so push first; the seed template is read from
+  the script's own `iso/preseed/` dir. Unattended builds imply autologin +
+  NOPASSWD sudo for the created user.
 
 ## Commands
 
@@ -134,13 +143,15 @@ ssh dazeb@192.168.8.187 'rm -rf ~/.local/share/zorin-ai && mkdir -p ~/.local/sha
 git clone -q git@github.com:dazeb/zorin-ai.git /tmp/zai-clone && find /tmp/zai-clone -type f | wc -l
 gh api repos/dazeb/zorin-ai/commits/heads/main --jq '.sha[0:7] + " " + .commit.message'
 
-# ISO build (on the node)
+# ISO build (on the node — clone fresh so the baked snapshot + seed match main)
 ssh root@192.168.8.195
+git clone -q --depth 1 https://github.com/dazeb/zorin-ai.git /local-zfs/iso-build/zorin-ai-src
 systemd-run --unit=zai-iso --collect bash -c \
-  "WORK_BASE=/local-zfs/iso-build bash /local-zfs/iso-build/build-zorin-ai-iso.sh \
+  "ZORIN_AI_UNATTENDED=1 ZORIN_AI_USER=dazeb ZORIN_AI_PASSWORD=zorin-test-2026 \
+   WORK_BASE=/local-zfs/iso-build bash /local-zfs/iso-build/zorin-ai-src/iso/build-zorin-ai-iso.sh \
    /var/lib/vz/template/iso/Zorin-OS-18.1-Core-64-bit.iso \
-   /var/lib/vz/template/iso/zorin-ai-os-18.1-amd64.iso > /local-zfs/iso-build/build.log 2>&1"
-tail -f /local-zfs/iso-build/build.log
+   /var/lib/vz/template/iso/zorin-ai-os-18.1-amd64.iso > /root/zai-build.log 2>&1"
+tail -f /root/zai-build.log
 ```
 
 ## Known pitfalls (each cost real debugging time)
@@ -165,6 +176,25 @@ tail -f /local-zfs/iso-build/build.log
 - **The first-boot runner falls back to the baked snapshot when `git` is
   absent** (fresh installs). Provisioner now installs openssh-server in
   module 01 for post-install remote access.
+- **Unattended preseed: the first Ubiquity page stops the flow** — the
+  "Updates and other software" page waits for Continue unless
+  `ubiquity/download_updates`, `ubiquity/use_nonfree` and the Zorin-specific
+  `ubiquity/no_zorin_os_census` are all preseeded (found in
+  `usr/lib/ubiquity/plugins/ubi-prepare.py`, not in ubiquity.templates).
+- **The GDM greeter is broken on Zorin 18.1**: gdm starts, the greeter's
+  gnome-session cannot resolve ANY required component (org.freedesktop.systemd1
+  activation fails on the greeter's private bus) → boot hangs at the splash
+  forever. User sessions are fine. Unattended builds therefore default to
+  autologin (writes /etc/gdm3/custom.conf in the squashfs).
+- **Boot-test VMs must boot the disk first** (`--boot order="scsi0;ide2"`):
+  after the unattended install reboots, a cdrom-first VM boots the installer
+  ISO again instead of the new system.
+- **casper waits for "remove installation medium, press ENTER"** unless the
+  kernel cmdline has `noprompt` (see `casper-stop` in the squashfs) — the
+  unattended boot entry carries it, so the installer auto-ejects and reboots.
+- **sudo credentials expire mid-provisioner-run** (~15 min tty ticket): the
+  firstboot flow blocks at the next sudo prompt. Autologin builds bake
+  NOPASSWD sudoers; interactive first boots are fine (user is watching).
 
 ## Verification checklist for any change
 
@@ -178,7 +208,9 @@ tail -f /local-zfs/iso-build/build.log
 
 ## Current state (2026-09-26)
 
-- `main` at v0.2.0; VM 114 runs the fully provisioned reference install.
-- ISO v0.2 on the node: sha256 `d747f013…` (see `.sha256` file next to it).
-- Roadmap ideas: unattended installer preseeding, Aider/Goose launchers
-  (non-npm install paths), custom branding assets, GTK corner-radius work.
+- `main` past v0.2.0: unattended installer preseeding shipped (v0.3.0 line).
+- ISO: `zorin-ai-os-18.1-amd64.iso` on the node is the v0.3 (unattended)
+  build; the v0.2 image is preserved as `zorin-ai-os-18.1-v0.2.iso`.
+- VM 114 runs the v0.2 reference install (autologin already on).
+- Roadmap ideas: Aider/Goose launchers (non-npm install paths), custom
+  branding assets, GTK corner-radius work, greeter-bug root cause.
