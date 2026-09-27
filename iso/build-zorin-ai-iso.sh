@@ -166,6 +166,13 @@ AutomaticLogin=$AI_USER
 
 [debug]
 EOF
+  # Appliance semantics: with autologin there is nobody to re-type the sudo
+  # password when the firstboot provisioner's credential cache expires.
+  mkdir -p "$SQ_ROOT/etc/sudoers.d"
+  cat > "$SQ_ROOT/etc/sudoers.d/90-zorin-ai-firstboot" <<EOF
+$AI_USER ALL=(ALL) NOPASSWD:ALL
+EOF
+  chmod 440 "$SQ_ROOT/etc/sudoers.d/90-zorin-ai-firstboot"
 fi
 
 # --- unattended preseed: bake the seed, add the boot entries ---------------
