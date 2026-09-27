@@ -187,7 +187,9 @@ step "4/7 adding unattended boot entries (BIOS isolinux + UEFI grub)"
 if [ -f "$ISO_TREE/boot/grub/grub.cfg" ]; then
   sed -i 's/Try or Install Zorin OS/Try or Install Zorin-AI OS/g' "$ISO_TREE/boot/grub/grub.cfg" || true
 fi
-SEED_ARGS="file=/cdrom/preseed/zorin-ai.seed auto=true priority=critical automatic-ubiquity"
+# noprompt: casper-stop ejects the medium and reboots without the
+# "Please remove the installation medium, then press ENTER" wait.
+SEED_ARGS="file=/cdrom/preseed/zorin-ai.seed auto=true priority=critical automatic-ubiquity noprompt"
 
 GRUB_ENTRY="menuentry \"Install Zorin-AI OS (unattended)\" --class zorin {
 	set gfxpayload=keep
