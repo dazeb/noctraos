@@ -96,10 +96,11 @@ iso/preseed/zorin-ai.seed.in  Ubiquity/d-i seed template for the above
 
 - **Proxmox node**: `ssh root@192.168.8.195` (key auth, host "files",
   PVE 9.2.20, i7-4770K / 15 GiB RAM). Web-UI password unknown — work over SSH.
-- **Test VM**: VM 114 `zorin-ai-iso-test` at `192.168.8.187`, user `dazeb`,
-  password `zorin-test-2026` (throwaway), our SSH key authorized,
-  passwordless sudo via `/etc/sudoers.d/zai-test`. Booted from the v0.2 ISO
-  and self-provisioned on first login — it is the living reference install.
+- **Test VMs**: VM 110 `zai-zerotouch-test` at `192.168.8.138` (v0.3 zero-touch
+  reference; DHCP — re-scan if the lease moved) and VM 114 `zorin-ai-iso-test`
+  at `192.168.8.187` (v0.2 reference). User `dazeb`, password
+  `zorin-test-2026` (throwaway), our SSH key authorized on both, passwordless
+  sudo via baked NOPASSWD (110) / `/etc/sudoers.d/zai-test` (114).
 - **ISO build** runs on the node, not here. Scratch MUST be on
   `/local-zfs` (`WORK_BASE=/local-zfs/iso-build`) — pve-root has ~8 GiB free
   and the build needs ~25 GiB. The zfs pool is HDD-backed: unsquashfs and
@@ -211,6 +212,11 @@ tail -f /root/zai-build.log
 - `main` past v0.2.0: unattended installer preseeding shipped (v0.3.0 line).
 - ISO: `zorin-ai-os-18.1-amd64.iso` on the node is the v0.3 (unattended)
   build; the v0.2 image is preserved as `zorin-ai-os-18.1-v0.2.iso`.
-- VM 114 runs the v0.2 reference install (autologin already on).
+  pve-root is at 90% — free space before the next build.
+- VM 110 `zai-zerotouch-test` (192.168.8.138, dazeb/zorin-test-2026, DHCP!):
+  installed **fully zero-touch** from the v0.3 ISO on 2026-09-27 (boot →
+  install → reboot → autologin → provision, no interaction; `zom doctor`
+  all green). It is the v0.3 reference install. VM 114 (192.168.8.187) is
+  the v0.2 reference.
 - Roadmap ideas: Aider/Goose launchers (non-npm install paths), custom
   branding assets, GTK corner-radius work, greeter-bug root cause.
