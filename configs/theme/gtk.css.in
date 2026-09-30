@@ -1,0 +1,51 @@
+/* Zorin AI GTK 3/4 overrides. Libadwaita and sandboxed apps may use their
+ * own styles; this does not force GTK_THEME or overwrite user GTK CSS. */
+@define-color theme_bg_color $background;
+@define-color theme_fg_color $foreground;
+@define-color theme_base_color $panel;
+@define-color theme_text_color $foreground;
+@define-color theme_selected_bg_color $accent;
+@define-color theme_selected_fg_color $panel;
+@define-color borders $border;
+@define-color accent_bg_color $accent;
+@define-color accent_fg_color $panel;
+@define-color accent_color $accent;
+window, dialog { background-color: $background; color: $foreground; }
+headerbar, toolbar {
+  background-color: $panel; background-image: none; color: $foreground;
+  border-color: $border; box-shadow: none;
+}
+button, entry, spinbutton, combobox button {
+  background-color: $raised; background-image: none; color: $foreground;
+  border: 1px solid $border; border-radius: ${radius}px; box-shadow: none;
+}
+button:hover { background-color: $selection; border-color: $muted; }
+headerbar button.titlebutton, .titlebar button.titlebutton {
+  background-color: $raised; background-image: none; color: $foreground;
+  border-color: $border; border-radius: ${radius}px; box-shadow: none;
+}
+headerbar button.titlebutton:hover, .titlebar button.titlebutton:hover {
+  background-color: $selection; color: $accent;
+}
+button:focus, entry:focus, spinbutton:focus {
+  border-color: $accent; outline-color: $accent; box-shadow: none;
+}
+button:active, button:checked, button.suggested-action {
+  background-color: $accent; background-image: none; color: $panel;
+}
+button:disabled, entry:disabled { color: $muted; }
+entry, textview, textview text { background-color: $panel; color: $foreground; }
+selection, textview text selection { background-color: $selection; color: $foreground; }
+menu, menuitem, popover, popover contents {
+  background-color: $background; color: $foreground;
+}
+menu, popover contents { border: 1px solid $border; border-radius: ${radius}px; }
+menuitem:hover, row:hover { background-color: $selection; }
+row:selected { background-color: $selection; color: $foreground; }
+check:checked, radio:checked, switch:checked {
+  background-color: $accent; background-image: none; color: $panel; border-color: $accent;
+}
+scale highlight, progressbar progress { background-color: $accent; border-color: $accent; }
+scrollbar slider { background-color: $border; border-radius: ${radius}px; }
+scrollbar slider:hover { background-color: $muted; }
+separator { background-color: $border; }
