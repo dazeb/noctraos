@@ -10,13 +10,19 @@ sudo mkdir -p \
   /etc/skel/.config/herdr \
   /etc/skel/.config/btop/themes \
   /etc/skel/.config/autostart \
+  /etc/skel/.config/Code/User \
   /etc/skel/.continue \
   /etc/skel/.local/share/nautilus/scripts
 
 sudo install -m 644 "$REPO_ROOT/configs/mise/config.toml" \
   /etc/skel/.config/mise/config.toml
-sudo install -m 644 "$REPO_ROOT/configs/vscodium/continue_config.yaml" \
+sudo install -m 644 "$REPO_ROOT/configs/vscode/continue_config.yaml" \
   /etc/skel/.continue/config.yaml
+sudo install -m 644 "$REPO_ROOT/configs/vscode/settings.json" \
+  /etc/skel/.config/Code/User/settings.json
+if [ -f /etc/skel/.local/share/nautilus/scripts/Open_in_VSCodium ]; then
+  sudo rm -f /etc/skel/.local/share/nautilus/scripts/Open_in_VSCodium
+fi
 sudo install -m 644 "$REPO_ROOT/configs/copyq/copyq.conf" \
   /etc/skel/.config/copyq/copyq.conf
 sudo install -m 644 "$REPO_ROOT/configs/theme/herdr.toml" \

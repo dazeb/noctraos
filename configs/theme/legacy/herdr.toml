@@ -1,0 +1,16 @@
+[theme]
+name = "terminal"
+
+[theme.custom]
+panel_bg = "#0b0d14"
+sidebar_bg = "#0b0d14"
+active_row_bg = "#23152f"
+selection_bg = "#39204c"
+text = "#f2f2f7"
+subtext0 = "#a8a6b5"
+accent = "#ff2d95"
+mauve = "#a124ff"
+green = "#39ff88"
+blue = "#58b8ff"
+red = "#ff5b79"
+yellow = "#f9c66e"

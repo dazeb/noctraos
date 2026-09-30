@@ -149,22 +149,15 @@ cmd_doctor() {
     bad "mise: not installed"
   fi
 
-  if command -v codium >/dev/null 2>&1; then
-    ok "VSCodium: $(codium --version 2>/dev/null | head -n 1)"
+  if command -v code >/dev/null 2>&1; then
+    ok "VS Code: $(code --version 2>/dev/null | head -n 1)"
   else
-    bad "VSCodium: missing"
+    bad "VS Code: missing"
   fi
 
   if command -v flatpak >/dev/null 2>&1; then
     flatpak list --app 2>/dev/null | grep -q MissionCenter \
       && ok "Mission Center: installed" || bad "Mission Center: missing"
-  fi
-
-  if dpkg-query -W -f='${Status}' chatbox 2>/dev/null | grep -q 'install ok installed' \
-     || dpkg-query -W -f='${Status}' xyz.chatboxapp.app 2>/dev/null | grep -q 'install ok installed'; then
-    ok "Chatbox: installed"
-  else
-    bad "Chatbox: missing"
   fi
 
   if command -v nvidia-smi >/dev/null 2>&1; then

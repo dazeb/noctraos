@@ -1,0 +1,76 @@
+/* Zorin AI: Omarchy-inspired geometry and Matte Black palette.
+ * Applied after the installed Zorin shell stylesheet. */
+stage { font-family: "JetBrainsMono Nerd Font"; font-size: 10pt; color: #bebebe; }
+#panel { background-color: #0d0d0d; color: #bebebe; box-shadow: none; }
+#panel .panel-button:hover, #panel .panel-button:active,
+#panel .panel-button:checked { background-color: #2a2a2a; border-radius: 4px; }
+.popup-menu-content, .candidate-popup-content,
+.quick-settings, .message-list, .datemenu-calendar-column {
+  background-color: #121212;
+  border: 1px solid #333333;
+  border-radius: 4px;
+  color: #bebebe;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+}
+.popup-menu-item { min-height: 24px; padding: 6px 12px; color: #bebebe; }
+.popup-menu-item:hover, .popup-menu-item:focus, .popup-menu-item.selected {
+  background-color: #2a2a2a; color: #bebebe; border-radius: 4px;
+}
+.popup-menu-item:checked, .popup-menu-item:active {
+  background-color: #2a2a2a; color: #e68e0d;
+}
+.popup-sub-menu { background-color: #0d0d0d; border-radius: 4px; }
+.popup-separator-menu-item .popup-separator-menu-item-separator { background-color: #333333; }
+.search-entry, #overview .search-entry, StEntry {
+  background-color: #0d0d0d; color: #bebebe;
+  border: 1px solid #333333; border-radius: 4px;
+  selection-background-color: #2a2a2a; selected-color: #bebebe;
+}
+.search-entry:focus, #overview .search-entry:focus, StEntry:focus { border-color: #e68e0d; box-shadow: none; }
+#overview .search-entry .search-entry-icon,
+.search-entry .search-entry-icon { color: #8a8a8d; }
+.search-entry .search-entry-icon:hover { color: #e68e0d; }
+.button, .quick-toggle {
+  background-color: #1e1e1e; color: #bebebe;
+  border: 1px solid #333333; border-radius: 4px; box-shadow: none;
+}
+.button:hover, .button:focus, .quick-toggle:hover, .quick-toggle:focus {
+  background-color: #2a2a2a; border-color: #e68e0d;
+}
+.button:active, .button:checked, .quick-toggle:checked {
+  background-color: #e68e0d; color: #0d0d0d;
+}
+.button:insensitive, .quick-toggle:insensitive { color: #8a8a8d; }
+.slider { -barlevel-background-color: #333333; -barlevel-active-background-color: #e68e0d; }
+.toggle-switch:checked { background-color: #e68e0d; }
+.notification-banner, .modal-dialog {
+  background-color: #121212; color: #bebebe;
+  border: 1px solid #333333; border-radius: 4px;
+}
+.modal-dialog-linked-button {
+  background-color: #1e1e1e; color: #bebebe; border-color: #333333;
+}
+.modal-dialog-linked-button:hover, .modal-dialog-linked-button:focus {
+  background-color: #2a2a2a; color: #e68e0d;
+}
+.dash-background { background-color: #0d0d0d; border: 1px solid #333333; border-radius: 4px; }
+.app-well-app:hover .overview-icon, .app-well-app:focus .overview-icon,
+.show-apps:hover .overview-icon { background-color: #2a2a2a; border-radius: 4px; }
+.app-well-app-running-dot { background-color: #e68e0d; }
+/* Installed Zorin Menu/Taskbar extensions add their own stylesheets. */
+.zorin-menu .grid-layout-box .app-item,
+.zorin-menu .session-buttons-section .system-menu-action {
+  border-radius: 4px;
+  color: #bebebe;
+}
+.zorin-menu .grid-layout-box .app-item:hover,
+.zorin-menu .session-buttons-section .system-menu-action:hover,
+.zorin-menu .session-buttons-section .system-menu-action:focus {
+  background-color: #2a2a2a; color: #e68e0d;
+}
+.zorin-menu .vertical-separator { border-color: #333333; }
+.zorintaskbarMainPanel { background-color: #0d0d0d; color: #bebebe; }
+#zorintaskbarThumbnailList .popup-menu-item { border-radius: 4px; }
+#zorintaskbarThumbnailList .window-box { background-color: #1e1e1e; }
+StScrollBar StButton { background-color: #333333; border-radius: 4px; }
+StScrollBar StButton:hover { background-color: #8a8a8d; }

@@ -33,7 +33,6 @@
     <Directory>zorin-ai-local-llm.directory</Directory>
     <Include>
       <Category>X-ZorinAI-LocalLLM</Category>
-      <Filename>xyz.chatboxapp.app.desktop</Filename>
     </Include>
   </Menu>
 

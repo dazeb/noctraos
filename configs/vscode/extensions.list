@@ -1,5 +1,5 @@
 # One extension id per line; '#' starts a comment.
-# VSCodium resolves these from Open VSX.
+# VS Code resolves these from the Visual Studio Marketplace.
 continue.continue
 eamodio.gitlens
 esbenp.prettier-vscode

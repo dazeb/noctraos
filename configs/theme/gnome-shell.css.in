@@ -1,0 +1,76 @@
+/* Zorin AI: Omarchy-inspired geometry and Matte Black palette.
+ * Applied after the installed Zorin shell stylesheet. */
+stage { font-family: "$font"; font-size: 10pt; color: $foreground; }
+#panel { background-color: $panel; color: $foreground; box-shadow: none; }
+#panel .panel-button:hover, #panel .panel-button:active,
+#panel .panel-button:checked { background-color: $selection; border-radius: ${radius}px; }
+.popup-menu-content, .candidate-popup-content,
+.quick-settings, .message-list, .datemenu-calendar-column {
+  background-color: $background;
+  border: 1px solid $border;
+  border-radius: ${radius}px;
+  color: $foreground;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+}
+.popup-menu-item { min-height: 24px; padding: 6px 12px; color: $foreground; }
+.popup-menu-item:hover, .popup-menu-item:focus, .popup-menu-item.selected {
+  background-color: $selection; color: $foreground; border-radius: ${radius}px;
+}
+.popup-menu-item:checked, .popup-menu-item:active {
+  background-color: $selection; color: $accent;
+}
+.popup-sub-menu { background-color: $panel; border-radius: ${radius}px; }
+.popup-separator-menu-item .popup-separator-menu-item-separator { background-color: $border; }
+.search-entry, #overview .search-entry, StEntry {
+  background-color: $panel; color: $foreground;
+  border: 1px solid $border; border-radius: ${radius}px;
+  selection-background-color: $selection; selected-color: $foreground;
+}
+.search-entry:focus, #overview .search-entry:focus, StEntry:focus { border-color: $accent; box-shadow: none; }
+#overview .search-entry .search-entry-icon,
+.search-entry .search-entry-icon { color: $muted; }
+.search-entry .search-entry-icon:hover { color: $accent; }
+.button, .quick-toggle {
+  background-color: $raised; color: $foreground;
+  border: 1px solid $border; border-radius: ${radius}px; box-shadow: none;
+}
+.button:hover, .button:focus, .quick-toggle:hover, .quick-toggle:focus {
+  background-color: $selection; border-color: $accent;
+}
+.button:active, .button:checked, .quick-toggle:checked {
+  background-color: $accent; color: $panel;
+}
+.button:insensitive, .quick-toggle:insensitive { color: $muted; }
+.slider { -barlevel-background-color: $border; -barlevel-active-background-color: $accent; }
+.toggle-switch:checked { background-color: $accent; }
+.notification-banner, .modal-dialog {
+  background-color: $background; color: $foreground;
+  border: 1px solid $border; border-radius: ${radius}px;
+}
+.modal-dialog-linked-button {
+  background-color: $raised; color: $foreground; border-color: $border;
+}
+.modal-dialog-linked-button:hover, .modal-dialog-linked-button:focus {
+  background-color: $selection; color: $accent;
+}
+.dash-background { background-color: $panel; border: 1px solid $border; border-radius: ${radius}px; }
+.app-well-app:hover .overview-icon, .app-well-app:focus .overview-icon,
+.show-apps:hover .overview-icon { background-color: $selection; border-radius: ${radius}px; }
+.app-well-app-running-dot { background-color: $accent; }
+/* Installed Zorin Menu/Taskbar extensions add their own stylesheets. */
+.zorin-menu .grid-layout-box .app-item,
+.zorin-menu .session-buttons-section .system-menu-action {
+  border-radius: ${radius}px;
+  color: $foreground;
+}
+.zorin-menu .grid-layout-box .app-item:hover,
+.zorin-menu .session-buttons-section .system-menu-action:hover,
+.zorin-menu .session-buttons-section .system-menu-action:focus {
+  background-color: $selection; color: $accent;
+}
+.zorin-menu .vertical-separator { border-color: $border; }
+.zorintaskbarMainPanel { background-color: $panel; color: $foreground; }
+#zorintaskbarThumbnailList .popup-menu-item { border-radius: ${radius}px; }
+#zorintaskbarThumbnailList .window-box { background-color: $raised; }
+StScrollBar StButton { background-color: $border; border-radius: ${radius}px; }
+StScrollBar StButton:hover { background-color: $muted; }

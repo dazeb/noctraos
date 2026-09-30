@@ -18,7 +18,7 @@ while true; do
     --title="zorin-ai control panel" \
     --column="Action" --column="What it does" \
     "Update everything"     "apt, Flatpak apps, mise runtimes, AI models" \
-    "Health check (doctor)" "Verify Ollama, mise, VSCodium, Flatpaks, GPU, disk" \
+    "Health check (doctor)" "Verify Ollama, mise, VS Code, Flatpaks, GPU, disk" \
     "Manage AI models"      "Download models from a GUI picker" \
     "About"                 "About zorin-ai" \
     --width=560 --height=340 2>/dev/null)" || exit 0

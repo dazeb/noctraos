@@ -11,14 +11,18 @@ gs org.gnome.desktop.wm.preferences button-layout ':minimize,maximize,close'
 
 log "Enabling system dark mode..."
 gs org.gnome.desktop.interface color-scheme 'prefer-dark'
-gs org.gnome.desktop.interface gtk-theme 'ZorinBlue-Dark'
+# Module 08 selects the custom GTK theme; avoid resetting it on every run.
 
 log "Pinning taskbar favorites (existing entries only)..."
+# Microsoft renamed the stable desktop entry; older packages still use code.desktop.
+VSCODE_DESKTOP=com.microsoft.VSCode.desktop
+if ! desktop_file_exists "$VSCODE_DESKTOP"; then
+  VSCODE_DESKTOP=code.desktop
+fi
 CANDIDATES=(
   zorin-menu.desktop
   org.gnome.Nautilus.desktop
-  codium.desktop
-  xyz.chatboxapp.app.desktop
+  "$VSCODE_DESKTOP"
   io.missioncenter.MissionCenter.desktop
   org.gnome.Terminal.desktop
 )
@@ -112,8 +116,8 @@ fi
 
 if as_user gsettings list-keys org.gnome.desktop.interface 2>/dev/null \
   | grep '^accent-color$' >/dev/null; then
-  log "Setting desktop accent to purple..."
-  gs org.gnome.desktop.interface accent-color 'purple'
+  log "Setting desktop accent to orange..."
+  gs org.gnome.desktop.interface accent-color 'orange'
 fi
 
 if as_user gsettings list-schemas 2>/dev/null | grep -q '^org\.gnome\.shell\.extensions\.ding$'; then

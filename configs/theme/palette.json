@@ -1,0 +1,27 @@
+{
+  "reference": "Omarchy Matte Black, quattro, 8b4eae66da2938ba9559f103b18dbf85cdf28a70",
+  "colors": {
+    "background": "#121212",
+    "panel": "#0d0d0d",
+    "raised": "#1e1e1e",
+    "selection": "#2a2a2a",
+    "border": "#333333",
+    "foreground": "#bebebe",
+    "muted": "#8a8a8d",
+    "accent": "#e68e0d",
+    "red": "#d35f5f",
+    "green": "#ffc107",
+    "yellow": "#e68e0d",
+    "blue": "#e68e0d",
+    "magenta": "#d35f5f",
+    "cyan": "#bebebe"
+  },
+  "terminal": [
+    "#121212", "#d35f5f", "#ffc107", "#e68e0d",
+    "#e68e0d", "#d35f5f", "#bebebe", "#bebebe",
+    "#555555", "#b91c1c", "#ffc107", "#f59e0b",
+    "#f59e0b", "#b91c1c", "#eaeaea", "#eaeaea"
+  ],
+  "font": "JetBrainsMono Nerd Font",
+  "radius": 4
+}
