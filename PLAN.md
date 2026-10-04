@@ -5,6 +5,12 @@
 **Input spec:** "Technical Specification & Implementation Plan: Zorin-AI OS Provisioner" (Omakub-pattern provisioner for Zorin OS 17+ / Ubuntu 22.04–24.04 base)
 **Status:** Phase 1 (provisioner) — scaffolded this session; modules implemented, untested on a target VM.
 
+> **Historical document.** This is the original 2026-09-25 build plan. VSCodium
+> and Chatbox were later replaced by Microsoft VS Code (`code`, `configs/vscode/`)
+> and removed (b6981b4); references below to `codium`, `configs/vscodium/`,
+> `Open_in_VSCodium` and the Chatbox .deb describe the original design. See
+> `AGENTS.md` and `docs/theme-design.md` for the current state.
+
 ---
 
 ## 1. Mission

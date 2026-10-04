@@ -31,7 +31,8 @@ install/
   02_mise.sh                mise binary, profile.d + bash.bashrc hooks, runtimes,
                             Herdr, Starship, lazygit, lazydocker
   03_ai_core.sh             Ollama + qwen2.5-coder:7b + nomic-embed-text
-  04_gui_apps.sh            VSCodium + extensions, Mission Center, Chatbox .deb
+  04_gui_apps.sh            Microsoft VS Code (apt repo) + extensions, Mission Center,
+                            CopyQ; retires codium/chatbox/foot (user data kept)
   04_workstation_apps.sh    Omarchy-style Ubuntu/Flathub workstation app set
   05_mouse_ergonomics.sh    Nautilus right-click scripts
   06_desktop_theme.sh       gsettings ergonomics, wallpapers, Agents menu,
@@ -46,13 +47,14 @@ bin/
                             first use, then execs the agent
 configs/
   mise/config.toml          node=lts, python=3.12, go=latest, terminal tools
-  vscodium/                 settings.json, extensions.list, continue_config.yaml
+  vscode/                   settings.json, extensions.list, continue_config.yaml,
+                            vscode.sources (Microsoft apt repo)
   copyq/copyq.conf          clipboard history preseed (1000 entries, silent, tray)
   autostart/copyq.desktop   CopyQ session autostart (user + /etc/skel)
   applications/             agent + Herdr + Local-LLM launchers, .directory files
   theme/                    Herdr and btop palettes
   xdg/                      gnome-applications.menu (AI-first tree), agents merge
-  nautilus-scripts/         Open_in_VSCodium, Ask_AI_to_Explain, Open_Terminal_Here
+  nautilus-scripts/         Open_in_VS_Code, Ask_AI_to_Explain, Open_Terminal_Here
 assets/
   wallpapers/               5 seeded 4K JPEG scenes + generate-wallpapers.py
   icons/                    white SVG glyphs (agents, Local LLM, category tiles)
@@ -165,9 +167,14 @@ tail -f /root/zai-build.log
   that line; do not silence xorriso's output.
 - **`sudo -v` needs a TTY even under NOPASSWD sudoers** — headless preflight
   uses `sudo -n true` first. Keep that fallback order.
-- **Chatbox package/desktop ids are `xyz.chatboxapp.app`** (not the old
-  Flathub id `xyz.chatboxapp.Chatbox`, which is dead — the vendor CDN
-  `.deb` is the channel).
+- **VS Code replaced VSCodium (b6981b4); Chatbox and Foot are retired.**
+  Module 04 installs `code` from Microsoft's apt repo (key in
+  `/usr/share/keyrings/microsoft.gpg`, source from `configs/vscode/vscode.sources`;
+  `debconf-set-selections` stops the package adding its own repo), then
+  `apt-get remove`s `codium`, `chatbox`, `xyz.chatboxapp.app` and `foot` — never
+  purge/autoremove, user data stays. Legacy `Open_in_VSCodium` Nautilus scripts
+  are deleted by modules 05/07. Settings and Continue config are only seeded
+  when missing, so existing installs keep their old copies.
 - **`zorin-menu.desktop` does not exist on Zorin 18**; favorites and menu
   code skip missing desktop entries by design.
 - **`org.gnome.desktop.interface accent-color` key is absent** on Zorin 18.1 —
