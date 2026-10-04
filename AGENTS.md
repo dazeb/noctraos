@@ -47,6 +47,8 @@ install/
   09_super_search.sh        Super+Space search, Noctra start button and Start panel:
                             installs the three GNOME Shell extensions, search app,
                             schema, index timer
+  10_boot_theme.sh          Plymouth splash + GRUB theme for non-ISO installs
+                            (update-alternatives, update-initramfs, update-grub)
 bin/
   zom                       CLI: update | doctor | models [list|pull|rm|gui] | bg [list|next|set]
   zom-menu                  zenity control panel
@@ -67,6 +69,13 @@ assets/
   icons/                    white SVG glyphs (agents, Local LLM, category tiles)
   icons/overrides/          white SVGs under STOCK icon names — these replace
                             the system category icons system-wide
+assets/boot/                boot-chain artwork: plymouth/noctraos (two-step theme),
+                            grub/noctraos (theme.txt + generated pixmaps/.pf2),
+                            isolinux/ (splash + theme.cfg), generate-boot-assets.py
+                            (outputs are committed; JetBrains Mono, OFL)
+iso/boot-theme.sh           sourced by the build script: themes the extracted ISO
+                            tree, the live initrd and the squashfs
+iso/initrd-theme.py         swaps the Plymouth theme inside casper/initrd.zstd
 iso/build-noctraos-iso.sh   ISO remaster pipeline (runs on the Proxmox node);
                             NOCTRAOS_UNATTENDED=1 + NOCTRAOS_USER/PASSWORD/…
                             bake an unattended-install seed and boot entries
@@ -213,6 +222,29 @@ tail -f /root/noctraos-build.log
 - **CopyQ must run with `QT_QPA_PLATFORM=xcb`.** As a native-Wayland client it
   logs "Failed to activate Wayland clipboard" and records nothing on GNOME
   (no wlr-data-control). The autostart entry sets it; keep it that way.
+- **Plymouth two-step loops `throbber-*.png`, not `animation-*.png`.** `animation-`
+  frames are only the end-of-boot animation, so a theme that ships only those shows
+  a blank screen. Also: `UseProgressBar=true` in `[boot-up]` replaces the throbber
+  with a bar. The live initrd contains only the `two-step` module (no `script.so`),
+  so any custom theme must be two-step. Fonts available there: Ubuntu / Ubuntu Mono.
+- **The live boot verifies `/cdrom/md5sum.txt`** (`casper-bottom/01integrity_check`,
+  skippable with `fsck.mode=skip`) and prints "errors found" for every file we
+  changed. The build script used to write `md5sums.txt` (plural) and hash the
+  *extracted original* squashfs, so the list was always wrong; it now moves the new
+  squashfs into the tree first and writes `md5sum.txt`.
+- **GRUB gfxmenu ignores a `progress_bar`'s `height`** (it drew a 28 px slab whatever
+  was set), so the theme shows a text countdown (`label` with `id = "__timeout__"`)
+  instead. isolinux: an opaque `MENU COLOR screen` background hides
+  `MENU BACKGROUND`'s image — make it `#00000000`.
+- **Testing boot screens without the node**: download the Zorin ISO from a mirror
+  (zorin.com/os/mirrors lists them), stage only the boot pieces with
+  `iso/boot-theme.sh` onto a copy (`xorriso -indev … -outdev … -boot_image any replay
+  -map …`, no squashfs repack), then boot it under `qemu-system-x86_64` (no KVM needed)
+  and take `screendump`s over the monitor socket. UEFI needs OVMF and ~50 s under TCG;
+  set `timeout=300` in the test copy of grub.cfg or the menu is gone before the shot.
+  Plymouth themes can be previewed with `plymouthd --no-daemon` under Xvfb with
+  `--kernel-command-line="splash plymouth.ignore-serial-consoles"` (needs the
+  `plymouth-x11` and `plymouth-theme-spinner` packages).
 - **Autologin leaves the login keyring locked**, so apps that use the Secret
   Service show an "Authentication required" prompt on first use. Fixed for what we
   install by using a non-keyring store (`scripts/seed-password-store.py`, run by

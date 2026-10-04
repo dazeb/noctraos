@@ -112,7 +112,10 @@ theme is Zorin's own `ZorinGrey-Dark`.
 | **Dock app icons** | Brand icons (VS Code blue, Brave/Chromium) stay as the apps ship them |
 | **Lock screen** | Gap, and not fixable from our extensions or user theme: GNOME 46 draws it with the *stock* shell theme because extensions and the user-theme are off in the lock session. It shows the blurred desktop wallpaper (the `screensaver picture-uri` setting is not used). Styling it means replacing the system shell theme resource (which also themes the GDM greeter) — doable but if the resource is broken the session will not start, so it needs a snapshot and a deliberate step |
 | **Login screen (GDM)** | Gap: unthemed, and the greeter is broken on Zorin 18.1 (autologin is used) |
-| **Boot splash, GRUB, ISO boot menus, installer** | Gap: stock Zorin. Needs a reboot or an ISO build to verify, so not touched yet |
+| Boot splash (Plymouth) | Done in the repo: dark `two-step` theme with the N mark, `noctraos` wordmark and a blinking cursor (`assets/boot/plymouth/noctraos`). Baked into the ISO's live initrd, the squashfs and, via module 10, any other install. Rendered and checked here with the x11 renderer and on a booted ISO under QEMU; not yet seen on real hardware or the installed system after a reboot |
+| GRUB menu (UEFI ISO and installed system) | Done in the repo: flat dark menu, JetBrains Mono, square frame, amber selection bar, text countdown (`assets/boot/grub/noctraos`). Checked on a booted ISO under QEMU/OVMF at 800x600 only; other resolutions and a real installed GRUB are unchecked |
+| ISO BIOS boot menu (isolinux) | Done in the repo: same palette, header lockup, amber selection. Checked under QEMU/SeaBIOS |
+| Installer (Ubiquity) and live session | Partly: the live session defaults to `ZorinGrey-Dark` with the ember-night wallpaper (a gschema override). The installer's own artwork and slideshow text are still Zorin's and are untouched |
 | Flatpak and Electron apps (Mission Center, Obsidian, Chromium) | Follow their own styling; Mission Center looked neutral dark, others unchecked |
 | Radio buttons and avatars | Left circular on purpose (affordance) |
 | Cursor | Stock Adwaita |

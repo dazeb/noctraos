@@ -9,10 +9,12 @@
 #        /usr/local/sbin/noctraos-firstboot  first-boot runner (as the user)
 #        /etc/skel/.config/autostart/...   autostart entry that runs it on
 #                                          the user's first desktop login
-#        boot menu + .disk/info rebranded to "NoctraOS"
+#        boot menus (BIOS isolinux + UEFI grub), live-boot splash, installed
+#        splash/GRUB theme and the dark installer session (iso/boot-theme.sh)
+#        .disk/info rebranded to "NoctraOS"
 #   4. repacks the squashfs with the original compressor
 #   5. writes a new ISO with xorriso, replaying the original boot equipment
-#      (BIOS + EFI, same volume id), and refreshes filesystem.size/md5sums.txt
+#      (BIOS + EFI, same volume id), and refreshes filesystem.size/md5sum.txt
 #
 # Usage:  sudo ./build-noctraos-iso.sh <zorin-live.iso> [out.iso]
 # Needs:  xorriso, squashfs-tools, git, openssl, ~25 GiB scratch (set WORK_BASE).
@@ -58,9 +60,12 @@ AI_LOCALE="${NOCTRAOS_LOCALE:-en_US.UTF-8}"
 AI_KEYMAP="${NOCTRAOS_KEYMAP:-us}"
 AI_TIMEZONE="${NOCTRAOS_TIMEZONE:-UTC}"
 SEED_TEMPLATE="$(cd "$(dirname "$0")" && pwd)/preseed/noctraos.seed.in"
+# shellcheck source=iso/boot-theme.sh
+source "$(cd "$(dirname "$0")" && pwd)/boot-theme.sh"
 
 need() { command -v "$1" >/dev/null 2>&1 || { echo "missing dependency: $1" >&2; exit 1; }; }
 need xorriso; need unsquashfs; need mksquashfs; need git; need openssl
+need python3; need zstd; need cpio; need update-alternatives; need chroot
 [ -f "$SEED_TEMPLATE" ] || { echo "missing preseed template: $SEED_TEMPLATE" >&2; exit 1; }
 
 WORK="$(mktemp -d "$WORK_BASE/noctraos-iso-build.XXXXXXXX")"
@@ -190,10 +195,12 @@ sed -e "s|@LOCALE@|$AI_LOCALE|g" \
     "$SEED_TEMPLATE" > "$ISO_TREE/preseed/noctraos.seed"
 chmod 644 "$ISO_TREE/preseed/noctraos.seed"
 
+step "4/7 theming the boot chain (grub, isolinux, live splash, installed system)"
+boot_theme_iso_tree "$ISO_TREE"
+boot_theme_initrd "$ISO_TREE"
+boot_theme_squashfs "$SQ_ROOT"
+
 step "4/7 adding unattended boot entries (BIOS isolinux + UEFI grub)"
-if [ -f "$ISO_TREE/boot/grub/grub.cfg" ]; then
-  sed -i 's/Try or Install Zorin OS/Try or Install NoctraOS/g' "$ISO_TREE/boot/grub/grub.cfg" || true
-fi
 # noprompt: casper-stop ejects the medium and reboots without the
 # "Please remove the installation medium, then press ENTER" wait.
 SEED_ARGS="file=/cdrom/preseed/noctraos.seed auto=true priority=critical automatic-ubiquity noprompt"
@@ -244,9 +251,13 @@ mksquashfs "$SQ_ROOT" "$WORK/filesystem.squashfs" -comp "$COMP" -noappend -all-r
   -no-progress -info >/dev/null
 
 step "6/7 refreshing ISO metadata"
-stat -c %s "$WORK/filesystem.squashfs" > "$ISO_TREE/casper/filesystem.size"
-( cd "$ISO_TREE" && find . -type f ! -name md5sums.txt -print0 \
-    | xargs -0 md5sum > md5sums.txt.new && mv md5sums.txt.new md5sums.txt )
+# casper-md5check runs on every live boot against /cdrom/md5sum.txt (singular) and
+# reports "errors found" for any file that differs, so the list must describe the
+# files that actually ship — including the new squashfs, not the extracted original.
+mv "$WORK/filesystem.squashfs" "$ISO_TREE/casper/filesystem.squashfs"
+stat -c %s "$ISO_TREE/casper/filesystem.squashfs" > "$ISO_TREE/casper/filesystem.size"
+( cd "$ISO_TREE" && find . -type f ! -name md5sum.txt ! -name boot.cat -print0 \
+    | xargs -0 md5sum > md5sum.txt.new && mv md5sum.txt.new md5sum.txt )
 
 step "7/7 writing $OUT_ISO (boot equipment replayed from source ISO)"
 # xorriso refuses to overwrite a non-empty -outdev — remove the previous image.
@@ -254,10 +265,13 @@ rm -f "$OUT_ISO"
 xorriso -indev "$SRC_ISO" \
   -outdev "$OUT_ISO" \
   -boot_image any replay \
-  -map "$WORK/filesystem.squashfs" /casper/filesystem.squashfs \
+  -map "$ISO_TREE/casper/filesystem.squashfs" /casper/filesystem.squashfs \
   -map "$ISO_TREE/casper/filesystem.size" /casper/filesystem.size \
-  -map "$ISO_TREE/md5sums.txt" /md5sums.txt \
+  -map "$ISO_TREE/md5sum.txt" /md5sum.txt \
   -map "$ISO_TREE/boot/grub/grub.cfg" /boot/grub/grub.cfg \
+  -map "$ISO_TREE/boot/grub/themes/noctraos" /boot/grub/themes/noctraos \
+  -map "$ISO_TREE/casper/initrd.zstd" /casper/initrd.zstd \
+  -map "$ISO_TREE/isolinux/splash.png" /isolinux/splash.png \
   -map "$ISO_TREE/preseed/noctraos.seed" /preseed/noctraos.seed \
   -map "$ISO_TREE/isolinux/menuentries.cfg" /isolinux/menuentries.cfg \
   -map "$ISO_TREE/isolinux/isolinux.cfg" /isolinux/isolinux.cfg \

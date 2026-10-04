@@ -145,13 +145,17 @@ Installer flags: `--skip-ai` (no Ollama/model downloads), `--skip-gui`
 4. generates an unattended-install seed from `iso/preseed/noctraos.seed.in`
    (baked at `/preseed/noctraos.seed`) and adds an **"Install NoctraOS
    (unattended)"** entry to the BIOS + UEFI boot menus
-5. rebrands the boot menu to "NoctraOS", resquashes with the original
-   compressor, and rewrites the ISO preserving BIOS + UEFI boot equipment
-6. prints the new sha256
+5. themes the boot chain (`iso/boot-theme.sh`, artwork in `assets/boot/`): the
+   BIOS (isolinux) and UEFI (GRUB) menus, the live-boot Plymouth splash inside
+   `casper/initrd.zstd`, the installed system's splash and GRUB theme, and a dark
+   live/installer session
+6. resquashes with the original compressor and rewrites the ISO preserving BIOS +
+   UEFI boot equipment, with a correct `md5sum.txt` (the live boot checks it)
+7. prints the new sha256
 
 ```bash
 sudo ./iso/build-noctraos-iso.sh Zorin-OS-18.1-Core-64-bit.iso noctraos-18.1-amd64.iso
-# needs: xorriso, squashfs-tools, git, openssl, root, ~25 GiB scratch (WORK_BASE=…)
+# needs: xorriso, squashfs-tools, git, openssl, python3, zstd, cpio, root, ~25 GiB scratch (WORK_BASE=…)
 ```
 
 Two ways to install the result:
@@ -245,8 +249,9 @@ onboarding flow that puts Super+Space front and center
 experience (boot, installer, login); the dark + amber reskin built around the
 Super+Space look; more agent launchers (Aider, Goose — non-npm install
 paths). Reskin items still to do before it is consistent everywhere: libadwaita/GTK 4 apps,
-wallpapers, boot/login/lock screens, the ISO boot menus and installer, and the
-remaining stock icons. See [the theme design](docs/theme-design.md).
+the login and lock screens, the installer's own artwork and slideshow, and the
+remaining stock icons. The boot menus and splash are themed but have only been
+seen under QEMU so far. See [the theme design](docs/theme-design.md).
 
 ## License
 
