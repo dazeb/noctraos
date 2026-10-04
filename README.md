@@ -33,7 +33,7 @@ Prefer to review first: `git clone https://github.com/dazeb/noctraos && cd noctr
 | Area | Software |
 |------|----------|
 | Local AI | [Ollama](https://ollama.com) on `127.0.0.1:11434` with `qwen2.5-coder:7b` (coding) and `nomic-embed-text` (embeddings for RAG) |
-| Agents menu | **Codex, Claude Code, OpenCode, Grok, Gemini CLI, Qwen Code** — each launches in a terminal and installs itself on first use (with your consent) |
+| Agents menu | **Hermes** (desktop app, preinstalled, free to start — no signup, local Ollama as offline fallback) plus **Codex, Claude Code, OpenCode, Grok, Gemini CLI, Qwen Code** — each launches in a terminal and installs itself on first use (with your consent) |
 | Local LLM menu | **AI Models** manager and **AI Health Check**; editor chat through Continue |
 | Editor | [Microsoft VS Code](https://code.visualstudio.com) + Continue.dev (pre-wired to local Ollama), GitLens, Prettier, Python, Go |
 | Agent sessions | [Herdr](https://herdr.dev) persistent workspaces, installed through mise and launched from Development |
@@ -54,7 +54,7 @@ Prefer to review first: `git clone https://github.com/dazeb/noctraos && cd noctr
 The stock GNOME category tree (Accessories, Graphics, Office…) is replaced:
 
 ```
-Agents  →  Codex · Claude Code · OpenCode · Grok · Gemini CLI · Qwen Code
+Agents  →  Hermes · Codex · Claude Code · OpenCode · Grok · Gemini CLI · Qwen Code
 Local LLM  →  AI Models · AI Health Check
 Development  →  VS Code …
 Internet  ·  Media  ·  Utilities  ·  System
@@ -229,10 +229,8 @@ iso/                     build script + preseed template for unattended installs
   log out/in (or reboot).
 - **"Ask AI to Explain" is slow the first time** — the model loads into RAM on
   first use (~30 s warm-up; longer on CPU-only machines).
-- **Ollama runs on CPU** — expected without a supported GPU; `zom doctor` reports
-  what was detected. NVIDIA and AMD drivers install automatically; reboot once
-  after the first install so they load. Optional CUDA toolkit (nvcc):
-  `NOCTRAOS_CUDA_TOOLKIT=1 bash install.sh`.
+- **Ollama runs on CPU** — expected without an NVIDIA GPU; `zom doctor` reports
+  what was detected.
 - **Installer says sudo is required over SSH** — headless runs need
   passwordless sudo or recently cached credentials; interactive runs can just
   type the password.

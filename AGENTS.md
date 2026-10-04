@@ -34,8 +34,6 @@ install/
   01_system.sh              apt core + python build deps, Flathub, Nerd Font
   02_mise.sh                mise binary, profile.d + bash.bashrc hooks, runtimes,
                             Herdr, Starship, lazygit, lazydocker
-  03_gpu_drivers.sh         NVIDIA driver (+ opt-in CUDA toolkit) / AMD amdgpu groups; runs before
-                            03_ai_core so Ollama installs its CUDA/ROCm runtime
   03_ai_core.sh             Ollama + qwen2.5-coder:7b + nomic-embed-text
   04_gui_apps.sh            Microsoft VS Code (apt repo) + extensions, Mission Center,
                             CopyQ; retires codium/chatbox/foot (user data kept)
@@ -51,9 +49,13 @@ install/
                             schema, index timer
   10_boot_theme.sh          Plymouth splash + GRUB theme for non-ISO installs
                             (update-alternatives, update-initramfs, update-grub)
+  11_hermes.sh              Hermes Desktop preinstalled (runtime + Electron app build),
+                            free Nous tier primary, local Ollama fallback
 bin/
   zom                       CLI: update | doctor | models [list|pull|rm|gui] | bg [list|next|set]
   zom-menu                  zenity control panel
+  noctraos-hermes           Hermes Desktop launcher/installer: launch | install | status.
+                            Sets HERMES_GUEST_ONBOARDING=1 (free tier), seeds the Ollama fallback
   noctraos-agent            agent launcher wrapper: installs npm package on
                             first use, then execs the agent
 configs/
@@ -316,6 +318,15 @@ tail -f /root/noctraos-build.log
 - **sudo credentials expire mid-provisioner-run** (~15 min tty ticket): the
   firstboot flow blocks at the next sudo prompt. Autologin builds bake
   NOPASSWD sudoers; interactive first boots are fine (user is watching).
+
+- **Hermes free tier is gated and pre-GA.** The Nous free tier only exists when
+  `HERMES_GUEST_ONBOARDING=1` (or `--guest-onboarding`); `noctraos-hermes` exports it. Never
+  set `model.provider` for the user: an explicit provider beats the free tier in
+  `resolve_provider`, and a bare `fallback_providers` entry does not rescue a machine that has
+  no identity and no network (no_provider_configured fires first), which is why the wrapper makes
+  Ollama the primary only in that offline-first-launch case. Upstream disabled Linux desktop
+  release builds, so module 11 builds the app locally with `hermes desktop --build-only`; write
+  config with `hermes config set`, never by editing config.yaml. Not yet run on VM 114.
 
 ## Verification checklist for any change
 

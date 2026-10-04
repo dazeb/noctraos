@@ -49,7 +49,6 @@ run_module() {
 run_module 00_preflight.sh
 run_module 01_system.sh
 run_module 02_mise.sh
-run_module 03_gpu_drivers.sh
 
 if [ "$SKIP_AI" -eq 1 ]; then
   log "SKIP 03_ai_core (--skip-ai)"
@@ -58,7 +57,7 @@ else
 fi
 
 if [ "$SKIP_GUI" -eq 1 ]; then
-  log "SKIP 04/04b/05/06/08/09/10 (--skip-gui)"
+  log "SKIP 04/04b/05/06/08/09/10/11 (--skip-gui)"
 else
   run_module 04_gui_apps.sh
   run_module 04_workstation_apps.sh
@@ -67,6 +66,7 @@ else
   run_module 08_shell_theme.sh
   run_module 09_super_search.sh
   run_module 10_boot_theme.sh
+  run_module 11_hermes.sh
 fi
 
 run_module 07_persistence.sh
