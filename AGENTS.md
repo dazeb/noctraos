@@ -326,7 +326,33 @@ tail -f /root/noctraos-build.log
   no identity and no network (no_provider_configured fires first), which is why the wrapper makes
   Ollama the primary only in that offline-first-launch case. Upstream disabled Linux desktop
   release builds, so module 11 builds the app locally with `hermes desktop --build-only`; write
-  config with `hermes config set`, never by editing config.yaml. Not yet run on VM 114.
+  config with `hermes config set`, never by editing config.yaml. Verified on VM 114
+  (2026-10-04): free tier resolves to `provider=nous` / `nous/welcome` with no signup.
+  `model.provider: "auto"` is Hermes' stock default and is NOT an explicit choice
+  (`explicit_provider` in the wrapper treats auto/empty as unset).
+- **Hermes onboarding prompt** (`configs/hermes/onboarding.md`): the wrapper exports it as
+  `HERMES_EPHEMERAL_SYSTEM_PROMPT` until `~/.hermes/.noctraos-onboarded` exists (the prompt
+  tells the agent to create it). There is deliberately no separate greeting turn: Hermes Desktop
+  opens with its OWN guided intro ("what should I call you?", "Skip setup"; hardcoded in
+  `apps/desktop/src/i18n/en.ts`, no supported off switch found), so the prompt starts the tour
+  from the user's first reply instead. The conversation is: who the user is (saved to
+  USER.md via the memory tool, target `user`; ~1,375 char cap), who the agent should be (a
+  "## How I should be" section appended to `~/.hermes/SOUL.md`, text shown first; SOUL.md is a
+  protected instruction file, so Hermes asks the user to approve the write), then only an
+  OFFER of the tour, run on a yes. Declining or finishing creates the done marker. A one-shot `hermes chat --oneshot` greeting was tried first:
+  it works but must pass `--source desktop` (the default source `oneshot` is hidden from the
+  desktop's session list) and it never showed ahead of Hermes' own intro. A `hermes config set`
+  value that starts with `--` is parsed as a CLI option, so pass lists as JSON (`'["--flag"]'`).
+- **Hermes Desktop on a VM renders blank unless Electron gets `--no-sandbox
+  --disable-dev-shm-usage`** (renderer crash loop, `/dev/shm ... No such process`); the wrapper
+  seeds them via `desktop.electron_flags` when `systemd-detect-virt` says VM. Launching over SSH
+  also needs the Xwayland auth file (`/run/user/1000/.mutter-Xwaylandauth.*`) and
+  `env -u SSH_CONNECTION -u SSH_CLIENT -u SSH_TTY` (Hermes disables the GPU for "remote display").
+  The Hermes runtime + app build adds ~5 GiB; a second `install.sh` on VM 114 then fails the
+  25 GiB free-space preflight (24 GiB free) — run single modules instead.
+- **Never run `hermes config set` with a temp `HERMES_HOME` on a box that has Hermes
+  installed:** it regenerates the shared launcher in the checkout
+  (`~/.hermes/hermes-agent/.hermes/bin/hermes`) pointing at the temp tools dir.
 
 ## Verification checklist for any change
 
