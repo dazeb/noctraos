@@ -229,11 +229,14 @@ Tested end-to-end on Zorin OS 18.1 (clean VM, full install, idempotent re-runs,
 first-boot provisioning from the ISO, unattended install from the custom ISO).
 Current release: **v0.3.0**.
 
-On the roadmap: more agent launchers (Aider, Goose — non-npm install paths)
-and custom branding assets.
+On the roadmap: more agent launchers (Aider, Goose — non-npm install paths),
+and a streamlined dark + amber reskin built around the Super+Space system
+search. Still to do before it is consistent everywhere: libadwaita/GTK 4 apps,
+wallpapers, boot/login/lock screens, the ISO boot menus and installer, and the
+remaining stock icons. See [the theme design](docs/theme-design.md).
 
 ## License
 
 Not yet selected — all rights reserved until then. Agent names and logos
-belong to their respective projects; noctraos ships none of them, only
+belong to their respective projects; NoctraOS ships none of them, only
 launchers.
