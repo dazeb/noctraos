@@ -106,6 +106,23 @@ iso/preseed/zorin-ai.seed.in  Ubiquity/d-i seed template for the above
   at `192.168.8.187` (v0.2 reference). User `dazeb`, password
   `zorin-test-2026` (throwaway), our SSH key authorized on both, passwordless
   sudo via baked NOPASSWD (110) / `/etc/sudoers.d/zai-test` (114).
+- **Remote testing from a cloud/CI agent (Tailscale)**: the LAN IPs above are
+  not routable from outside. VM 114 is on the tailnet as `zorin-ai-iso-test`
+  (`100.125.207.0`); the node is `files` (`100.83.252.94`). Nothing advertises
+  `192.168.8.0/24`, so use the tailnet IPs. A cloud container has no TUN-based
+  routing, so run Tailscale in userspace mode and SSH through it:
+  ```bash
+  tailscaled --tun=userspace-networking --state=$S/tailscaled.state --socket=$S/ts.sock &
+  tailscale --socket=$S/ts.sock up --auth-key=<ephemeral, tagged key> --hostname=claude-cloud
+  ssh -o ProxyCommand="tailscale --socket=$S/ts.sock nc %h %p" dazeb@100.125.207.0
+  ```
+  Start `tailscaled` with `setsid nohup` (plain background jobs die between
+  turns; saved state rejoins without the key). Needs `openssh-client`. Auth
+  keys are pasted by the user per session — never commit one, and ask the user
+  to revoke it afterwards. The agent's SSH public key must be in VM 114's
+  `~dazeb/.ssh/authorized_keys`; do not add keys to or touch the Proxmox node.
+  Verified 2026-10-04: static checks, full `install.sh` run + idempotent
+  second run, and `zom doctor` all green on VM 114 this way.
 - **ISO build** runs on the node, not here. Scratch MUST be on
   `/local-zfs` (`WORK_BASE=/local-zfs/iso-build`) — pve-root has ~8 GiB free
   and the build needs ~25 GiB. The zfs pool is HDD-backed: unsquashfs and
