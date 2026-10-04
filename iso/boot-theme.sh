@@ -73,6 +73,8 @@ boot_theme_squashfs() {
     sed -i -e 's/#eaf0f6/#121212/g' -e 's/#123354/#bebebe/g' -e 's/#15a6f0/#e68e0d/g' \
            -e "s/font-family:'Inter', sans-serif;/font-family:'JetBrains Mono', monospace;/" "$slides/link/base.css"
     rm -f "$slides/screenshots/welcome.png"
+    install -m 644 "$BOOT_ASSETS/installer/cd_in_tray.png" "$BOOT_ASSETS/installer/ubuntu_installed.png" \
+      "$root/usr/share/ubiquity/pixmaps/"
   else
     echo "ubiquity slideshow not found — installer slide left as is" >&2
   fi
@@ -81,11 +83,18 @@ boot_theme_squashfs() {
   # The wallpaper is the same file the provisioner installs later.
   local wall="$BOOT_ASSETS/../wallpapers/noctraos-ember-night-2160p.jpg"
   install -D -m 644 "$wall" "$root/usr/share/backgrounds/noctraos/ember-night.jpg"
+  # Zorin sets its theme keys in `:zorin` session groups, which beat plain groups, so
+  # the theme keys must be overridden in the same groups (this file sorts after 50_).
   cat > "$root/usr/share/glib-2.0/schemas/90_noctraos-live.gschema.override" <<'OVR'
-[org.gnome.desktop.interface]
+[org.gnome.desktop.interface:zorin]
 gtk-theme = 'ZorinGrey-Dark'
 icon-theme = 'ZorinGrey-Dark'
+
+[org.gnome.desktop.interface]
 color-scheme = 'prefer-dark'
+
+[org.gnome.shell.extensions.user-theme:zorin]
+name = 'ZorinGrey-Dark'
 
 [org.gnome.desktop.wm.preferences]
 theme = 'ZorinGrey-Dark'

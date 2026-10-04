@@ -241,7 +241,9 @@ if [ "$UNATTENDED" = 1 ]; then
 fi
 
 if [ -f "$ISO_TREE/.disk/info" ]; then
-  sed -i 's/Zorin OS/NoctraOS/' "$ISO_TREE/.disk/info" || true
+  # The installer builds "Try/Install <name>" from the first word of this line, and
+  # the file reads "Zorin-OS 18.1 Core 64bit" (hyphen), so match the hyphen.
+  sed -i 's/^Zorin[- ]OS/NoctraOS/' "$ISO_TREE/.disk/info" || true
 fi
 chown -R root:root "$SQ_ROOT/opt/noctraos" "$SQ_ROOT/usr/local/sbin/noctraos-firstboot" \
   "$SQ_ROOT/etc/skel/.config/autostart"

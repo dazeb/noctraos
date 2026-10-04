@@ -245,6 +245,17 @@ tail -f /root/noctraos-build.log
   Plymouth themes can be previewed with `plymouthd --no-daemon` under Xvfb with
   `--kernel-command-line="splash plymouth.ignore-serial-consoles"` (needs the
   `plymouth-x11` and `plymouth-theme-spinner` packages).
+- **The installer takes its name from `/cdrom/.disk/info`** (`Zorin-OS 18.1 Core 64bit`, hyphen):
+  ubiquity's `get_release()` uses the first word, hyphen turned into a space, for
+  "Try/Install ${RELEASE}". The old `sed 's/Zorin OS/…/'` never matched; it is now
+  `s/^Zorin[- ]OS/NoctraOS/`. The two pictures on that page are
+  `usr/share/ubiquity/pixmaps/{cd_in_tray,ubuntu_installed}.png`.
+- **Zorin's theme defaults live in `:zorin` session groups** (e.g.
+  `[org.gnome.desktop.interface:zorin] gtk-theme`, `[org.gnome.shell.extensions.user-theme:zorin] name`
+  in `50_zorin-desktop-session.gschema.override`), and a session group beats a plain
+  group. A gschema override that only sets the plain group is silently ignored for the
+  theme keys (the wallpaper keys have no `:zorin` entry, so those did apply). The ISO's
+  `90_noctraos-live.gschema.override` therefore repeats the `:zorin` group names.
 - **Autologin leaves the login keyring locked**, so apps that use the Secret
   Service show an "Authentication required" prompt on first use. Fixed for what we
   install by using a non-keyring store (`scripts/seed-password-store.py`, run by

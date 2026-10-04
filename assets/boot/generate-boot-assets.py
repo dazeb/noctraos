@@ -8,6 +8,7 @@ the Noctra "N" mark (assets/icons/noctraos-start.svg geometry):
                        password-prompt pieces
   grub/noctraos/       logo, square 9-slice pixmaps, monospace .pf2 fonts
   isolinux/splash.png  640x480 background for the BIOS menu
+  installer/           the two 180x165 pictures on the installer's first page
 
 Outputs are committed, so building an ISO needs none of this. Re-run after
 changing the palette or the mark:
@@ -132,6 +133,40 @@ def isolinux(out, font_path):
     image.save(out / "splash.png")
 
 
+def installer(out):
+    """Pictures for the installer's Try / Install choice (replace ubiquity's pixmaps)."""
+    out.mkdir(parents=True, exist_ok=True)
+    border, raised, panel = rgb("border"), rgb("raised"), rgb("panel")
+    accent, fg, bg = rgb("accent"), rgb("foreground"), rgb("background")
+    size = (180, 165)
+
+    # Try: a small dark desktop with the top bar, the N mark and a floating dock.
+    img = Image.new("RGBA", size, (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    draw.rectangle([10, 12, 169, 128], fill=bg + (255,), outline=border + (255,))
+    draw.rectangle([11, 13, 168, 20], fill=panel + (255,))
+    draw.rectangle([82, 15, 97, 17], fill=fg + (255,))
+    img.alpha_composite(mark(46, accent + (255,)), (67, 46))
+    draw.rectangle([52, 108, 127, 121], fill=raised + (255,), outline=border + (255,))
+    for x in range(58, 122, 12):
+        draw.rectangle([x, 112, x + 6, 118], fill=fg + (255,))
+    draw.rectangle([70, 136, 109, 140], fill=border + (255,))
+    draw.rectangle([56, 140, 123, 143], fill=border + (255,))
+    img.save(out / "cd_in_tray.png")
+
+    # Install: a drive with an amber arrow badge.
+    img = Image.new("RGBA", size, (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    draw.rectangle([22, 26, 133, 140], fill=raised + (255,), outline=border + (255,))
+    draw.rectangle([22, 108, 133, 140], fill=panel + (255,), outline=border + (255,))
+    draw.rectangle([112, 120, 124, 128], fill=accent + (255,))
+    draw.ellipse([44, 40, 110, 96], outline=border + (255,), width=3)
+    draw.rectangle([96, 86, 170, 158], fill=accent + (255,))
+    draw.rectangle([127, 96, 139, 124], fill=bg + (255,))
+    draw.polygon([(115, 122), (151, 122), (133, 146)], fill=bg + (255,))
+    img.save(out / "ubuntu_installed.png")
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--font", required=True, help="JetBrains Mono Regular .ttf")
@@ -141,6 +176,7 @@ def main():
     plymouth(HERE / "plymouth/noctraos", args.bold_font)
     grub(HERE / "grub/noctraos", args.font, args.bold_font, not args.no_pf2)
     isolinux(HERE / "isolinux", args.bold_font)
+    installer(HERE / "installer")
 
 
 if __name__ == "__main__":
