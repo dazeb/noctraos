@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="What is included in Noctra OS: local AI models, six coding agents, a dark desktop theme and a ready developer toolchain.">
+<meta name="theme-color" content="#0e0d12">
+<title>Features · Noctra OS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Hanken+Grotesk:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="nav">
+  <div class="wrap">
+    <a class="brand" href="index.html" aria-label="Noctra OS home">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><polygon points="2,26 13,6 18,16" fill="#e68e0d"/><polygon points="13,26 22,10 30,26" fill="#e68e0d" opacity="0.55"/></svg>
+      <span>Noctra <small>OS</small></span>
+    </a>
+    <nav aria-label="Main">
+      <ul>
+        <li><a href="index.html">Home</a></li>
+        <li><a href="features.html" aria-current="page">Features</a></li>
+        <li><a href="download.html">Download</a></li>
+        <li><a href="community.html">Get Involved</a></li>
+        <li><a href="https://github.com/dazeb/noctraos">GitHub</a></li>
+      </ul>
+    </nav>
+  </div>
+</header>
+
+<main>
+<div class="banner">
+  <img src="img/glacier-facet.webp" alt="" width="1920" height="1080">
+  <div class="wrap">
+    <p class="eyebrow"><span class="dot"></span>Features</p>
+    <h1>What is in the box</h1>
+    <p class="lede">Everything is installed and configured on first login. Nothing to assemble.</p>
+  </div>
+</div>
+
+<section>
+  <div class="wrap rows">
+    <div class="row">
+      <div class="intro">
+        <h2>Local AI</h2>
+        <p>Models run on your own hardware. Nothing leaves your PC unless you choose a hosted agent.</p>
+      </div>
+      <ul>
+        <li><div><strong>Hardware detection.</strong> <span>llmfit checks CPU, GPU and memory and lists the models that fit.</span></div></li>
+        <li><div><strong>Ollama.</strong> <span>Runs on 127.0.0.1 only and starts with the system.</span></div></li>
+        <li><div><strong>Embeddings.</strong> <span>A local embedding model is included for search over your own files.</span></div></li>
+        <li><div><strong>Model manager.</strong> <span>Add or remove models from a window, or with <code>zom models</code>.</span></div></li>
+        <li><div><strong>Ask AI to Explain.</strong> <span>Right-click any file and a local model explains it.</span></div></li>
+      </ul>
+    </div>
+    <div class="row">
+      <div class="intro">
+        <h2>Coding agents</h2>
+        <p>Six agents sit in the start menu. Each opens in a terminal and installs itself the first time you use it.</p>
+        <div class="tiles">
+          <div class="tile"><img src="icons/zorin-ai-agent-codex.svg" alt="">Codex</div>
+          <div class="tile"><img src="icons/zorin-ai-agent-claude.svg" alt="">Claude Code</div>
+          <div class="tile"><img src="icons/zorin-ai-agent-opencode.svg" alt="">OpenCode</div>
+          <div class="tile"><img src="icons/zorin-ai-agent-grok.svg" alt="">Grok</div>
+          <div class="tile"><img src="icons/zorin-ai-agent-gemini.svg" alt="">Gemini CLI</div>
+          <div class="tile"><img src="icons/zorin-ai-agent-qwen.svg" alt="">Qwen Code</div>
+        </div>
+      </div>
+      <ul>
+        <li><div><strong>Agents menu.</strong> <span>Codex, Claude Code, OpenCode, Grok, Gemini CLI and Qwen Code.</span></div></li>
+        <li><div><strong>Herdr.</strong> <span>Persistent terminal workspaces, so agent sessions survive closing the window.</span></div></li>
+        <li><div><strong>Continue in VS Code.</strong> <span>Pre-configured to talk to your local model.</span></div></li>
+        <li><div><strong>Your accounts.</strong> <span>Hosted agents need their own account and a network connection.</span></div></li>
+      </ul>
+    </div>
+    <div class="row">
+      <div class="intro">
+        <h2>Desktop</h2>
+        <p>A dark, flat desktop that stays out of the way. Mouse-first, with no tiling to learn.</p>
+      </div>
+      <ul>
+        <li><div><strong>Matte black theme.</strong> <span>Charcoal surfaces with amber for focus and active states.</span></div></li>
+        <li><div><strong>AI-first start menu.</strong> <span>Agents and Local LLM come first; every other app is in All Apps and search.</span></div></li>
+        <li><div><strong>Wallpapers.</strong> <span>Five polygonal 4K scenes. Switch with <code>zom bg next</code>.</span></div></li>
+        <li><div><strong>One palette.</strong> <span>The shell, GTK, VS Code, Herdr, btop and the terminal share the same colors.</span></div></li>
+      </ul>
+    </div>
+    <div class="row">
+      <div class="intro">
+        <h2>Developer tools</h2>
+        <p>The toolchain is installed system-wide, so every user account gets it.</p>
+      </div>
+      <ul>
+        <li><div><strong>Runtimes.</strong> <span>Node LTS, Python 3.12 and Go, managed by mise.</span></div></li>
+        <li><div><strong>Editor.</strong> <span>Microsoft VS Code with GitLens, Prettier, Python and Go extensions.</span></div></li>
+        <li><div><strong>Terminal.</strong> <span>Starship, lazygit, lazydocker, btop, bat, eza, fd, fzf, ripgrep, zoxide, neovim and tmux.</span></div></li>
+        <li><div><strong>Containers and Git.</strong> <span>Docker with Compose, and the GitHub CLI.</span></div></li>
+      </ul>
+    </div>
+    <div class="row">
+      <div class="intro">
+        <h2>Everyday apps</h2>
+        <p>A workstation is more than a terminal.</p>
+      </div>
+      <ul>
+        <li><div><strong>Browse and write.</strong> <span>Chromium, Obsidian and LibreOffice.</span></div></li>
+        <li><div><strong>Create.</strong> <span>OBS Studio, Kdenlive, Pinta and MPV.</span></div></li>
+        <li><div><strong>Utilities.</strong> <span>Mission Center, CopyQ clipboard history, LocalSend and Flameshot.</span></div></li>
+      </ul>
+    </div>
+    <div class="row">
+      <div class="intro">
+        <h2>Maintenance</h2>
+        <p>One tool keeps the whole stack healthy.</p>
+      </div>
+      <ul>
+        <li><div><strong><code>zom update</code></strong> <span>Updates apt, Flatpak apps, runtimes and models.</span></div></li>
+        <li><div><strong><code>zom doctor</code></strong> <span>Checks Ollama, runtimes, editors, GPU and disk.</span></div></li>
+        <li><div><strong>Safe to re-run.</strong> <span>The installer changes nothing it does not need to, so you can run it again after any update.</span></div></li>
+        <li><div><strong>New users.</strong> <span>Every new account inherits the same setup.</span></div></li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap band">
+    <div>
+      <p class="eyebrow"><span class="dot"></span>Ready?</p>
+      <h2>Try Noctra OS.</h2>
+    </div>
+    <div class="cta"><a class="btn primary" href="download.html">Download</a><a class="btn ghost" href="community.html">Get involved</a></div>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="cols">
+      <div class="about">
+        <a class="brand" href="index.html"><svg viewBox="0 0 32 32" aria-hidden="true"><polygon points="2,26 13,6 18,16" fill="#e68e0d"/><polygon points="13,26 22,10 30,26" fill="#e68e0d" opacity="0.55"/></svg><span>Noctra <small>OS</small></span></a>
+        <p>An AI workstation built on Zorin OS. It finds the models your PC can run and puts the coding agents in the start menu.</p>
+      </div>
+      <div>
+        <h3>Noctra OS</h3>
+        <ul><li><a href="index.html">Home</a></li><li><a href="features.html">Features</a></li><li><a href="download.html">Download</a></li></ul>
+      </div>
+      <div>
+        <h3>Community</h3>
+        <ul><li><a href="community.html">Get involved</a></li><li><a href="https://github.com/dazeb/noctraos/issues">Report a bug</a></li><li><a href="https://github.com/dazeb/noctraos">Source code</a></li></ul>
+      </div>
+      <div>
+        <h3>Documentation</h3>
+        <ul><li><a href="https://github.com/dazeb/noctraos#readme">README</a></li><li><a href="https://github.com/dazeb/noctraos/blob/main/docs/theme-design.md">Theme design</a></li><li><a href="https://github.com/dazeb/noctraos/blob/main/docs/omarchy-parity.md">App list</a></li></ul>
+      </div>
+    </div>
+    <div class="legal">
+      <p>Noctra OS is built on Zorin OS and is an independent project. It is not an official Ubuntu flavour and is not affiliated with or endorsed by Zorin Group, Canonical or Omarchy.</p>
+      <p>Zorin OS is a trademark of Zorin Group. Ubuntu is a registered trademark of Canonical Ltd. Agent names and logos belong to their respective projects; Noctra OS ships launchers only. No license has been selected yet.</p>
+    </div>
+  </div>
+</footer>
+<script src="script.js"></script>
+</body>
+</html>

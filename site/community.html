@@ -3,9 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="description" content="Noctra OS finds the AI models your PC can run and puts every coding agent in the start menu. Built on Zorin OS 18.">
+<meta name="description" content="Report bugs, read the docs, build the ISO or contribute code to Noctra OS.">
 <meta name="theme-color" content="#0e0d12">
-<title>Noctra OS</title>
+<title>Get Involved · Noctra OS</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Hanken+Grotesk:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap">
@@ -20,10 +20,10 @@
     </a>
     <nav aria-label="Main">
       <ul>
-        <li><a href="index.html" aria-current="page">Home</a></li>
+        <li><a href="index.html">Home</a></li>
         <li><a href="features.html">Features</a></li>
         <li><a href="download.html">Download</a></li>
-        <li><a href="community.html">Get Involved</a></li>
+        <li><a href="community.html" aria-current="page">Get Involved</a></li>
         <li><a href="https://github.com/dazeb/noctraos">GitHub</a></li>
       </ul>
     </nav>
@@ -31,67 +31,49 @@
 </header>
 
 <main>
-<div class="hero">
-  <img src="img/neon-rift.webp" alt="" width="1920" height="1080" fetchpriority="high">
+<div class="banner">
+  <img src="img/sunset-peaks.webp" alt="" width="1920" height="1080">
   <div class="wrap">
-    <p class="eyebrow"><span class="dot"></span>Noctra OS 0.3 · built on Zorin OS 18</p>
-    <h1>Install. Detect. <em>Run AI.</em></h1>
-    <p class="lede">Noctra OS checks your hardware, picks the AI models your PC can run, and puts every coding agent in the start menu.</p>
-    <div class="cta">
-      <a class="btn primary" href="download.html">Download</a>
-      <a class="btn ghost" href="features.html">See features</a>
-    </div>
-  </div>
-</div>
-
-<div class="facts">
-  <div class="wrap">
-    <div>Release<b>0.3.0</b></div>
-    <div>Based on<b>Zorin OS 18.1</b></div>
-    <div>Desktop<b>GNOME, Zorin edition</b></div>
-    <div>Architecture<b>64-bit (amd64)</b></div>
+    <p class="eyebrow"><span class="dot"></span>Get involved</p>
+    <h1>Help shape Noctra</h1>
+    <p class="lede">Noctra OS is developed in the open on GitHub. Bug reports, ideas and patches are all welcome.</p>
   </div>
 </div>
 
 <section>
   <div class="wrap">
-    <div class="head">
-      <p class="eyebrow"><span class="dot"></span>What is Noctra OS?</p>
-      <h2>A desktop where AI is already set up.</h2>
-      <p class="lede">Noctra takes a fresh Zorin OS install and finishes the job: models, agents, editor and tools, all wired together before your first login.</p>
-    </div>
-    <div class="highlights">
-      <div class="hl">
-        <img src="icons/zorin-ai-local-llm.svg" alt="">
-        <h3>Detects what you can run</h3>
-        <p>llmfit scans your CPU, GPU and memory and lists the local models that fit your PC.</p>
-      </div>
-      <div class="hl">
-        <img src="icons/zorin-ai-agents.svg" alt="">
-        <h3>Agents in the start menu</h3>
-        <p>Codex, Claude Code, OpenCode, Grok, Gemini CLI and Qwen Code are one click away.</p>
-      </div>
-      <div class="hl">
-        <img src="icons/applications-development.svg" alt="">
-        <h3>Ready for development</h3>
-        <p>VS Code, Node, Python, Go, Docker and the terminal tools you expect are already installed.</p>
-      </div>
+    <div class="ways">
+      <a class="way" href="https://github.com/dazeb/noctraos/issues">
+        <h3>Report a problem</h3>
+        <p>Something broken or confusing? Open an issue and include the output of <code>zom doctor</code>.</p>
+        <span class="go">Open an issue →</span>
+      </a>
+      <a class="way" href="https://github.com/dazeb/noctraos">
+        <h3>Read the source</h3>
+        <p>The installer, the <code>zom</code> tools and the ISO builder are all in one repository.</p>
+        <span class="go">View on GitHub →</span>
+      </a>
+      <a class="way" href="https://github.com/dazeb/noctraos/blob/main/docs/theme-design.md">
+        <h3>Theme and design</h3>
+        <p>How the dark theme is built, and how one palette file generates every surface.</p>
+        <span class="go">Read the theme notes →</span>
+      </a>
+      <a class="way" href="download.html">
+        <h3>Build the ISO</h3>
+        <p>Build the installer yourself and test it in a virtual machine. Reports from real hardware are especially useful.</p>
+        <span class="go">Download page →</span>
+      </a>
     </div>
   </div>
 </section>
 
 <section>
-  <div class="wrap band">
-    <div>
-      <p class="eyebrow"><span class="dot"></span>Get started</p>
-      <h2>Already on Zorin OS 18?</h2>
-    </div>
-    <div class="stack">
-      <p class="alt">Run one command to turn it into Noctra. Or <a href="download.html">download the installer</a> for a fresh disk.</p>
-      <div class="term-line">
-          <code id="oneliner">curl -fsSL https://raw.githubusercontent.com/dazeb/zorin-ai/main/boot.sh | bash</code>
-          <button type="button" data-copy="oneliner" aria-label="Copy install command">Copy</button>
-        </div>
+  <div class="wrap">
+    <div class="head"><h2>Contributing</h2></div>
+    <div class="prose">
+      <p>Noctra OS is a set of idempotent shell modules plus a few small tools. If you want to change something, open an issue first so we can agree on the approach before you write code.</p>
+      <p>There is no license yet, so please check with the maintainer before sending a large change.</p>
+      <p>Noctra is not an official Ubuntu flavour. If you are looking for Ubuntu support, see <a href="https://ubuntu.com/community">ubuntu.com/community</a>. For the base system, see <a href="https://zorin.com">zorin.com</a>.</p>
     </div>
   </div>
 </section>
