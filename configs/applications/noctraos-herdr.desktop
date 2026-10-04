@@ -5,7 +5,7 @@ Name=Herdr
 GenericName=Agent Session Manager
 Comment=Persistent terminal workspaces for coding agents
 Exec=gnome-terminal --title=Herdr -- /usr/local/bin/mise exec herdr -- herdr
-Icon=zorin-ai-herdr
+Icon=noctraos-herdr
 Categories=Development;
 Terminal=false
 StartupNotify=true

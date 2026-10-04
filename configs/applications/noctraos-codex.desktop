@@ -4,9 +4,9 @@ Version=1.0
 Name=Codex
 GenericName=AI Coding Agent
 Comment=OpenAI Codex CLI in a terminal
-Exec=gnome-terminal --title=Codex -- /usr/local/bin/zorin-ai-agent codex
-Icon=zorin-ai-agent-codex
-Categories=X-ZorinAI-Agents;Development;
+Exec=gnome-terminal --title=Codex -- /usr/local/bin/noctraos-agent codex
+Icon=noctraos-agent-codex
+Categories=X-NoctraOS-Agents;Development;
 Terminal=false
 StartupNotify=true
 Keywords=codex;openai;agent;ai;

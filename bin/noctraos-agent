@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
-# zorin-ai-agent — launch an AI coding agent from the menu, installing it
-# on first use. Usage: zorin-ai-agent <codex|claude|opencode|grok> [args...]
+# noctraos-agent — launch an AI coding agent from the menu, installing it
+# on first use. Usage: noctraos-agent <codex|claude|opencode|grok> [args...]
 set -u
 
 AGENT="${1:-}"; shift || true
 
 # mise-managed node/npm lives behind the profile hooks; pull it in for this
 # non-login shell so npm and the agent shims resolve.
-if [ -f /etc/profile.d/zorin-ai-mise.sh ]; then
+if [ -f /etc/profile.d/noctraos-mise.sh ]; then
   # shellcheck disable=SC1091
-  . /etc/profile.d/zorin-ai-mise.sh
+  . /etc/profile.d/noctraos-mise.sh
 fi
 
 declare -A PKG=(
@@ -22,7 +22,7 @@ declare -A PKG=(
 )
 
 if [ -z "$AGENT" ] || [ -z "${PKG[$AGENT]:-}" ]; then
-  echo "usage: zorin-ai-agent <codex|claude|opencode|grok> [args...]" >&2
+  echo "usage: noctraos-agent <codex|claude|opencode|grok> [args...]" >&2
   exit 1
 fi
 
@@ -30,7 +30,7 @@ if ! command -v "$AGENT" >/dev/null 2>&1; then
   echo "$AGENT is not installed yet."
   if command -v zenity >/dev/null 2>&1; then
     zenity --question --no-wrap \
-      --text="$AGENT is not installed.\n\nInstall it now with npm (needs node — included with zorin-ai)?" \
+      --text="$AGENT is not installed.\n\nInstall it now with npm (needs node — included with noctraos)?" \
       || exit 1
   fi
   if ! command -v npm >/dev/null 2>&1; then

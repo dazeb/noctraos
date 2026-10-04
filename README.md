@@ -1,8 +1,8 @@
-# zorin-ai
+# NoctraOS
 
 **A mouse-first, AI-agent workstation for Zorin OS — one command, or one ISO.**
 
-zorin-ai turns a fresh [Zorin OS](https://zorin.com) 18.x machine into a
+NoctraOS turns a fresh [Zorin OS](https://zorin.com) 18.x machine into a
 complete AI development workstation: a local LLM stack, a start menu built
 around AI agents, polyglot runtimes, and an Omarchy-inspired dark theme with
 polygonal wallpapers — all installed and wired together by an idempotent
@@ -14,10 +14,10 @@ opening a terminal — unless you want to, because the terminal is where the
 agents live.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/dazeb/zorin-ai/main/boot.sh | bash
+curl -fsSL https://raw.githubusercontent.com/dazeb/noctraos/main/boot.sh | bash
 ```
 
-Prefer to review first: `git clone https://github.com/dazeb/zorin-ai && cd zorin-ai && ./boot.sh`
+Prefer to review first: `git clone https://github.com/dazeb/noctraos && cd noctraos && ./boot.sh`
 
 ---
 
@@ -36,10 +36,10 @@ Prefer to review first: `git clone https://github.com/dazeb/zorin-ai && cd zorin
 | Runtimes | [mise](https://mise.jdx.dev) managing Node LTS, Python 3.12, Go — system-wide, for every user |
 | Mouse ergonomics | Nautilus right-click: *Open in VS Code*, *Ask AI to Explain* (sends the file to local Ollama, answers in a dialog), *Open Terminal Here* |
 | Clipboard | [CopyQ](https://hluk.github.io/CopyQ/) permanent clipboard history — tray-resident, survives reboots, searchable, image support, 1000 entries |
-| Desktop | ZorinAI-Dark shell theme, AI-first start menu, white menu icons, neon polygonal 4K wallpapers, dark mode, Windows-style window buttons, pinned taskbar |
+| Desktop | NoctraOS-Dark shell theme, AI-first start menu, white menu icons, neon polygonal 4K wallpapers, dark mode, Windows-style window buttons, pinned taskbar |
 | Maintenance | `zom` CLI + `zom-menu` GUI panel |
 | Persistence | New user accounts inherit the whole setup via `/etc/skel` |
-| Bootable ISO | Build a **Zorin-AI OS** image with everything baked in (see below) |
+| Bootable ISO | Build a **NoctraOS** image with everything baked in (see below) |
 
 ### The start menu, rebuilt AI-first
 
@@ -61,7 +61,7 @@ The main desktop design follows **Omarchy Matte Black**: charcoal surfaces,
 restrained borders, amber focus and active states, compact 4 px corners, and
 JetBrains Mono in the shell and terminals. GNOME remains the desktop.
 
-- **ZorinAI-Dark** derives from the installed Zorin Shell and GTK themes, then
+- **NoctraOS-Dark** derives from the installed Zorin Shell and GTK themes, then
   applies our overrides to panels, menus, quick settings, notifications,
   dialogs, buttons, entries, and selection states.
 - **One palette** in `configs/theme/palette.json` generates the shell/GTK CSS,
@@ -113,59 +113,59 @@ Environment variables, all optional:
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `ZORIN_AI_MODEL` | `qwen2.5-coder:7b` | Coding model pulled by module 03 |
-| `ZORIN_AI_EMBED_MODEL` | `nomic-embed-text` | Embedding model for RAG |
-| `ZORIN_AI_REPO_URL` | `https://github.com/dazeb/zorin-ai.git` | Source repo (boot.sh + ISO first-boot) |
-| `ZORIN_AI_BRANCH` | `main` | Branch to pull |
-| `ZORIN_AI_HOME` | `~/.local/share/zorin-ai` | Provisioner install location |
-| `ZORIN_AI_LOG` | `/tmp/zorin-ai-install-<ts>.log` | Installer log path |
-| `ZORIN_AI_OLLAMA_URL` | `http://localhost:11434` | Endpoint used by the *Ask AI to Explain* script |
+| `NOCTRAOS_MODEL` | `qwen2.5-coder:7b` | Coding model pulled by module 03 |
+| `NOCTRAOS_EMBED_MODEL` | `nomic-embed-text` | Embedding model for RAG |
+| `NOCTRAOS_REPO_URL` | `https://github.com/dazeb/noctraos.git` | Source repo (boot.sh + ISO first-boot) |
+| `NOCTRAOS_BRANCH` | `main` | Branch to pull |
+| `NOCTRAOS_HOME` | `~/.local/share/noctraos` | Provisioner install location |
+| `NOCTRAOS_LOG` | `/tmp/noctraos-install-<ts>.log` | Installer log path |
+| `NOCTRAOS_OLLAMA_URL` | `http://localhost:11434` | Endpoint used by the *Ask AI to Explain* script |
 
 Installer flags: `--skip-ai` (no Ollama/model downloads), `--skip-gui`
 (headless-ish: skips GUI apps, Nautilus scripts, theme, shell reskin).
 
-## Building the Zorin-AI OS ISO
+## Building the NoctraOS ISO
 
-`iso/build-zorin-ai-iso.sh` remasters a stock Zorin live ISO:
+`iso/build-noctraos-iso.sh` remasters a stock Zorin live ISO:
 
 1. extracts the ISO tree and unpacks `casper/filesystem.squashfs`
-2. bakes in a snapshot of this provisioner at `/opt/zorin-ai`
-3. adds `/usr/local/sbin/zorin-ai-firstboot` + an autostart entry so the
+2. bakes in a snapshot of this provisioner at `/opt/noctraos`
+3. adds `/usr/local/sbin/noctraos-firstboot` + an autostart entry so the
    provisioner runs on the user's **first desktop login** after installation
    (it prefers a fresh clone from GitHub and falls back to the baked snapshot
    when offline)
-4. generates an unattended-install seed from `iso/preseed/zorin-ai.seed.in`
-   (baked at `/preseed/zorin-ai.seed`) and adds an **"Install Zorin-AI OS
+4. generates an unattended-install seed from `iso/preseed/noctraos.seed.in`
+   (baked at `/preseed/noctraos.seed`) and adds an **"Install NoctraOS
    (unattended)"** entry to the BIOS + UEFI boot menus
-5. rebrands the boot menu to "Zorin-AI OS", resquashes with the original
+5. rebrands the boot menu to "NoctraOS", resquashes with the original
    compressor, and rewrites the ISO preserving BIOS + UEFI boot equipment
 6. prints the new sha256
 
 ```bash
-sudo ./iso/build-zorin-ai-iso.sh Zorin-OS-18.1-Core-64-bit.iso zorin-ai-os-18.1-amd64.iso
+sudo ./iso/build-noctraos-iso.sh Zorin-OS-18.1-Core-64-bit.iso noctraos-18.1-amd64.iso
 # needs: xorriso, squashfs-tools, git, openssl, root, ~25 GiB scratch (WORK_BASE=…)
 ```
 
 Two ways to install the result:
 
 - **Interactive** — boot it like normal Zorin and click through the installer
-  ("Try or Install Zorin-AI OS"). On first login a terminal appears, asks once
+  ("Try or Install NoctraOS"). On first login a terminal appears, asks once
   for your sudo password, and builds the workstation.
-- **Fully unattended** — pick "Install Zorin-AI OS (unattended)" (or build with
-  `ZORIN_AI_UNATTENDED=1` to make it the default with a 5 s timeout). The OS
+- **Fully unattended** — pick "Install NoctraOS (unattended)" (or build with
+  `NOCTRAOS_UNATTENDED=1` to make it the default with a 5 s timeout). The OS
   installs hands-off (locale, keyboard, whole-disk partitioning, user, GRUB —
   all preseeded), reboots straight into the new system, and the provisioner
   starts on its own.
 
 Unattended builds default to **autologin + passwordless sudo** for the created
 user (appliance semantics — the firstboot provisioning runs with zero
-interaction). Set `ZORIN_AI_AUTOLOGIN=0` to keep a locked-down first boot.
+interaction). Set `NOCTRAOS_AUTOLOGIN=0` to keep a locked-down first boot.
 
-Build-time knobs (all optional): `ZORIN_AI_UNATTENDED`, `ZORIN_AI_AUTOLOGIN`,
-`ZORIN_AI_USER` (default `zorin`), `ZORIN_AI_FULLNAME`, `ZORIN_AI_HOSTNAME`
-(default `zorin-ai`), `ZORIN_AI_PASSWORD` (default `zorin-ai`),
-`ZORIN_AI_LOCALE` (`en_US.UTF-8`), `ZORIN_AI_KEYMAP` (`us`),
-`ZORIN_AI_TIMEZONE` (`UTC`).
+Build-time knobs (all optional): `NOCTRAOS_UNATTENDED`, `NOCTRAOS_AUTOLOGIN`,
+`NOCTRAOS_USER` (default `noctraos`), `NOCTRAOS_FULLNAME`, `NOCTRAOS_HOSTNAME`
+(default `noctraos`), `NOCTRAOS_PASSWORD` (default `noctraos`),
+`NOCTRAOS_LOCALE` (`en_US.UTF-8`), `NOCTRAOS_KEYMAP` (`us`),
+`NOCTRAOS_TIMEZONE` (`UTC`).
 
 > **Heads-up:** the baked seed contains the created user's password hash —
 > anyone holding the ISO can read it. Bake throwaway credentials only.
@@ -201,7 +201,7 @@ rather than a throwaway bus.
 boot.sh                  remote fetcher
 install.sh               orchestrator (--skip-ai, --skip-gui)
 install/                 modules 00–08 + lib.sh (shared helpers)
-bin/                     zom, zom-menu, zorin-ai-agent
+bin/                     zom, zom-menu, noctraos-agent
 configs/                 mise, VS Code, Continue.dev, .desktop launchers,
                          XDG menu tree, Nautilus scripts
 assets/wallpapers/       generator + 5 seeded 4K scenes
@@ -235,5 +235,5 @@ and custom branding assets.
 ## License
 
 Not yet selected — all rights reserved until then. Agent names and logos
-belong to their respective projects; zorin-ai ships none of them, only
+belong to their respective projects; noctraos ships none of them, only
 launchers.

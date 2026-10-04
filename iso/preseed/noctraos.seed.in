@@ -1,7 +1,7 @@
-# Zorin-AI OS unattended-install preseed (Ubiquity/d-i).
-# Template — iso/build-zorin-ai-iso.sh substitutes the @VARS@ from build-time
-# environment (ZORIN_AI_*) and bakes the result into the ISO at
-# /preseed/zorin-ai.seed. NOTE: the baked seed contains the user's password
+# NoctraOS unattended-install preseed (Ubiquity/d-i).
+# Template — iso/build-noctraos-iso.sh substitutes the @VARS@ from build-time
+# environment (NOCTRAOS_*) and bakes the result into the ISO at
+# /preseed/noctraos.seed. NOTE: the baked seed contains the user's password
 # hash — anyone holding the ISO can read it. Only bake throwaway credentials.
 
 # --- locale / console ------------------------------------------------------

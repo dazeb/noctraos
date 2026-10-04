@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# zorin-ai — main orchestrator.
+# noctraos — main orchestrator.
 # Run as your normal desktop user; sudo is used internally for system changes.
 set -Eeuo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-LOG_FILE="${ZORIN_AI_LOG:-/tmp/zorin-ai-install-$(date +%Y%m%d-%H%M%S).log}"
+LOG_FILE="${NOCTRAOS_LOG:-/tmp/noctraos-install-$(date +%Y%m%d-%H%M%S).log}"
 exec > >(tee -a "$LOG_FILE") 2>&1
 
 # ---- resolve the target desktop user -----------------------------------------
@@ -36,7 +36,7 @@ for arg in "$@"; do
 done
 
 echo "======================================================"
-echo "  zorin-ai :: mouse-first AI developer workstation"
+echo "  NoctraOS :: mouse-first AI developer workstation"
 echo "======================================================"
 log "Log file: $LOG_FILE"
 log "Target user: $TARGET_USER ($TARGET_HOME)"

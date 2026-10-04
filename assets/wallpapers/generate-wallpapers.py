@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""generate-wallpapers.py — Zorin-AI OS wallpaper set: striking polygonal.
+"""generate-wallpapers.py — NoctraOS wallpaper set: striking polygonal.
 
 Renders low-poly landscape wallpapers: faceted mountain layers with vivid
 palette-mapped elevation shading, flat sun discs, aurora ribbons and star
@@ -314,7 +314,7 @@ def main():
     os.makedirs(args.outdir, exist_ok=True)
     names = [args.only] if args.only else sorted(SCENES)
     for name in names:
-        out = os.path.join(args.outdir, f"zorin-ai-{name}-{args.height}p.jpg")
+        out = os.path.join(args.outdir, f"noctraos-{name}-{args.height}p.jpg")
         img = SCENES[name](args.width, args.height, args.seed)
         img.save(out, "JPEG", quality=92, optimize=True, progressive=True)
         print(f"{out}  ({os.path.getsize(out) // 1024} KiB)")

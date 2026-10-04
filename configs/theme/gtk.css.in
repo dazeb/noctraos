@@ -1,4 +1,4 @@
-/* Zorin AI GTK 3/4 overrides. Libadwaita and sandboxed apps may use their
+/* NoctraOS GTK 3/4 overrides. Libadwaita and sandboxed apps may use their
  * own styles; this does not force GTK_THEME or overwrite user GTK CSS. */
 @define-color theme_bg_color $background;
 @define-color theme_fg_color $foreground;

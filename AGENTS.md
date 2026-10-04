@@ -1,26 +1,26 @@
-# AGENTS.md — zorin-ai
+# AGENTS.md — noctraos
 
 Instructions for coding agents working in this repository. Read fully before
 changing anything; the pitfalls section saves real debugging time.
 
 ## What this repo is
 
-`zorin-ai` is an Omakub-style provisioner that turns a fresh **Zorin OS 18.x**
+`noctraos` (NoctraOS) is an Omakub-style provisioner that turns a fresh **Zorin OS 18.x**
 (Ubuntu 24.04 base) machine into a mouse-first **AI development workstation**:
 local Ollama stack, a six-agent start menu, mise-managed runtimes, and a
-cyberpunk visual theme (ZorinAI-Dark shell theme, neon polygonal wallpapers,
-white icons). It also builds a bootable **Zorin-AI OS ISO** with all of this
+cyberpunk visual theme (NoctraOS-Dark shell theme, neon polygonal wallpapers,
+white icons). It also builds a bootable **NoctraOS ISO** with all of this
 baked in.
 
-The repo is **public on GitHub** (`github.com/dazeb/zorin-ai`) — this is a hard
+The repo is **public on GitHub** (`github.com/dazeb/noctraos`) — this is a hard
 requirement: the one-liner bootstrap and the ISO's first-boot fetch clone it
 anonymously. Never make it private, never commit secrets.
 
 ## Repository map
 
 ```
-boot.sh                     remote fetcher: clones repo to ~/.local/share/zorin-ai,
-                            runs install.sh; env: ZORIN_AI_REPO_URL, ZORIN_AI_BRANCH, ZORIN_AI_HOME
+boot.sh                     remote fetcher: clones repo to ~/.local/share/noctraos,
+                            runs install.sh; env: NOCTRAOS_REPO_URL, NOCTRAOS_BRANCH, NOCTRAOS_HOME
 install.sh                  orchestrator: logging, TARGET_USER resolution, flags
                             (--skip-ai, --skip-gui), runs modules 00-07 + 08
 install/
@@ -38,12 +38,12 @@ install/
   06_desktop_theme.sh       gsettings ergonomics, wallpapers, Agents menu,
                             AI-first /etc/xdg/menus/gnome-applications.menu
   07_persistence.sh         /etc/skel defaults, zom + zom-menu install
-  08_shell_theme.sh         ZorinAI-Dark shell + GTK themes (derived, not
+  08_shell_theme.sh         NoctraOS-Dark shell + GTK themes (derived, not
                             shipped), white menu icons, terminal/app palette
 bin/
   zom                       CLI: update | doctor | models [list|pull|rm|gui] | bg [list|next|set]
   zom-menu                  zenity control panel
-  zorin-ai-agent            agent launcher wrapper: installs npm package on
+  noctraos-agent            agent launcher wrapper: installs npm package on
                             first use, then execs the agent
 configs/
   mise/config.toml          node=lts, python=3.12, go=latest, terminal tools
@@ -60,10 +60,10 @@ assets/
   icons/                    white SVG glyphs (agents, Local LLM, category tiles)
   icons/overrides/          white SVGs under STOCK icon names — these replace
                             the system category icons system-wide
-iso/build-zorin-ai-iso.sh   ISO remaster pipeline (runs on the Proxmox node);
-                            ZORIN_AI_UNATTENDED=1 + ZORIN_AI_USER/PASSWORD/…
+iso/build-noctraos-iso.sh   ISO remaster pipeline (runs on the Proxmox node);
+                            NOCTRAOS_UNATTENDED=1 + NOCTRAOS_USER/PASSWORD/…
                             bake an unattended-install seed and boot entries
-iso/preseed/zorin-ai.seed.in  Ubiquity/d-i seed template for the above
+iso/preseed/noctraos.seed.in  Ubiquity/d-i seed template for the above
 ```
 
 ## Non-negotiable rules
@@ -84,7 +84,7 @@ iso/preseed/zorin-ai.seed.in  Ubiquity/d-i seed template for the above
    guard misreads "installed" as "missing". Drain with `grep ... >/dev/null`.
 6. **gsettings must target the user session bus**, never `dbus-launch`:
    `as_user` in lib.sh handles it (DBUS_SESSION_BUS_ADDRESS=/run/user/UID/bus).
-7. **Verify pushes server-side**: `gh api repos/dazeb/zorin-ai/commits/heads/main --jq .sha`.
+7. **Verify pushes server-side**: `gh api repos/dazeb/noctraos/commits/heads/main --jq .sha`.
    A clean `git push` exit code has already lied here once — check which branch
    HEAD is on (`git status`) and confirm the remote SHA after pushing.
 8. **Working tree hygiene**: commit on `main`. If `git status` shows a feature
@@ -132,7 +132,7 @@ iso/preseed/zorin-ai.seed.in  Ubiquity/d-i seed template for the above
 - **RAM pressure**: the node juggles 14 GiB of allocated VMs. Don't start
   extra VMs while builds run; builds peak ~2 GiB.
 - **local-zfs is nearly full** (~17 GiB free, 2026-09-26): a build's scratch
-  (~15 GiB peak) fits, but delete `zorin-ai-iso-build.*` work dirs afterwards.
+  (~15 GiB peak) fits, but delete `noctraos-iso-build.*` work dirs afterwards.
 - `xorriso`, `git`, `squashfs-tools`, `openssl` are available on the node.
 - **Unattended ISO build** (v0.3+): the build script clones the provisioner
   from GitHub for the squashfs, so push first; the seed template is read from
@@ -145,7 +145,7 @@ iso/preseed/zorin-ai.seed.in  Ubiquity/d-i seed template for the above
 # static checks (docker shellcheck — not installed on this host)
 bash -n boot.sh install.sh install/*.sh bin/* configs/nautilus-scripts/*
 docker run --rm -v "$PWD:/mnt" koalaman/shellcheck:stable --severity=warning \
-  boot.sh install.sh install/*.sh bin/zom bin/zom-menu bin/zorin-ai-agent \
+  boot.sh install.sh install/*.sh bin/zom bin/zom-menu bin/noctraos-agent \
   configs/nautilus-scripts/*
 
 # wallpaper iteration (venv at ~/workspace/scratch/zorin-img-venv: pillow+numpy)
@@ -155,26 +155,26 @@ cd assets/wallpapers
 ~/workspace/scratch/zorin-img-venv/bin/python generate-wallpapers.py      # 4K final
 
 # deploy a change to the test VM (idempotent full pass)
-tar czf /tmp/zai-repo.tgz --exclude=.git --exclude=.zcodeignore .
-scp -q /tmp/zai-repo.tgz dazeb@192.168.8.187:/tmp/
-ssh dazeb@192.168.8.187 'rm -rf ~/.local/share/zorin-ai && mkdir -p ~/.local/share/zorin-ai \
-  && tar xzf /tmp/zai-repo.tgz -C ~/.local/share/zorin-ai \
-  && nohup bash ~/.local/share/zorin-ai/install.sh > /tmp/zai-run.log 2>&1 &'
+tar czf /tmp/noctraos-repo.tgz --exclude=.git --exclude=.zcodeignore .
+scp -q /tmp/noctraos-repo.tgz dazeb@192.168.8.187:/tmp/
+ssh dazeb@192.168.8.187 'rm -rf ~/.local/share/noctraos && mkdir -p ~/.local/share/noctraos \
+  && tar xzf /tmp/noctraos-repo.tgz -C ~/.local/share/noctraos \
+  && nohup bash ~/.local/share/noctraos/install.sh > /tmp/noctraos-run.log 2>&1 &'
 # headless runs need NOPASSWD sudo (already enabled on VM 114) or cached creds
 
 # fresh-clone audit + server-side push verification
-git clone -q git@github.com:dazeb/zorin-ai.git /tmp/zai-clone && find /tmp/zai-clone -type f | wc -l
-gh api repos/dazeb/zorin-ai/commits/heads/main --jq '.sha[0:7] + " " + .commit.message'
+git clone -q git@github.com:dazeb/noctraos.git /tmp/noctraos-clone && find /tmp/noctraos-clone -type f | wc -l
+gh api repos/dazeb/noctraos/commits/heads/main --jq '.sha[0:7] + " " + .commit.message'
 
 # ISO build (on the node — clone fresh so the baked snapshot + seed match main)
 ssh root@192.168.8.195
-git clone -q --depth 1 https://github.com/dazeb/zorin-ai.git /local-zfs/iso-build/zorin-ai-src
-systemd-run --unit=zai-iso --collect bash -c \
-  "ZORIN_AI_UNATTENDED=1 ZORIN_AI_USER=dazeb ZORIN_AI_PASSWORD=zorin-test-2026 \
-   WORK_BASE=/local-zfs/iso-build bash /local-zfs/iso-build/zorin-ai-src/iso/build-zorin-ai-iso.sh \
+git clone -q --depth 1 https://github.com/dazeb/noctraos.git /local-zfs/iso-build/noctraos-src
+systemd-run --unit=noctraos-iso --collect bash -c \
+  "NOCTRAOS_UNATTENDED=1 NOCTRAOS_USER=dazeb NOCTRAOS_PASSWORD=zorin-test-2026 \
+   WORK_BASE=/local-zfs/iso-build bash /local-zfs/iso-build/noctraos-src/iso/build-noctraos-iso.sh \
    /var/lib/vz/template/iso/Zorin-OS-18.1-Core-64-bit.iso \
-   /var/lib/vz/template/iso/zorin-ai-os-18.1-amd64.iso > /root/zai-build.log 2>&1"
-tail -f /root/zai-build.log
+   /var/lib/vz/template/iso/noctraos-18.1-amd64.iso > /root/noctraos-build.log 2>&1"
+tail -f /root/noctraos-build.log
 ```
 
 ## Known pitfalls (each cost real debugging time)
@@ -237,8 +237,13 @@ tail -f /root/zai-build.log
 ## Current state (2026-09-26)
 
 - `main` past v0.2.0: unattended installer preseeding shipped (v0.3.0 line).
-- ISO: `zorin-ai-os-18.1-amd64.iso` on the node is the v0.3 (unattended)
-  build; the v0.2 image is preserved as `zorin-ai-os-18.1-v0.2.iso`.
+- Renamed from `zorin-ai` to **NoctraOS** (slug `noctraos`) — clean break, no
+  migration shims. Existing VMs keep their old `zorin-ai` files until reset or
+  re-provisioned. Test VM names (`zorin-ai-iso-test`, `zai-zerotouch-test`) are
+  unchanged. Zorin OS remains the upstream base and is named only as such.
+- ISO: `zorin-ai-os-18.1-amd64.iso` on the node (pre-rename name) is the v0.3
+  (unattended) build; the v0.2 image is `zorin-ai-os-18.1-v0.2.iso`. New builds
+  are named `noctraos-18.1-amd64.iso`.
   pve-root is at 90% — free space before the next build.
 - VM 110 `zai-zerotouch-test` (192.168.8.138, dazeb/zorin-test-2026, DHCP!):
   installed **fully zero-touch** from the v0.3 ISO on 2026-09-27 (boot →

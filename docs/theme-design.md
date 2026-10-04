@@ -1,4 +1,4 @@
-# ZorinAI-Dark: Omarchy design reference
+# NoctraOS-Dark: Omarchy design reference
 
 The main design follows [Omarchy's Matte Black palette](https://github.com/basecamp/omarchy/blob/8b4eae66da2938ba9559f103b18dbf85cdf28a70/themes/matte-black/colors.toml)
 and coordinated theme model, adapted to Zorin OS 18.1 and GNOME. This is the
@@ -84,9 +84,9 @@ session, then rebuild and boot-test the ISO from the published repository.
   their contents and timestamps on the second full pass. The final CSS refinement
   also produced no changes on its second theme-module pass.
 - GTK 3 and GTK 4 reported no CSS parsing diagnostics. After reboot, GNOME Shell
-  loaded ZorinAI-Dark without theme-parser errors; the menu and terminal were
+  loaded NoctraOS-Dark without theme-parser errors; the menu and terminal were
   inspected. `zom doctor` was green.
 - The reference VM is restored after testing. These worktree changes have not
   been published or baked into a new ISO.
 
-![Zorin AI menu and terminal with the Omarchy-inspired theme](screenshots/zorin-ai-matte-black.png)
+![NoctraOS menu and terminal with the Omarchy-inspired theme](screenshots/noctraos-matte-black.png)

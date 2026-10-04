@@ -1,12 +1,12 @@
 <!DOCTYPE Menu PUBLIC "-//freedesktop//DTD Menu 1.0//EN"
  "http://www.freedesktop.org/standards/menu-spec/1.0/menu.dtd">
 <Menu>
-  <!-- zorin-ai: "Agents" section in XDG application menus -->
+  <!-- noctraos: "Agents" section in XDG application menus -->
   <Menu>
     <Name>Agents</Name>
-    <Directory>zorin-ai-agents.directory</Directory>
+    <Directory>noctraos-agents.directory</Directory>
     <Include>
-      <Category>X-ZorinAI-Agents</Category>
+      <Category>X-NoctraOS-Agents</Category>
     </Include>
   </Menu>
 </Menu>

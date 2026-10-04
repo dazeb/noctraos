@@ -4,9 +4,9 @@ Version=1.0
 Name=Qwen Code
 GenericName=AI Coding Agent
 Comment=Qwen Code CLI in a terminal
-Exec=gnome-terminal --title="Qwen Code" -- /usr/local/bin/zorin-ai-agent qwen
-Icon=zorin-ai-agent-qwen
-Categories=X-ZorinAI-Agents;
+Exec=gnome-terminal --title="Qwen Code" -- /usr/local/bin/noctraos-agent qwen
+Icon=noctraos-agent-qwen
+Categories=X-NoctraOS-Agents;
 Terminal=false
 StartupNotify=true
 Keywords=qwen;alibaba;agent;ai;

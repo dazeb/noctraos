@@ -1,4 +1,4 @@
-/* Zorin AI: Omarchy-inspired geometry and Matte Black palette.
+/* NoctraOS: Omarchy-inspired geometry and Matte Black palette.
  * Applied after the installed Zorin shell stylesheet. */
 stage { font-family: "$font"; font-size: 10pt; color: $foreground; }
 #panel { background-color: $panel; color: $foreground; box-shadow: none; }

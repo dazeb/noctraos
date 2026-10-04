@@ -15,7 +15,7 @@ def compose(base, output, overlay, css_name, radius=4):
         raise ValueError("The base theme and custom theme must be different directories")
     if not 0 <= radius <= 16:
         raise ValueError("The corner radius must be between 0 and 16 px")
-    with tempfile.TemporaryDirectory(prefix="zorin-ai-theme-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="noctraos-theme-") as tmp:
         stage = Path(tmp) / "theme"
         shutil.copytree(base, stage)
         # Clamp each px radius, including multi-value declarations. Keep small radii.

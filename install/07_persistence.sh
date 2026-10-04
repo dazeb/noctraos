@@ -27,10 +27,10 @@ sudo install -m 644 "$REPO_ROOT/configs/copyq/copyq.conf" \
   /etc/skel/.config/copyq/copyq.conf
 sudo install -m 644 "$REPO_ROOT/configs/theme/herdr.toml" \
   /etc/skel/.config/herdr/config.toml
-sudo install -m 644 "$REPO_ROOT/configs/theme/zorin-ai-btop.theme" \
-  /etc/skel/.config/btop/themes/zorin-ai.theme
+sudo install -m 644 "$REPO_ROOT/configs/theme/noctraos-btop.theme" \
+  /etc/skel/.config/btop/themes/noctraos.theme
 if [ ! -f /etc/skel/.config/btop/btop.conf ]; then
-  printf 'color_theme = "zorin-ai"\n' | sudo tee /etc/skel/.config/btop/btop.conf >/dev/null
+  printf 'color_theme = "noctraos"\n' | sudo tee /etc/skel/.config/btop/btop.conf >/dev/null
 fi
 sudo install -m 644 "$REPO_ROOT/configs/autostart/copyq.desktop" \
   /etc/skel/.config/autostart/copyq.desktop
@@ -48,8 +48,8 @@ sudo mkdir -p /usr/local/share/applications
 sudo tee /usr/local/share/applications/zom-menu.desktop >/dev/null <<'EOF'
 [Desktop Entry]
 Type=Application
-Name=zorin-ai Control Panel
-Comment=Update and health-check your zorin-ai workstation
+Name=NoctraOS Control Panel
+Comment=Update and health-check your NoctraOS workstation
 Exec=zom-menu
 Icon=applications-system
 Terminal=false

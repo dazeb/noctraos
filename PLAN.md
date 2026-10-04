@@ -1,12 +1,13 @@
-# Zorin-AI OS Provisioner — Build Plan
+# NoctraOS Provisioner — Build Plan
 
-**Project:** `zorin-ai` · **Repo:** `/mnt/nvme1/workspace/projects/zorin-ai`
+**Project:** `noctraos` · **Repo:** `/mnt/nvme1/workspace/projects/noctraos`
 **Plan date:** 2026-09-25
-**Input spec:** "Technical Specification & Implementation Plan: Zorin-AI OS Provisioner" (Omakub-pattern provisioner for Zorin OS 17+ / Ubuntu 22.04–24.04 base)
+**Input spec:** "Technical Specification & Implementation Plan: NoctraOS Provisioner" (Omakub-pattern provisioner for Zorin OS 17+ / Ubuntu 22.04–24.04 base)
 **Status:** Phase 1 (provisioner) — scaffolded this session; modules implemented, untested on a target VM.
 
-> **Historical document.** This is the original 2026-09-25 build plan. VSCodium
-> and Chatbox were later replaced by Microsoft VS Code (`code`, `configs/vscode/`)
+> **Historical document.** This is the original 2026-09-25 build plan, written when the
+> project was called `zorin-ai`; identifiers were mechanically renamed to NoctraOS
+> (`noctraos`) afterwards. VSCodium and Chatbox were later replaced by Microsoft VS Code (`code`, `configs/vscode/`)
 > and removed (b6981b4); references below to `codium`, `configs/vscodium/`,
 > `Open_in_VSCodium` and the Chatbox .deb describe the original design. See
 > `AGENTS.md` and `docs/theme-design.md` for the current state.
@@ -40,7 +41,7 @@ curl -fsSL https://RAW-BOOTSTRAP-URL/boot.sh | bash
 
 ```
 boot.sh (remote one-liner)
-   └─ clones repo to ~/.local/share/zorin-ai, runs install.sh
+   └─ clones repo to ~/.local/share/noctraos, runs install.sh
         └─ install.sh  (orchestrator: logging, flags, TARGET_USER resolution)
              ├─ install/00_preflight.sh          OS / sudo / network / 25 GB disk
              ├─ install/01_system.sh             apt core, Flathub, Nerd Font
@@ -68,7 +69,7 @@ boot.sh (remote one-liner)
 ## 3. Repository layout
 
 ```
-zorin-ai/
+noctraos/
 ├── PLAN.md                ← this document
 ├── README.md
 ├── boot.sh                # remote fetcher / repo updater
@@ -97,7 +98,7 @@ zorin-ai/
 │       ├── Ask_AI_to_Explain
 │       └── Open_Terminal_Here
 ├── iso/
-│   └── build-zorin-ai-iso.sh        # M5: remaster Zorin ISO → Zorin-AI OS ISO
+│   └── build-noctraos-iso.sh        # M5: remaster Zorin ISO → NoctraOS ISO
 └── assets/branding/       # reserved for wallpapers/icons (phase 2)
 ```
 
@@ -171,7 +172,7 @@ Each module: **objective → actions → idempotence guard → acceptance check.
 
 ### 02_mise
 - **Actions:** install mise to `/usr/local/bin/mise` via the official installer
-  (`sudo MISE_INSTALL_PATH=…`); write `/etc/profile.d/zorin-ai-mise.sh` (login shells,
+  (`sudo MISE_INSTALL_PATH=…`); write `/etc/profile.d/noctraos-mise.sh` (login shells,
   bash/zsh aware); append a marked, guarded block to `/etc/bash.bashrc` so interactive
   **non-login** shells (desktop terminals) also get `mise activate`; install
   `/etc/mise/config.toml` (system baseline) and `~/.config/mise/config.toml` (user, only
@@ -182,8 +183,8 @@ Each module: **objective → actions → idempotence guard → acceptance check.
 ### 03_ai_core
 - **Actions:** official Ollama installer; `systemctl enable --now ollama`; poll
   `http://127.0.0.1:11434/api/tags` for up to 60 s; pull `qwen2.5-coder:7b`
-  (override: `ZORIN_AI_MODEL=<model> ./install.sh`); pull the small embedding model
-  `nomic-embed-text` (override: `ZORIN_AI_EMBED_MODEL=<model>`) for RAG / semantic search.
+  (override: `NOCTRAOS_MODEL=<model> ./install.sh`); pull the small embedding model
+  `nomic-embed-text` (override: `NOCTRAOS_EMBED_MODEL=<model>`) for RAG / semantic search.
 - **Guard:** `command -v ollama`; `systemctl is-enabled/is-active`; `api/tags` model match.
 - **Accept:** `curl 127.0.0.1:11434/api/version` answers; `ollama list` shows the model.
   Ollama binds `127.0.0.1` by default — we verify rather than reconfigure (§9.9).
@@ -214,7 +215,7 @@ Each module: **objective → actions → idempotence guard → acceptance check.
   `gtk-theme ZorinBlue-Dark`; striking polygonal wallpaper set (procedurally
   generated 4K low-poly scenes in `assets/wallpapers/` — sunset-peaks,
   neon-rift, aurora-peaks, crimson-dunes, glacier-facet — installed to
-  `/usr/local/share/backgrounds/zorin-ai/`, default + lock-screen set via
+  `/usr/local/share/backgrounds/noctraos/`, default + lock-screen set via
   `picture-uri[-dark]`; cycle with `zom bg next`); accent color attempted via
   `org.gnome.desktop.interface accent-color` (warn-not-die — key absent on some
   Zorin builds); pin favorites filtered to desktop entries that actually exist;
@@ -223,9 +224,9 @@ Each module: **objective → actions → idempotence guard → acceptance check.
   Also part of 06: the **Agents menu section** — branded SVG tile icons
   (`assets/icons/`), XDG launchers for Codex / Claude Code / OpenCode / Grok
   (`configs/applications/`) that open the agent in gnome-terminal through
-  `bin/zorin-ai-agent` (installs the agent's npm package on first use, with a
+  `bin/noctraos-agent` (installs the agent's npm package on first use, with a
   zenity consent prompt, via mise-managed node), an XDG menu merge adding the
-  "Agents" category (`configs/xdg/zorin-ai-agents.menu`), and a GNOME app-grid
+  "Agents" category (`configs/xdg/noctraos-agents.menu`), and a GNOME app-grid
   "Agents" folder via the relocatable `org.gnome.desktop.app-folders.folder`
   schema. The stock category tree itself is replaced by an AI-first
   `/etc/xdg/menus/gnome-applications.menu` (original preserved as
@@ -280,7 +281,7 @@ Each module: **objective → actions → idempotence guard → acceptance check.
   (`192.168.8.124`); remote VNC automation is blocked while the Proxmox web console
   holds the VM's single VNC client slot.
 - **M4 — polish & release:** *(done 2026-09-25)* — live at
-  [github.com/dazeb/zorin-ai](https://github.com/dazeb/zorin-ai); real bootstrap URL
+  [github.com/dazeb/noctraos](https://github.com/dazeb/noctraos); real bootstrap URL
   in `boot.sh`/README; CI workflow committed (`.github/workflows/ci.yml`,
   bash -n + shellcheck at warning severity; **note:** GitHub Actions is disabled at
   the account level, so runs won't start until re-enabled); shellcheck clean at
@@ -288,10 +289,10 @@ Each module: **objective → actions → idempotence guard → acceptance check.
   (exit 0, fully idempotent re-run); pipefail/grep -q guard bug found and fixed;
   tagged `v0.1.0`.
 - **M5 — phase 2 (true "fully featured OS"):** *(pipeline built + ISO validated
-  2026-09-25)* — `iso/build-zorin-ai-iso.sh` remasters a Zorin 18.1 ISO: provisioner
-  snapshot baked at `/opt/zorin-ai`, first-boot autostart runner
-  (`/usr/local/sbin/zorin-ai-firstboot`, GitHub-fresh preferred / snapshot fallback),
-  boot menu rebranded "Zorin-AI OS", squashfs repacked with the original zstd
+  2026-09-25)* — `iso/build-noctraos-iso.sh` remasters a Zorin 18.1 ISO: provisioner
+  snapshot baked at `/opt/noctraos`, first-boot autostart runner
+  (`/usr/local/sbin/noctraos-firstboot`, GitHub-fresh preferred / snapshot fallback),
+  boot menu rebranded "NoctraOS", squashfs repacked with the original zstd
   compressor, ISO rewritten with xorriso `boot_image replay` (BIOS + UEFI verified
   intact). End-to-end proof: the built ISO was installed into a fresh VM through the
   normal installer; on first login the provisioner launched itself and ran
@@ -299,8 +300,8 @@ Each module: **objective → actions → idempotence guard → acceptance check.
   CDN throttling — download speed is environment-dependent, not a pipeline issue).
   Remaining niceties: firmware/branding polish, unattended installer preseeding.
   **Unattended installer preseeding — done 2026-09-26:** the build script bakes
-  a d-i/Ubiquity seed (`iso/preseed/zorin-ai.seed.in`) and an "Install
-  Zorin-AI OS (unattended)" entry into both boot menus; unattended builds also
+  a d-i/Ubiquity seed (`iso/preseed/noctraos.seed.in`) and an "Install
+  NoctraOS (unattended)" entry into both boot menus; unattended builds also
   default to autologin + NOPASSWD sudo so first-boot provisioning is fully
   hands-off. Boot-test findings folded back as fixes: three unpreseeded keys on
   Ubiquity's first page, a broken GDM greeter session on Zorin 18.1 (worked
@@ -375,7 +376,7 @@ Each module: **objective → actions → idempotence guard → acceptance check.
 
 | Risk | Mitigation |
 |------|-----------|
-| `qwen2.5-coder:7b` is a ~4.7 GB download | 25 GB preflight floor; `--skip-ai` flag; model overridable via `ZORIN_AI_MODEL` |
+| `qwen2.5-coder:7b` is a ~4.7 GB download | 25 GB preflight floor; `--skip-ai` flag; model overridable via `NOCTRAOS_MODEL` |
 | No GPU / unsupported GPU | Ollama falls back to CPU; `zom doctor` reports what it detected |
 | Upstream outages (GitHub, GitLab, Flathub, chatboxai CDN) | preflight probes network; per-step warnings allow partial installs; `zom update` retries later |
 | Zorin schema drift across 17.x | module 06 steps are warn-not-die; favorites filtered to existing entries |
