@@ -335,7 +335,11 @@ tail -f /root/noctraos-build.log
   tells the agent to create it). There is deliberately no separate greeting turn: Hermes Desktop
   opens with its OWN guided intro ("what should I call you?", "Skip setup"; hardcoded in
   `apps/desktop/src/i18n/en.ts`, no supported off switch found), so the prompt starts the tour
-  from the user's first reply instead. A one-shot `hermes chat --oneshot` greeting was tried first:
+  from the user's first reply instead. The conversation is: who the user is (saved to
+  USER.md via the memory tool, target `user`; ~1,375 char cap), who the agent should be (a
+  "## How I should be" section appended to `~/.hermes/SOUL.md`, text shown first; SOUL.md is a
+  protected instruction file, so Hermes asks the user to approve the write), then only an
+  OFFER of the tour, run on a yes. Declining or finishing creates the done marker. A one-shot `hermes chat --oneshot` greeting was tried first:
   it works but must pass `--source desktop` (the default source `oneshot` is hidden from the
   desktop's session list) and it never showed ahead of Hermes' own intro. A `hermes config set`
   value that starts with `--` is parsed as a CLI option, so pass lists as JSON (`'["--flag"]'`).
