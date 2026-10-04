@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=OpenCode
+GenericName=AI Coding Agent
+Comment=OpenCode terminal agent
+Exec=gnome-terminal --title=OpenCode -- /usr/local/bin/noctraos-agent opencode
+Icon=noctraos-agent-opencode
+Categories=X-NoctraOS-Agents;Development;
+Terminal=false
+StartupNotify=true
+Keywords=opencode;agent;ai;

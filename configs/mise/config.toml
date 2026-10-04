@@ -1,5 +1,5 @@
-# zorin-ai default toolchain — system-wide baseline for all users.
-# Managed by the zorin-ai provisioner; user-level overrides go in
+# noctraos default toolchain — system-wide baseline for all users.
+# Managed by the noctraos provisioner; user-level overrides go in
 # ~/.config/mise/config.toml.
 
 [tools]

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""generate-wallpapers.py — Zorin-AI OS wallpaper set: striking polygonal.
+"""generate-wallpapers.py — NoctraOS wallpaper set: striking polygonal.
 
 Renders low-poly landscape wallpapers: faceted mountain layers with vivid
 palette-mapped elevation shading, flat sun discs, aurora ribbons and star
@@ -293,12 +293,32 @@ def scene_glacier_facet(w, h, seed):
     return finish(img)
 
 
+def scene_ember_night(w, h, seed):
+    """Near-black facets under a low amber sun — the NoctraOS house look (lock screen)."""
+    rng = np.random.default_rng(seed)
+    img = sky_gradient(w, h, [(0.0, hex_rgb("050505")), (0.55, hex_rgb("0d0b09")),
+                              (0.85, hex_rgb("1c1409")), (1.0, hex_rgb("2b1b08"))])
+    img = draw_stars(img, rng, density=70, max_y=0.5)
+    img = draw_sun(img, w * 0.70, h * 0.60, int(h * 0.07),
+                   hex_rgb("e68e0d"), glow=0.55, glow_color=hex_rgb("7a4a08"))
+    amber = hex_rgb("e68e0d")
+    facet_layer(img, rng, base_y=0.76, amp=0.13, cols=COLS, light_k=0.45,
+                elev_stops=shift_palette(
+                    [(0.0, hex_rgb("0d0d0d")), (0.6, hex_rgb("1e1e1e")),
+                     (1.0, hex_rgb("2f2a22"))], amber, 0.10))
+    facet_layer(img, rng, base_y=0.92, amp=0.18, cols=COLS, light_k=0.45,
+                elev_stops=[(0.0, hex_rgb("050505")), (0.55, hex_rgb("141414")),
+                            (0.85, hex_rgb("2a2a2a")), (1.0, hex_rgb("a8650a"))])
+    return finish(img, vignette=0.2)
+
+
 SCENES = {
     "sunset-peaks": scene_sunset_peaks,
     "neon-rift": scene_neon_rift,
     "aurora-peaks": scene_aurora_peaks,
     "crimson-dunes": scene_crimson_dunes,
     "glacier-facet": scene_glacier_facet,
+    "ember-night": scene_ember_night,
 }
 
 
@@ -314,7 +334,7 @@ def main():
     os.makedirs(args.outdir, exist_ok=True)
     names = [args.only] if args.only else sorted(SCENES)
     for name in names:
-        out = os.path.join(args.outdir, f"zorin-ai-{name}-{args.height}p.jpg")
+        out = os.path.join(args.outdir, f"noctraos-{name}-{args.height}p.jpg")
         img = SCENES[name](args.width, args.height, args.seed)
         img.save(out, "JPEG", quality=92, optimize=True, progressive=True)
         print(f"{out}  ({os.path.getsize(out) // 1024} KiB)")

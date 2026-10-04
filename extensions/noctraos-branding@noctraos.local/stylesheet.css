@@ -1,0 +1,35 @@
+/* Compact Noctra menu; preserve the stock layouts and keyboard navigation. */
+.zorin-menu { -arrow-background-color: #121212; -arrow-border-color: #333333; -arrow-border-radius: 2px; }
+.zorin-menu .popup-menu-content { padding: 6px; }
+.zorin-menu .all-layout-box,
+.zorin-menu .mint-layout-box,
+.zorin-menu .apps-only-layout-box,
+.zorin-menu .shortcuts-only-layout-box { padding: 4px; }
+.zorin-menu .popup-menu-item { min-height: 24px; padding: 4px 10px; border-radius: 2px; }
+.zorin-menu .main-box .apps-box { width: 17em; }
+.zorin-menu .main-box .shortcuts-box { width: 13em; }
+.zorin-menu .vertical-separator { margin: 0 8px; }
+.zorin-menu .search-entry {
+  margin-top: 8px; padding: 8px 10px;
+  background-color: #0d0d0d; color: #bebebe;
+  border: 1px solid #333333; border-radius: 2px; box-shadow: none;
+}
+.zorin-menu .search-entry:focus { border-color: #e68e0d; }
+.zorin-menu .session-buttons-section { padding-bottom: 6px; }
+.zorin-menu .session-buttons-section .button.system-menu-action,
+.zorin-menu .grid-layout-box .session-box .button.system-menu-action {
+  padding: 6px 10px !important; margin: 0 6px !important;
+  border-radius: 2px !important;
+}
+.zorin-menu .shortcuts-box .popup-separator-menu-item .popup-separator-menu-item-separator {
+  margin-top: 6px; margin-bottom: 6px;
+}
+.zorin-menu .main-box .menu-user-avatar { border-radius: 2px; }
+.zorintaskbarMainPanel { background-color: #0d0d0d; color: #bebebe; }
+.zorintaskbarMainPanel .panel-button { border-radius: 0; }
+/* Top bar: compact, flat, sharp. No hover effects; an open menu is marked in amber. */
+#panel { background-color: #0d0d0d; color: #bebebe; height: 28px; font-size: 12px; box-shadow: none; }
+#panel .panel-button, #panel .panel-button:hover, #panel .panel-button:focus {
+  color: #bebebe; background-color: transparent; border-radius: 0; box-shadow: none; padding: 0 8px; }
+#panel .panel-button:active, #panel .panel-button:checked { background-color: transparent; color: #e68e0d; }
+#panel .system-status-icon { icon-size: 16px; }

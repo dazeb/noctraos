@@ -1,4 +1,4 @@
-/* Zorin AI GTK 3/4 overrides. Libadwaita and sandboxed apps may use their
+/* NoctraOS GTK 3/4 overrides. Libadwaita and sandboxed apps may use their
  * own styles; this does not force GTK_THEME or overwrite user GTK CSS. */
 @define-color theme_bg_color #121212;
 @define-color theme_fg_color #bebebe;
@@ -17,12 +17,12 @@ headerbar, toolbar {
 }
 button, entry, spinbutton, combobox button {
   background-color: #1e1e1e; background-image: none; color: #bebebe;
-  border: 1px solid #333333; border-radius: 4px; box-shadow: none;
+  border: 1px solid #333333; border-radius: 0px; box-shadow: none;
 }
 button:hover { background-color: #2a2a2a; border-color: #8a8a8d; }
 headerbar button.titlebutton, .titlebar button.titlebutton {
   background-color: #1e1e1e; background-image: none; color: #bebebe;
-  border-color: #333333; border-radius: 4px; box-shadow: none;
+  border-color: #333333; border-radius: 0px; box-shadow: none;
 }
 headerbar button.titlebutton:hover, .titlebar button.titlebutton:hover {
   background-color: #2a2a2a; color: #e68e0d;
@@ -39,13 +39,24 @@ selection, textview text selection { background-color: #2a2a2a; color: #bebebe; 
 menu, menuitem, popover, popover contents {
   background-color: #121212; color: #bebebe;
 }
-menu, popover contents { border: 1px solid #333333; border-radius: 4px; }
+menu, popover contents { border: 1px solid #333333; border-radius: 0px; }
 menuitem:hover, row:hover { background-color: #2a2a2a; }
 row:selected { background-color: #2a2a2a; color: #bebebe; }
+/* Sidebars and lists (libadwaita): a quiet marker, not a solid amber block. */
+.navigation-sidebar row:selected, .navigation-sidebar > row:selected,
+.sidebar row:selected, placessidebar row:selected, list row:selected,
+columnview row:selected, listview row:selected, gridview child:selected {
+  background-color: #2a2a2a; background-image: none; color: #e68e0d;
+  box-shadow: inset 2px 0 0 #e68e0d;
+}
+.navigation-sidebar row:selected:hover, list row:selected:hover { background-color: #333333; }
+/* Round and pill shapes become sharp too. */
+windowcontrols button, headerbar windowcontrols button, button.circular, button.pill,
+button.titlebutton, windowcontrols > button > image, infobar .close { border-radius: 0; }
 check:checked, radio:checked, switch:checked {
   background-color: #e68e0d; background-image: none; color: #0d0d0d; border-color: #e68e0d;
 }
 scale highlight, progressbar progress { background-color: #e68e0d; border-color: #e68e0d; }
-scrollbar slider { background-color: #333333; border-radius: 4px; }
+scrollbar slider { background-color: #333333; border-radius: 0px; }
 scrollbar slider:hover { background-color: #8a8a8d; }
 separator { background-color: #333333; }

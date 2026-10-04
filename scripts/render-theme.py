@@ -35,7 +35,7 @@ def render(root):
             "temp_start": "foreground", "temp_mid": "accent", "temp_end": "red",
             "cpu_start": "border", "cpu_mid": "foreground", "cpu_end": "accent",
             "free_start": "border", "free_mid": "foreground", "free_end": "accent"}
-    outputs[theme / "zorin-ai-btop.theme"] = "".join(
+    outputs[theme / "noctraos-btop.theme"] = "".join(
         f'theme[{key}]="{colors[value]}"\n' for key, value in btop.items())
     editor = {"editor.background": "background", "editor.foreground": "foreground",
               "editorCursor.foreground": "accent", "editor.selectionBackground": "selection",
@@ -52,7 +52,11 @@ def render(root):
               "button.foreground": "panel", "list.activeSelectionBackground": "selection",
               "list.activeSelectionForeground": "foreground", "panel.border": "border",
               "terminal.background": "background", "terminal.foreground": "foreground",
-              "terminalCursor.foreground": "accent"}
+              "terminalCursor.foreground": "accent",
+              "textLink.foreground": "accent", "textLink.activeForeground": "foreground",
+              "progressBar.background": "accent", "badge.background": "accent",
+              "badge.foreground": "panel", "statusBarItem.remoteBackground": "raised",
+              "statusBarItem.remoteForeground": "accent"}
     editor_colors = {key: colors[value] for key, value in editor.items()}
     ansi = ["Black", "Red", "Green", "Yellow", "Blue", "Magenta", "Cyan", "White"]
     for index, color in enumerate(palette["terminal"]):

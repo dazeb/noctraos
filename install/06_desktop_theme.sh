@@ -45,15 +45,15 @@ sudo mkdir -p /usr/local/share/applications /usr/share/desktop-directories \
               /etc/xdg/menus/applications-merged \
               /usr/local/share/icons/hicolor/scalable/apps \
               /usr/local/bin
-sudo install -m 755 "$REPO_ROOT/bin/zorin-ai-agent" /usr/local/bin/zorin-ai-agent
+sudo install -m 755 "$REPO_ROOT/bin/noctraos-agent" /usr/local/bin/noctraos-agent
 for f in "$REPO_ROOT"/configs/applications/*.desktop; do
   [ -f "$f" ] && sudo install -m 644 "$f" /usr/local/share/applications/
 done
-sudo install -m 644 "$REPO_ROOT/configs/applications/zorin-ai-agents.directory" \
+sudo install -m 644 "$REPO_ROOT/configs/applications/noctraos-agents.directory" \
   /usr/share/desktop-directories/
-sudo install -m 644 "$REPO_ROOT/configs/xdg/zorin-ai-agents.menu" \
+sudo install -m 644 "$REPO_ROOT/configs/xdg/noctraos-agents.menu" \
   /etc/xdg/menus/applications-merged/
-for i in "$REPO_ROOT"/assets/icons/zorin-ai-*.svg; do
+for i in "$REPO_ROOT"/assets/icons/noctraos-*.svg; do
   [ -f "$i" ] && sudo install -m 644 "$i" /usr/local/share/icons/hicolor/scalable/apps/
 done
 sudo update-desktop-database >/dev/null 2>&1 || true
@@ -61,7 +61,7 @@ sudo gtk-update-icon-cache -q -t -f /usr/local/share/icons/hicolor 2>/dev/null |
 log "OK: Agents section — Codex, Claude Code, OpenCode, Grok, Gemini CLI, Qwen Code (install-on-first-use)"
 
 log "Installing AI-first application menu (replaces stock category tree)..."
-sudo install -m 644 "$REPO_ROOT/configs/applications/zorin-ai-local-llm.directory" \
+sudo install -m 644 "$REPO_ROOT/configs/applications/noctraos-local-llm.directory" \
   /usr/share/desktop-directories/
 if [ -f /etc/xdg/menus/gnome-applications.menu ] \
    && [ ! -f /etc/xdg/menus/gnome-applications.menu.orig ]; then
@@ -76,36 +76,30 @@ AF="org.gnome.desktop.app-folders"
 if as_user gsettings list-schemas 2>/dev/null | grep -q "^${AF}$"; then
   cur="$(as_user gsettings get $AF folder-children 2>/dev/null || echo '@as []')"
   case "$cur" in
-    *zorin-ai-agents.folder*) : ;;
+    *noctraos-agents.folder*) : ;;
     '@as []'|'[]')
-      as_user gsettings set $AF folder-children "['zorin-ai-agents.folder']" || warn "app-folders set failed" ;;
+      as_user gsettings set $AF folder-children "['noctraos-agents.folder']" || warn "app-folders set failed" ;;
     *)
-      as_user gsettings set $AF folder-children "${cur%]}, 'zorin-ai-agents.folder']" \
+      as_user gsettings set $AF folder-children "${cur%]}, 'noctraos-agents.folder']" \
         || warn "app-folders append failed" ;;
   esac
-  as_user gsettings set "$AF.folder:/org/gnome/Desktop/folders/zorin-ai-agents.folder/" name "Agents" \
+  as_user gsettings set "$AF.folder:/org/gnome/Desktop/folders/noctraos-agents.folder/" name "Agents" \
     || warn "app-folder name failed"
-  as_user gsettings set "$AF.folder:/org/gnome/Desktop/folders/zorin-ai-agents.folder/" \
-    categories "['X-ZorinAI-Agents']" || warn "app-folder categories failed"
+  as_user gsettings set "$AF.folder:/org/gnome/Desktop/folders/noctraos-agents.folder/" \
+    categories "['X-NoctraOS-Agents']" || warn "app-folder categories failed"
   log "OK: 'Agents' folder registered in the app grid"
 fi
 
 log "Applying polygonal wallpaper set..."
-WALLPAPER_DIR="/usr/local/share/backgrounds/zorin-ai"
+WALLPAPER_DIR="/usr/local/share/backgrounds/noctraos"
 sudo mkdir -p "$WALLPAPER_DIR"
-# drop any previous-generation wallpapers
-sudo rm -f "$WALLPAPER_DIR"/zorin-ai-midnight-ridges-*.jpg \
-           "$WALLPAPER_DIR"/zorin-ai-dusk-valley-*.jpg \
-           "$WALLPAPER_DIR"/zorin-ai-teal-forest-*.jpg \
-           "$WALLPAPER_DIR"/zorin-ai-storm-coast-*.jpg \
-           "$WALLPAPER_DIR"/zorin-ai-ember-minimal-*.jpg
 for wp in "$REPO_ROOT"/assets/wallpapers/*.jpg; do
   [ -f "$wp" ] || continue
   sudo install -m 644 "$wp" "$WALLPAPER_DIR/$(basename "$wp")"
 done
 # Default: the striking sunset scene; aurora for the lock screen.
-DEFAULT_WP="$WALLPAPER_DIR/zorin-ai-sunset-peaks-2160p.jpg"
-LOCK_WP="$WALLPAPER_DIR/zorin-ai-aurora-peaks-2160p.jpg"
+DEFAULT_WP="$WALLPAPER_DIR/noctraos-sunset-peaks-2160p.jpg"
+LOCK_WP="$WALLPAPER_DIR/noctraos-aurora-peaks-2160p.jpg"
 if [ -f "$DEFAULT_WP" ]; then
   gs org.gnome.desktop.background picture-uri "file://$DEFAULT_WP"
   gs org.gnome.desktop.background picture-uri-dark "file://$DEFAULT_WP"

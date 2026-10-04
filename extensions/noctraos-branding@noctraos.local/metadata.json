@@ -1,0 +1,8 @@
+{
+  "uuid": "noctraos-branding@noctraos.local",
+  "name": "Noctra Start",
+  "description": "Noctra's N start-menu button, without modifying the Zorin Menu extension.",
+  "shell-version": ["46"],
+  "version": 1,
+  "url": "https://github.com/dazeb/noctraos"
+}

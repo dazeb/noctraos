@@ -113,5 +113,12 @@ if have copyq; then
     "$TARGET_HOME/.config/autostart/copyq.desktop"
 fi
 
+# ---- No keyring prompt (autologin leaves the login keyring locked) --------------
+# VS Code and Chromium would ask for a keyring password on first use; store their
+# secrets without the keyring instead. Browsers installed later by the user are not
+# covered (see AGENTS.md).
+as_user python3 "$REPO_ROOT/scripts/seed-password-store.py" "$TARGET_HOME" \
+  || warn "Could not set the keyring-free password store"
+
 sudo update-desktop-database >/dev/null 2>&1 || true
 log "GUI applications complete."

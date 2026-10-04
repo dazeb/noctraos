@@ -1,6 +1,6 @@
-# Continue.dev — wired to the local Ollama daemon by zorin-ai.
+# Continue.dev — wired to the local Ollama daemon by noctraos.
 # Endpoint: http://localhost:11434 (installed by install/03_ai_core.sh)
-name: zorin-ai Local Assistant
+name: noctraos Local Assistant
 version: 1.0.0
 schema: v1
 models:
