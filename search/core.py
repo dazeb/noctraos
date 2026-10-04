@@ -197,6 +197,8 @@ def search_clipboard(query, limit):
     try:
         process = subprocess.run(['copyq', 'eval', script], capture_output=True, text=True,
                                  input=json.dumps({'query': query, 'limit': limit}),
+                                 # If this starts the server, it must be the X11 one (see copyq.desktop).
+                                 env={**os.environ, 'QT_QPA_PLATFORM': 'xcb'},
                                  timeout=3, check=True)
         items = json.loads(process.stdout)
     except (OSError, subprocess.SubprocessError, ValueError):

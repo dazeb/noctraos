@@ -2,7 +2,10 @@
 Type=Application
 Name=Clipboard History (CopyQ)
 Comment=Permanent clipboard history — runs in the tray
-Exec=copyq
+# CopyQ must run as an X11 (XWayland) client: GNOME has no wlr-data-control, so a
+# native-Wayland CopyQ cannot watch the clipboard ("Failed to activate Wayland
+# clipboard") and silently records nothing.
+Exec=env QT_QPA_PLATFORM=xcb copyq
 Icon=copyq
 Terminal=false
 Categories=Utility;

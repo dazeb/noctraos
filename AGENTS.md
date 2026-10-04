@@ -198,6 +198,17 @@ tail -f /root/noctraos-build.log
   purge/autoremove, user data stays. Legacy `Open_in_VSCodium` Nautilus scripts
   are deleted by modules 05/07. Settings and Continue config are only seeded
   when missing, so existing installs keep their old copies.
+- **CopyQ must run with `QT_QPA_PLATFORM=xcb`.** As a native-Wayland client it
+  logs "Failed to activate Wayland clipboard" and records nothing on GNOME
+  (no wlr-data-control). The autostart entry sets it; keep it that way.
+- **Autologin leaves the login keyring locked**, so apps that use the Secret
+  Service (Chromium/Chrome, etc.) show an "Authentication required" prompt on
+  first use. Seen on VM 114 with Chromium; it also swallows keystrokes in
+  synthetic-input tests (press Escape first). Not yet addressed.
+- **Driving the VM desktop for tests**: over SSH, unlock the session
+  (`gdbus call ... org.gnome.ScreenSaver.SetActive false`), take screenshots with
+  `gnome-screenshot -f`, inject keys through `/dev/uinput` (needs sudo). Never
+  `pkill -f <pattern>` in an ssh one-liner — it kills your own shell.
 - **`zorin-menu.desktop` does not exist on Zorin 18**; favorites and menu
   code skip missing desktop entries by design.
 - **`org.gnome.desktop.interface accent-color` key is absent** on Zorin 18.1 —

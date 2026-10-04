@@ -125,26 +125,34 @@ The unbound ones all have a mouse route, and the ones worth a keyboard route
 Clipboard history is reached through Super+Space, not a second shortcut (no
 Windows+V rebinding). The open question is the backend, not the door.
 
-**Should we build our own permanent clipboard, like KDE's Klipper?** We would
-be building a daemon that watches the clipboard, stores text and images,
-persists history safely (including passwords and secrets handling), and
-survives Wayland's restrictions — a lot of surface area for a feature that
-mature software already covers. Recommended order:
+**Should we build our own permanent clipboard, like KDE's Klipper?** No. We
+would be building a daemon that watches the clipboard, stores text and images,
+persists history safely (including passwords and secrets handling) and survives
+Wayland's restrictions, when mature software covers it. The real problem turned
+out to be one launch flag, not the choice of tool.
 
-1. **Keep CopyQ** for now: it is installed, persistent, and Super+Space already
-   searches it. Its weakness on GNOME is Wayland: GNOME does not let a
-   background app watch the clipboard the way a KDE service can, so CopyQ's
-   capture may be incomplete for native Wayland apps. **This is unverified on
-   our image**: my attempts to test it on VM 114 were inconclusive for both
-   CopyQ and GPaste (the probe copy never reached either), so treat it as a
-   hypothesis, not a finding.
-2. **Test properly** by copying from real apps (Firefox/Chromium, Files, GNOME
-   Text Editor, VS Code, terminal) and checking what history captures.
-3. If CopyQ fails that test, move to **GPaste**: it is the GNOME-native
-   equivalent of Klipper (a daemon plus a Shell extension, persistent history,
-   a CLI/D-Bus API we can bridge to Super+Space), packaged for GNOME Shell 46 in
-   the Ubuntu archive (`gnome-shell-extension-gpaste`). That is a swap of the
-   backend behind `search/core.py`, not a new clipboard manager.
-4. Only build our own if both fail a concrete requirement, and then as a Shell
-   extension (it runs inside the compositor, so it sees every copy), not a
-   standalone daemon.
+**Tested on VM 114 (2026-10-04, GNOME Shell 46 on Wayland, CopyQ 7.1.0):**
+
+- As installed, CopyQ started as a native-Wayland client and **recorded
+  nothing**. Its own log says `Failed to activate Wayland clipboard`; GNOME has
+  no `wlr-data-control`, so a background Wayland client never sees clipboard
+  changes. Copying from the GTK 4 Text Editor and from VS Code (both confirmed
+  to have reached the clipboard) captured **0 of 2**.
+- Started as an X11/XWayland client (`QT_QPA_PLATFORM=xcb`) it captured every
+  copy we could drive: an X11 control (`xclip`), the GTK 4 Text Editor
+  (native Wayland), VS Code, and Chromium (Flatpak, address-bar URL).
+- Fix shipped: `configs/autostart/copyq.desktop` now runs
+  `env QT_QPA_PLATFORM=xcb copyq`, and the search bridge sets the same variable
+  if it ever has to start the server. Verified from the session-autostarted
+  instance after a fresh login (no Wayland sockets held, all four captured).
+- **Not exercised:** GNOME Terminal and Files/Nautilus. The harness drives apps
+  with synthetic keystrokes, and Ctrl+Shift+A in Terminal and Ctrl+A/C in Files
+  never put the token on the clipboard, so those two say nothing either way.
+  Test them by hand before claiming full coverage. Images and rich text were not
+  tested at all.
+
+**Decision:** keep CopyQ with the X11 flag. GPaste stays the fallback if a
+manual test on real hardware finds gaps (it is packaged for GNOME Shell 46 as
+`gnome-shell-extension-gpaste`, with a CLI/D-Bus API that would replace the
+`copyq eval` call in `search/core.py`). Build our own only if both fail a
+concrete requirement, and then as a Shell extension, not a standalone daemon.
