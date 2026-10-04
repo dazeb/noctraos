@@ -1,17 +1,24 @@
 # NoctraOS
 
-**A mouse-first, AI-agent workstation for Zorin OS — one command, or one ISO.**
+**An AI-ready desktop for people moving from Windows — Omarchy's idea, on an Ubuntu base, without the learning curve.**
 
-NoctraOS turns a fresh [Zorin OS](https://zorin.com) 18.x machine into a
-complete AI development workstation: a local LLM stack, a start menu built
-around AI agents, polyglot runtimes, and an Omarchy-inspired dark theme with
-polygonal wallpapers — all installed and wired together by an idempotent
-provisioner you can run again and again.
+NoctraOS is a complete, opinionated workstation: a local LLM stack, a start
+menu built around AI agents, polyglot runtimes, and a dark theme with amber
+highlights. Everything is where a Windows user expects it (taskbar, start
+button, window buttons, a task manager), so there is nothing to relearn —
+except one new idea, **Super+Space**, which searches your whole system
+(apps, files, clipboard history, the web) from a single keystroke.
 
-It follows the [Omakub](https://omakub.org) pattern with one deliberate
-difference: **full mouse parity**. Nothing in the day-to-day workflow requires
-opening a terminal — unless you want to, because the terminal is where the
-agents live.
+The product is a **bootable ISO**; the same idempotent provisioner also runs
+on an existing [Zorin OS](https://zorin.com) 18.x machine. See
+[the objectives](docs/objectives.md) for who this is for and where it is going.
+
+It follows the [Omakub](https://omakub.org) pattern for provisioning with one
+deliberate difference: **full mouse parity**. Nothing in the day-to-day
+workflow requires opening a terminal — unless you want to, because the
+terminal is where the agents live.
+
+Provision an existing Zorin OS 18.x machine:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/dazeb/noctraos/main/boot.sh | bash
@@ -32,11 +39,11 @@ Prefer to review first: `git clone https://github.com/dazeb/noctraos && cd noctr
 | Agent sessions | [Herdr](https://herdr.dev) persistent workspaces, installed through mise and launched from Development |
 | Workstation apps | Chromium, Obsidian, LocalSend, Pinta, Moonlight, LibreOffice, MPV, Kdenlive, OBS Studio, Flameshot, Xournal++, Evince, GNOME Disks, and Sushi preview |
 | Developer tools | btop, bat, eza, fd-find, fzf, ripgrep, zoxide, neovim, tmux, Starship, lazygit, lazydocker, GitHub CLI, Docker/Compose, clang, Ruby, ffmpeg, ImageMagick, yt-dlp, tldr |
-| Task manager | Mission Center (Flathub) — Windows-Task-Manager-style, CPU/RAM/GPU |
+| Task manager | Mission Center (Flathub) — the familiar Task-Manager role: CPU/RAM/GPU and running apps |
 | Runtimes | [mise](https://mise.jdx.dev) managing Node LTS, Python 3.12, Go — system-wide, for every user |
 | Mouse ergonomics | Nautilus right-click: *Open in VS Code*, *Ask AI to Explain* (sends the file to local Ollama, answers in a dialog), *Open Terminal Here* |
 | Clipboard | [CopyQ](https://hluk.github.io/CopyQ/) permanent clipboard history — tray-resident, survives reboots, searchable, image support, 1000 entries |
-| Desktop | NoctraOS-Dark shell theme, AI-first start menu, white menu icons, neon polygonal 4K wallpapers, dark mode, Windows-style window buttons, pinned taskbar |
+| Desktop | NoctraOS-Dark shell theme, AI-first start menu, white menu icons, neon polygonal 4K wallpapers, dark mode, minimize/maximize/close window buttons, pinned taskbar |
 | Maintenance | `zom` CLI + `zom-menu` GUI panel |
 | Persistence | New user accounts inherit the whole setup via `/etc/skel` |
 | Bootable ISO | Build a **NoctraOS** image with everything baked in (see below) |
@@ -229,9 +236,12 @@ Tested end-to-end on Zorin OS 18.1 (clean VM, full install, idempotent re-runs,
 first-boot provisioning from the ISO, unattended install from the custom ISO).
 Current release: **v0.3.0**.
 
-On the roadmap: more agent launchers (Aider, Goose — non-npm install paths),
-and a streamlined dark + amber reskin built around the Super+Space system
-search. Still to do before it is consistent everywhere: libadwaita/GTK 4 apps,
+On the roadmap, in priority order: import the Super+Space search and the
+Noctra start button (currently only on a test VM) into this repo; a first-run
+onboarding flow that puts Super+Space front and center; the full-ISO
+experience (boot, installer, login); the dark + amber reskin built around the
+Super+Space look; more agent launchers (Aider, Goose — non-npm install
+paths). Reskin items still to do before it is consistent everywhere: libadwaita/GTK 4 apps,
 wallpapers, boot/login/lock screens, the ISO boot menus and installer, and the
 remaining stock icons. See [the theme design](docs/theme-design.md).
 

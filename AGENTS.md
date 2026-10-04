@@ -5,12 +5,16 @@ changing anything; the pitfalls section saves real debugging time.
 
 ## What this repo is
 
-`noctraos` (NoctraOS) is an Omakub-style provisioner that turns a fresh **Zorin OS 18.x**
-(Ubuntu 24.04 base) machine into a mouse-first **AI development workstation**:
-local Ollama stack, a six-agent start menu, mise-managed runtimes, and a
-cyberpunk visual theme (NoctraOS-Dark shell theme, neon polygonal wallpapers,
-white icons). It also builds a bootable **NoctraOS ISO** with all of this
-baked in.
+NoctraOS (`noctraos`) is an AI-ready desktop OS for **people moving from
+Windows**, on an Ubuntu base (Zorin OS 18.x today) — Omarchy's idea without
+the tiling-WM learning curve. It is delivered as a bootable **ISO**; the
+Omakub-style provisioner (`install.sh`) is the engine baked into it. Contents:
+local Ollama stack, a six-agent start menu, mise-managed runtimes, a dark +
+amber theme, and the **Super+Space** system search as the headline feature.
+
+Read `docs/objectives.md` first: it defines the audience, principles
+(muscle memory over Windows imitation, no terminal required, no tiling WM),
+the onboarding goal, and non-goals. Keep it current when direction changes.
 
 The repo is **public on GitHub** (`github.com/dazeb/noctraos`) — this is a hard
 requirement: the one-liner bootstrap and the ISO's first-boot fetch clone it
@@ -250,5 +254,9 @@ tail -f /root/noctraos-build.log
   install → reboot → autologin → provision, no interaction; `zom doctor`
   all green). It is the v0.3 reference install. VM 114 (192.168.8.187) is
   the v0.2 reference.
-- Roadmap ideas: Aider/Goose launchers (non-npm install paths), custom
-  branding assets, greeter-bug root cause.
+- VM 114 holds Super+Space search and the Noctra start button as
+  `zorin-ai-search@zorin-ai.local` / `zorin-ai-branding@zorin-ai.local`
+  extensions that are NOT in the repo yet; import and rename them.
+- Roadmap ideas: first-run onboarding showcasing Super+Space, theme gap list
+  (see README), Aider/Goose launchers (non-npm install paths), greeter-bug
+  root cause.
