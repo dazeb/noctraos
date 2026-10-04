@@ -1,0 +1,605 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Noctra OS turns Zorin OS 18 into an AI workstation: local models through Ollama, six coding agents in the start menu, and a matte black desktop.">
+<meta name="theme-color" content="#0e0d12">
+<title>Noctra OS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Hanken+Grotesk:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<style>
+/* Layout concept: the page is the desktop. A drawn Noctra desktop opens the page,
+   then each section is a folder under ~/ (local, agents, desktop, stack, install).
+   Tokens come from configs/theme/palette.json; violet/pink come from the wallpapers. */
+:root {
+  --bg: #0e0d12;
+  --panel: #0a090d;
+  --raised: #17161c;
+  --select: #24222b;
+  --line: #2c2a33;
+  --fg: #dcd9e2;
+  --muted: #9a97a4;
+  --amber: #e68e0d;
+  --amber-hot: #ffc107;
+  --red: #d35f5f;
+  --violet: #a124ff;
+  --pink: #ff2d95;
+  --display: "Chakra Petch", "Eurostile", "Bahnschrift", system-ui, sans-serif;
+  --body: "Hanken Grotesk", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --wrap: 1200px;
+  color-scheme: dark;
+}
+*, *::before, *::after { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 72px; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 400 1.0625rem/1.65 var(--body);
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+img { max-width: 100%; display: block; }
+a { color: inherit; }
+:focus-visible { outline: 2px solid var(--amber); outline-offset: 3px; }
+code, pre, kbd { font-family: var(--mono); }
+.wrap { width: 100%; max-width: var(--wrap); margin-inline: auto; padding-inline: 24px; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* ---------- type ---------- */
+h1, h2, h3 { font-family: var(--display); font-weight: 600; line-height: 1.04; letter-spacing: -0.01em; margin: 0; text-wrap: balance; }
+h1 { font-size: clamp(2.6rem, 6.2vw, 5rem); font-weight: 700; }
+h2 { font-size: clamp(1.9rem, 3.6vw, 3rem); }
+h3 { font-size: 1.25rem; line-height: 1.2; }
+p { margin: 0; }
+.lede { font-size: clamp(1.1rem, 1.6vw, 1.3rem); color: var(--muted); max-width: 58ch; }
+.eyebrow { font: 500 0.8125rem/1 var(--mono); letter-spacing: 0.04em; color: var(--amber); display: flex; align-items: center; gap: 10px; margin: 0 0 18px; }
+.eyebrow .dot { width: 8px; height: 8px; background: var(--amber); clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%); }
+.tag { font: 500 0.75rem/1 var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+
+/* ---------- nav ---------- */
+.nav { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20; background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(12px); border-bottom: 1px solid var(--line); }
+.nav .wrap { display: flex; align-items: center; justify-content: space-between; gap: 16px; height: 60px; }
+.brand { display: flex; align-items: center; gap: 12px; text-decoration: none; font: 700 1.05rem/1 var(--display); letter-spacing: 0.2em; text-transform: uppercase; }
+.brand svg { width: 26px; height: 26px; flex: none; }
+.brand small { font-weight: 500; color: var(--muted); letter-spacing: 0.2em; }
+.nav ul { display: flex; gap: 28px; list-style: none; margin: 0; padding: 0; font: 500 0.875rem/1 var(--mono); }
+.nav ul a { text-decoration: none; color: var(--muted); padding: 8px 0; }
+.nav ul a:hover { color: var(--fg); }
+@media (max-width: 760px) { .nav ul li:not(:last-child) { display: none; } }
+
+/* ---------- buttons ---------- */
+.btn { --cut: 10px; display: inline-flex; align-items: center; gap: 10px; padding: 15px 26px; font: 600 0.9375rem/1 var(--display); letter-spacing: 0.08em; text-transform: uppercase; text-decoration: none; cursor: pointer; border: 0;
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut)); transition: background 0.15s, color 0.15s; }
+.btn.primary { background: var(--amber); color: #120c02; }
+.btn.primary:hover { background: var(--amber-hot); }
+.btn.ghost { background: var(--line); color: var(--fg); position: relative; }
+.btn.ghost:hover { background: #3a3744; }
+
+/* ---------- hero ---------- */
+.hero { padding-block: clamp(48px, 7vw, 88px) 0; position: relative; }
+.hero::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 560px; pointer-events: none;
+  background: radial-gradient(60% 80% at 78% 0%, rgba(161, 36, 255, 0.22), transparent 70%), radial-gradient(40% 60% at 12% 10%, rgba(255, 45, 149, 0.10), transparent 70%); }
+.hero .wrap { position: relative; display: grid; gap: 28px; }
+.hero h1 { max-width: 15ch; }
+.hero h1 em { font-style: normal; color: var(--amber); }
+.hero .cta { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 8px; }
+.hero-meta { display: flex; flex-wrap: wrap; gap: 8px 28px; font: 400 0.8125rem/1.4 var(--mono); color: var(--muted); }
+.hero-meta span::before { content: "› "; color: var(--amber); }
+
+.stage { position: relative; margin-top: clamp(36px, 5vw, 64px); }
+.mock { container-type: inline-size; position: relative; aspect-ratio: 16 / 9; overflow: hidden; background: #05040a; border: 1px solid var(--line); box-shadow: 0 40px 120px -30px rgba(161, 36, 255, 0.35), 0 0 0 1px rgba(255,255,255,0.02); }
+.scene { --u: 1cqw; --menu-w: 19; --fly-w: 19; position: absolute; inset: 0; font-size: calc(var(--u) * 1.05); line-height: 1.35; color: #bebebe; font-family: var(--mono); user-select: none; }
+.wp { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transition: opacity 0.35s; }
+.wp.flip { transform: scaleX(-1); }
+.wp.fade { opacity: 0; }
+.u-win { position: absolute; background: #121212; border: 1px solid #333; border-radius: calc(var(--u) * 0.4); box-shadow: 0 calc(var(--u) * 1.4) calc(var(--u) * 3.6) rgba(0,0,0,0.55); overflow: hidden; }
+.term { left: calc(var(--u) * 43); top: calc(var(--u) * 4); width: calc(var(--u) * 38); height: calc(var(--u) * 22.5); }
+.term .bar { height: calc(var(--u) * 2.5); background: #0d0d0d; border-bottom: 1px solid #333; display: flex; align-items: center; justify-content: center; font-size: calc(var(--u) * 0.95); color: #8a8a8d; position: relative; }
+.term .bar::after { content: ""; position: absolute; right: calc(var(--u) * 1); width: calc(var(--u) * 0.9); height: calc(var(--u) * 0.9); border: 1px solid #555; border-radius: 50%; }
+.term pre { margin: 0; padding: calc(var(--u) * 1.1) calc(var(--u) * 1.3); font-size: calc(var(--u) * 1.02); line-height: 1.6; white-space: pre; overflow: hidden; }
+.term .ok { color: #ffc107; }
+.term .pr { color: #e68e0d; }
+.term .dim { color: #8a8a8d; }
+.caret { display: inline-block; width: 0.55em; height: 1.05em; background: #e68e0d; vertical-align: text-bottom; animation: blink 1.1s steps(1) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+
+.menu { left: 0; bottom: calc(var(--u) * 4.2); width: calc(var(--u) * var(--menu-w)); border-left: 0; border-bottom: 0; border-radius: 0 calc(var(--u) * 0.4) 0 0; background: #121212; padding: calc(var(--u) * 0.7); display: flex; flex-direction: column; gap: calc(var(--u) * 0.15); }
+.mrow { display: flex; align-items: center; gap: calc(var(--u) * 0.9); height: calc(var(--u) * 3.1); padding-inline: calc(var(--u) * 0.9); border-radius: calc(var(--u) * 0.35); color: #eaeaea; font-size: calc(var(--u) * 1.08); white-space: nowrap; }
+.mrow img { width: calc(var(--u) * 1.9); height: calc(var(--u) * 1.9); flex: none; }
+.mrow .chev { margin-left: auto; color: #8a8a8d; }
+.mrow.on { background: #2a2a2a; }
+.mrule { height: 1px; background: #333; margin: calc(var(--u) * 0.5) 0; }
+.msearch { height: calc(var(--u) * 3); border: 1px solid #333; border-radius: calc(var(--u) * 0.35); display: flex; align-items: center; padding-inline: calc(var(--u) * 1); color: #8a8a8d; background: #0d0d0d; }
+.fly { left: calc(var(--u) * (var(--menu-w) + 0.6)); bottom: calc(var(--u) * 18.2); width: calc(var(--u) * var(--fly-w)); padding: calc(var(--u) * 0.7); display: flex; flex-direction: column; gap: calc(var(--u) * 0.15); }
+.fly .mrow.on { outline: 1px solid #e68e0d; outline-offset: -1px; }
+.dock { position: absolute; left: 0; right: 0; bottom: 0; height: calc(var(--u) * 4.2); background: #0d0d0d; border-top: 1px solid #333; display: flex; align-items: center; gap: calc(var(--u) * 1.2); padding-inline: calc(var(--u) * 1.2); }
+.dock img { width: calc(var(--u) * 2.2); height: calc(var(--u) * 2.2); opacity: 0.9; }
+.dock .sp { margin-left: auto; }
+.dock .clock { font-size: calc(var(--u) * 1); color: #bebebe; }
+
+.stage-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 24px; padding-block: 16px 0; font: 400 0.8125rem/1.4 var(--mono); color: var(--muted); }
+.cmd { display: inline-flex; align-items: center; gap: 10px; background: var(--raised); border: 1px solid var(--line); color: var(--fg); padding: 9px 14px; font: 500 0.875rem/1 var(--mono); cursor: pointer; border-radius: 4px; }
+.cmd:hover { border-color: var(--amber); }
+.cmd .pr { color: var(--amber); }
+.cmd b { font-weight: 500; color: var(--muted); }
+
+@media (max-width: 640px) {
+  .mock { aspect-ratio: 4 / 5; }
+  .scene { --u: 2.9cqw; --menu-w: 16.5; --fly-w: 16.5; }
+  .term { display: none; }
+  .fly { bottom: calc(var(--u) * 17.8); }
+}
+
+/* ---------- sections ---------- */
+section { padding-block: clamp(64px, 9vw, 120px); border-top: 1px solid var(--line); }
+.hero + section { margin-top: clamp(56px, 7vw, 96px); }
+.head { display: grid; gap: 20px; margin-bottom: clamp(36px, 5vw, 64px); }
+.head h2 { max-width: 20ch; }
+
+/* local */
+.surfaces { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; }
+.surface { display: grid; grid-template-rows: auto 1fr auto; gap: 20px; }
+.surface .label { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.surface p { color: var(--muted); font-size: 0.9375rem; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 14px; font: 400 0.8125rem/1.5 var(--mono); color: #bebebe; min-height: 220px; display: flex; flex-direction: column; justify-content: center; gap: 2px; min-width: 0; }
+.panel .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 10px; border-radius: 4px; }
+.panel .row.on { background: var(--select); color: #fff; box-shadow: inset 2px 0 0 var(--amber); }
+.panel .row span:last-child { color: var(--muted); }
+.panel .rule { height: 1px; background: var(--line); margin: 6px 0; }
+.panel .k { color: var(--muted); }
+.panel .v { color: var(--amber-hot); }
+.chip { font: 500 0.6875rem/1 var(--mono); letter-spacing: 0.05em; text-transform: uppercase; padding: 4px 6px; border: 1px solid var(--line); border-radius: 3px; color: var(--muted); white-space: nowrap; }
+.chip.in { color: var(--amber-hot); border-color: #5a4310; }
+.fine { margin-top: 36px; display: flex; flex-wrap: wrap; gap: 10px 36px; font: 400 0.8125rem/1.5 var(--mono); color: var(--muted); }
+.fine b { color: var(--fg); font-weight: 500; }
+@media (max-width: 900px) { .surfaces { grid-template-columns: minmax(0, 1fr); } }
+
+/* agents */
+.agents { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: clamp(32px, 6vw, 88px); align-items: start; }
+.agents .head { margin: 0; position: sticky; top: 100px; }
+.list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
+.list li { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; align-items: center; gap: 18px; padding: 20px 8px; border-bottom: 1px solid var(--line); transition: background 0.15s, padding 0.15s; }
+.list li:hover { background: var(--raised); padding-left: 16px; }
+.list .ico { width: 44px; height: 44px; background: var(--raised); border: 1px solid var(--line); border-radius: 4px; display: grid; place-items: center; }
+.list .ico img { width: 24px; height: 24px; }
+.list h3 { font-size: 1.15rem; }
+.list .by { color: var(--muted); font-size: 0.875rem; }
+.list code { font-size: 0.75rem; color: var(--muted); text-align: right; overflow-wrap: anywhere; }
+.agents-note { margin-top: 22px; color: var(--muted); font-size: 0.875rem; max-width: 60ch; }
+.herdr { margin-top: 28px; display: flex; gap: 16px; align-items: flex-start; padding: 18px; border: 1px solid var(--line); border-radius: 4px; background: var(--panel); }
+.herdr img { width: 28px; height: 28px; flex: none; margin-top: 2px; }
+.herdr p { color: var(--muted); font-size: 0.9375rem; }
+.herdr strong { color: var(--fg); font-weight: 600; }
+@media (max-width: 900px) { .agents { grid-template-columns: minmax(0, 1fr); } .agents .head { position: static; } .list li { grid-template-columns: 44px minmax(0, 1fr); } .list code { grid-column: 2; text-align: left; } }
+
+/* desktop */
+.swatches { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+.sw { padding: 56px 14px 14px; font: 400 0.75rem/1.45 var(--mono); }
+.sw b { display: block; font-weight: 500; font-size: 0.8125rem; }
+.sw span { opacity: 0.7; }
+.sw.l { color: #111; }
+.sw.d { color: #eaeaea; }
+@media (max-width: 760px) { .swatches { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.shell-notes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 32px; margin-top: 40px; }
+.shell-notes p { color: var(--muted); font-size: 0.9375rem; }
+.shell-notes h3 { margin-bottom: 10px; }
+@media (max-width: 760px) { .shell-notes { grid-template-columns: minmax(0, 1fr); gap: 24px; } }
+.walls { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; margin-top: 56px; }
+.walls figure { margin: 0; position: relative; overflow: hidden; border: 1px solid var(--line); background: #05040a; grid-column: span 2; }
+.walls figure:nth-child(n+4) { grid-column: span 3; }
+.walls img { width: 100%; height: auto; aspect-ratio: 16 / 9; object-fit: cover; transition: transform 0.6s; }
+.walls figure:hover img { transform: scale(1.04); }
+.walls figcaption { position: absolute; left: 0; bottom: 0; padding: 10px 12px; font: 500 0.75rem/1 var(--mono); color: #fff; background: linear-gradient(90deg, rgba(0,0,0,0.7), transparent); }
+@media (max-width: 640px) { .walls figure, .walls figure:nth-child(n+4) { grid-column: span 6; } }
+.walls-cap { margin-top: 16px; font: 400 0.8125rem/1.5 var(--mono); color: var(--muted); }
+
+/* stack */
+.stack { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; border: 1px solid var(--line); border-radius: 4px; }
+.stack > div { padding: 28px; border-right: 1px solid var(--line); min-width: 0; }
+.stack > div:last-child { border-right: 0; }
+.stack h3 { margin-bottom: 6px; }
+.stack .sub { color: var(--muted); font-size: 0.875rem; margin-bottom: 20px; }
+.stack ul { list-style: none; margin: 0; padding: 0; font: 400 0.875rem/1 var(--mono); display: flex; flex-wrap: wrap; gap: 8px; }
+.stack li { padding: 7px 10px; background: var(--raised); border: 1px solid var(--line); border-radius: 3px; }
+.stack li.v { color: var(--amber-hot); border-color: #4a3710; }
+@media (max-width: 900px) { .stack { grid-template-columns: minmax(0, 1fr); } .stack > div { border-right: 0; border-bottom: 1px solid var(--line); } .stack > div:last-child { border-bottom: 0; } }
+.mouse { margin-top: 36px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 28px; }
+.mouse p { color: var(--muted); font-size: 0.9375rem; }
+.mouse h3 { font-size: 1rem; margin-bottom: 8px; color: var(--fg); }
+@media (max-width: 900px) { .mouse { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 520px) { .mouse { grid-template-columns: minmax(0, 1fr); } }
+
+/* install */
+.paths { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
+.path { border: 1px solid var(--line); border-radius: 4px; padding: clamp(22px, 3vw, 36px); background: var(--panel); display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+.path h3 { font-size: 1.5rem; }
+.path p { color: var(--muted); }
+.term-line { display: flex; align-items: stretch; background: #0d0d0d; border: 1px solid var(--line); border-radius: 4px; min-width: 0; }
+.term-line code { flex: 1; min-width: 0; overflow-x: auto; white-space: nowrap; padding: 14px 16px; font-size: 0.8125rem; color: #eaeaea; scrollbar-width: thin; }
+.term-line code::before { content: "$ "; color: var(--amber); }
+.term-line button { flex: none; background: var(--raised); color: var(--fg); border: 0; border-left: 1px solid var(--line); padding: 0 16px; font: 500 0.8125rem/1 var(--mono); cursor: pointer; }
+.term-line button:hover { background: var(--select); color: var(--amber-hot); }
+.steps { margin: 0; padding: 0; list-style: none; display: grid; gap: 10px; color: var(--muted); font-size: 0.9375rem; }
+.steps li { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 10px; }
+.steps li::before { content: "›"; color: var(--amber); font-family: var(--mono); }
+.steps strong { color: var(--fg); font-weight: 600; }
+.reqs { margin-top: 24px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border: 1px solid var(--line); border-radius: 4px; }
+.reqs div { padding: 18px 20px; border-right: 1px solid var(--line); font: 400 0.8125rem/1.5 var(--mono); color: var(--muted); }
+.reqs div:last-child { border-right: 0; }
+.reqs b { display: block; color: var(--fg); font-weight: 500; font-size: 0.9375rem; }
+@media (max-width: 900px) { .paths { grid-template-columns: minmax(0, 1fr); } .reqs { grid-template-columns: repeat(2, minmax(0, 1fr)); } .reqs div:nth-child(2) { border-right: 0; } .reqs div:nth-child(-n+2) { border-bottom: 1px solid var(--line); } }
+.version { margin-top: 28px; font: 400 0.8125rem/1.6 var(--mono); color: var(--muted); }
+
+/* footer */
+footer { border-top: 1px solid var(--line); padding-block: 48px calc(48px + env(safe-area-inset-bottom, 0px)); color: var(--muted); font-size: 0.875rem; }
+footer .wrap { display: grid; gap: 28px; grid-template-columns: minmax(0, 1fr) auto; align-items: end; }
+footer p { max-width: 70ch; }
+footer nav { display: flex; gap: 22px; font: 500 0.8125rem/1 var(--mono); }
+footer nav a { text-decoration: none; }
+footer nav a:hover { color: var(--amber-hot); }
+@media (max-width: 760px) { footer .wrap { grid-template-columns: minmax(0, 1fr); } }
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; }
+}
+</style>
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap">
+    <a class="brand" href="#top" aria-label="Noctra OS home">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><polygon points="2,26 13,6 18,16" fill="#e68e0d"/><polygon points="13,26 22,10 30,26" fill="#e68e0d" opacity="0.55"/></svg>
+      <span>Noctra <small>OS</small></span>
+    </a>
+    <ul>
+      <li><a href="#local">Local AI</a></li>
+      <li><a href="#agents">Agents</a></li>
+      <li><a href="#desktop">Desktop</a></li>
+      <li><a href="#stack">Stack</a></li>
+      <li><a href="#install">Install</a></li>
+      <li><a href="https://github.com/dazeb/noctraos">GitHub</a></li>
+    </ul>
+  </div>
+</header>
+
+<main id="top">
+<div class="hero">
+  <div class="wrap">
+    <p class="eyebrow"><span class="dot"></span>v0.3.0 · built on Zorin OS 18.1</p>
+    <h1>The AI operating system that lives on <em>your</em> machine.</h1>
+    <p class="lede">Noctra OS rebuilds Zorin OS 18 around local models and coding agents. Ollama runs on your hardware, six agents sit in the start menu, and every tool works with a mouse.</p>
+    <div class="cta">
+      <a class="btn primary" href="#install">Install Noctra</a>
+      <a class="btn ghost" href="https://github.com/dazeb/noctraos">View source</a>
+    </div>
+    <div class="hero-meta">
+      <span>Local LLM by default</span>
+      <span>No account, no API key to start</span>
+      <span>Installer is idempotent</span>
+    </div>
+
+    <div class="stage">
+      <div class="mock" role="img" aria-label="Illustration of the Noctra desktop: the start menu open on Agents, a terminal running zom doctor, a polygonal mountain wallpaper under a neon sun.">
+        <div class="scene">
+          <img class="wp flip" id="wp" src="img/neon-rift.webp" alt="" width="1920" height="1080" fetchpriority="high">
+
+          <div class="u-win term">
+            <div class="bar">dazeb@noctra: ~</div>
+<pre><span class="pr">$</span> zom doctor
+zorin-ai doctor
+<span class="dim">----------------</span>
+  <span class="ok">OK</span>  OS: Zorin OS 18.1
+  <span class="ok">OK</span>  Ollama: running
+  <span class="ok">OK</span>  Ollama: 2 local model(s)
+  <span class="ok">OK</span>  mise: runtimes resolve
+  <span class="ok">OK</span>  node, python 3.12, go
+  <span class="ok">OK</span>  Herdr
+  <span class="ok">OK</span>  VS Code
+<span class="pr">$</span> <span class="caret"></span></pre>
+          </div>
+
+          <div class="u-win fly" aria-hidden="true">
+            <div class="mrow on"><img src="icons/zorin-ai-agent-codex.svg" alt="">Codex</div>
+            <div class="mrow"><img src="icons/zorin-ai-agent-claude.svg" alt="">Claude Code</div>
+            <div class="mrow"><img src="icons/zorin-ai-agent-opencode.svg" alt="">OpenCode</div>
+            <div class="mrow"><img src="icons/zorin-ai-agent-grok.svg" alt="">Grok</div>
+            <div class="mrow"><img src="icons/zorin-ai-agent-gemini.svg" alt="">Gemini CLI</div>
+            <div class="mrow"><img src="icons/zorin-ai-agent-qwen.svg" alt="">Qwen Code</div>
+          </div>
+
+          <div class="u-win menu" aria-hidden="true">
+            <div class="mrow on"><img src="icons/zorin-ai-agents.svg" alt="">Agents<span class="chev">›</span></div>
+            <div class="mrow"><img src="icons/zorin-ai-local-llm.svg" alt="">Local LLM<span class="chev">›</span></div>
+            <div class="mrow"><img src="icons/applications-development.svg" alt="">Development<span class="chev">›</span></div>
+            <div class="mrow"><img src="icons/applications-internet.svg" alt="">Internet<span class="chev">›</span></div>
+            <div class="mrow"><img src="icons/applications-multimedia.svg" alt="">Media<span class="chev">›</span></div>
+            <div class="mrow"><img src="icons/applications-utilities.svg" alt="">Utilities<span class="chev">›</span></div>
+            <div class="mrow"><img src="icons/applications-system.svg" alt="">System<span class="chev">›</span></div>
+            <div class="mrule"></div>
+            <div class="msearch">Type to search</div>
+          </div>
+
+          <div class="dock" aria-hidden="true">
+            <img src="icons/zorin-ai-agents.svg" alt="">
+            <img src="icons/applications-development.svg" alt="">
+            <img src="icons/zorin-ai-herdr.svg" alt="">
+            <span class="sp"></span>
+            <span class="clock">02:14</span>
+          </div>
+        </div>
+      </div>
+      <div class="stage-bar">
+        <span>Illustration drawn from the real menu tree and palette. Wallpaper: <b id="wp-name" style="font-weight:500;color:var(--fg)">neon-rift</b></span>
+        <button class="cmd" id="bg-next" type="button"><span class="pr">$</span> zom bg next <b>↵</b></button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ======================= LOCAL ======================= -->
+<section id="local">
+  <div class="wrap">
+    <div class="head">
+      <p class="eyebrow"><span class="dot"></span>~/local</p>
+      <h2>Your models run on your own hardware.</h2>
+      <p class="lede">Ollama starts with the system and listens on 127.0.0.1 only. The installer pulls <code>qwen2.5-coder:7b</code> for code and <code>nomic-embed-text</code> for embeddings. After that download, chat, completion and retrieval need no network, no account and no API key.</p>
+    </div>
+
+    <div class="surfaces">
+      <div class="surface">
+        <div class="label"><h3>In the file manager</h3><span class="tag">Nautilus</span></div>
+        <div class="panel" aria-label="Right-click menu with Open in VS Code, Ask AI to Explain and Open Terminal Here">
+          <div class="row"><span>Open in VS Code</span></div>
+          <div class="row on"><span>Ask AI to Explain</span><span>↵</span></div>
+          <div class="row"><span>Open Terminal Here</span></div>
+        </div>
+        <p>Right-click any file. The local model reads it and answers in a dialog.</p>
+      </div>
+
+      <div class="surface">
+        <div class="label"><h3>In the editor</h3><span class="tag">VS Code + Continue</span></div>
+        <div class="panel" aria-label="Continue configuration pointing at local Ollama">
+          <div><span class="k">name:</span> Qwen2.5 Coder (local)</div>
+          <div><span class="k">provider:</span> <span class="v">ollama</span></div>
+          <div><span class="k">model:</span> <span class="v">qwen2.5-coder:7b</span></div>
+          <div><span class="k">apiBase:</span> http://localhost:11434</div>
+          <div class="rule"></div>
+          <div class="k"># chat and autocomplete, already wired</div>
+        </div>
+        <p>Continue ships pre-configured. Open a project and the assistant is already there.</p>
+      </div>
+
+      <div class="surface">
+        <div class="label"><h3>In the model manager</h3><span class="tag">AI Models</span></div>
+        <div class="panel" aria-label="List of local and available models">
+          <div class="row on"><span>qwen2.5-coder:7b</span><span class="chip in">installed</span></div>
+          <div class="row"><span>nomic-embed-text</span><span class="chip in">installed</span></div>
+          <div class="row"><span>qwen2.5-coder:14b</span><span class="chip">pull</span></div>
+          <div class="row"><span>llama3.2:3b</span><span class="chip">pull</span></div>
+          <div class="row"><span>phi4-mini</span><span class="chip">pull</span></div>
+        </div>
+        <p>Pick a model from the list, or run <code>zom models pull &lt;model&gt;</code>.</p>
+      </div>
+    </div>
+
+    <div class="fine">
+      <span><b>8 GB RAM</b> minimum, <b>16 GB</b> recommended for 7B-class models</span>
+      <span>Runs on CPU; uses an <b>NVIDIA GPU</b> when one is detected</span>
+      <span><code>zom doctor</code> checks all of it</span>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= AGENTS ======================= -->
+<section id="agents">
+  <div class="wrap agents">
+    <div class="head">
+      <p class="eyebrow"><span class="dot"></span>~/agents</p>
+      <h2>Six coding agents, one click from the start menu.</h2>
+      <p class="lede">Each launcher opens a terminal and looks for the agent's CLI. The first time, a dialog offers to install it with npm. Node already ships with the system.</p>
+      <div class="herdr">
+        <img src="icons/zorin-ai-herdr.svg" alt="">
+        <p><strong>Run several at once.</strong> Herdr keeps persistent terminal workspaces for coding agents, so a session survives closing the window.</p>
+      </div>
+    </div>
+
+    <div>
+      <ul class="list">
+        <li><span class="ico"><img src="icons/zorin-ai-agent-codex.svg" alt=""></span><div><h3>Codex</h3><div class="by">OpenAI Codex CLI</div></div><code>@openai/codex</code></li>
+        <li><span class="ico"><img src="icons/zorin-ai-agent-claude.svg" alt=""></span><div><h3>Claude Code</h3><div class="by">Anthropic Claude Code CLI</div></div><code>@anthropic-ai/claude-code</code></li>
+        <li><span class="ico"><img src="icons/zorin-ai-agent-opencode.svg" alt=""></span><div><h3>OpenCode</h3><div class="by">OpenCode terminal agent</div></div><code>opencode-ai</code></li>
+        <li><span class="ico"><img src="icons/zorin-ai-agent-grok.svg" alt=""></span><div><h3>Grok</h3><div class="by">Grok CLI</div></div><code>@vibe-kit/grok-cli</code></li>
+        <li><span class="ico"><img src="icons/zorin-ai-agent-gemini.svg" alt=""></span><div><h3>Gemini CLI</h3><div class="by">Google Gemini CLI</div></div><code>@google/gemini-cli</code></li>
+        <li><span class="ico"><img src="icons/zorin-ai-agent-qwen.svg" alt=""></span><div><h3>Qwen Code</h3><div class="by">Qwen Code CLI</div></div><code>@qwen-code/qwen-code</code></li>
+      </ul>
+      <p class="agents-note">Noctra ships launchers, not the agents. Hosted agents need their own account and a network connection. Agent names and logos belong to their projects.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= DESKTOP ======================= -->
+<section id="desktop">
+  <div class="wrap">
+    <div class="head">
+      <p class="eyebrow"><span class="dot"></span>~/desktop</p>
+      <h2>Matte black, with amber only where you are working.</h2>
+      <p class="lede">The shell is charcoal and flat. Borders stay at one pixel, corners at four, and the accent appears for focus and active states. One palette file generates the shell, GTK, VS Code, Herdr, btop and terminal colors.</p>
+    </div>
+
+    <div class="swatches" aria-label="Noctra palette">
+      <div class="sw d" style="background:#0d0d0d"><b>#0d0d0d</b><span>panel</span></div>
+      <div class="sw d" style="background:#121212"><b>#121212</b><span>canvas</span></div>
+      <div class="sw d" style="background:#1e1e1e"><b>#1e1e1e</b><span>raised</span></div>
+      <div class="sw d" style="background:#333333"><b>#333333</b><span>border</span></div>
+      <div class="sw l" style="background:#bebebe"><b>#bebebe</b><span>text</span></div>
+      <div class="sw l" style="background:#e68e0d"><b>#e68e0d</b><span>accent</span></div>
+    </div>
+
+    <div class="shell-notes">
+      <div><h3>JetBrains Mono</h3><p>The shell, terminal and editor share one monospace face, so the whole machine reads as a single surface.</p></div>
+      <div><h3>AI-first menu</h3><p>The stock category tree is replaced. Agents and Local LLM come first; everything else is still in All Apps and search.</p></div>
+      <div><h3>White glyphs</h3><p>Menu and category icons are redrawn in white so they hold up on the dark panels.</p></div>
+    </div>
+
+    <div class="walls">
+      <figure><img src="img/neon-rift-thumb.webp" alt="Neon Rift: a pink sun setting behind violet and teal polygonal mountains" width="640" height="360"><figcaption>neon-rift</figcaption></figure>
+      <figure><img src="img/crimson-dunes-thumb.webp" alt="Crimson Dunes: a white sun over magenta polygonal ridges" width="640" height="360"><figcaption>crimson-dunes</figcaption></figure>
+      <figure><img src="img/glacier-facet-thumb.webp" alt="Glacier Facet: a pale moon over lilac faceted peaks" width="640" height="360"><figcaption>glacier-facet</figcaption></figure>
+      <figure><img src="img/aurora-peaks-thumb.webp" alt="Aurora Peaks: green aurora over blue-grey peaks" width="640" height="360"><figcaption>aurora-peaks</figcaption></figure>
+      <figure><img src="img/sunset-peaks-thumb.webp" alt="Sunset Peaks: a pink sun over violet faceted mountains" width="640" height="360"><figcaption>sunset-peaks</figcaption></figure>
+    </div>
+    <p class="walls-cap">Five polygonal 4K scenes. Cycle them with <code>zom bg next</code>.</p>
+  </div>
+</section>
+
+<!-- ======================= STACK ======================= -->
+<section id="stack">
+  <div class="wrap">
+    <div class="head">
+      <p class="eyebrow"><span class="dot"></span>~/stack</p>
+      <h2>A developer machine that is ready on first login.</h2>
+      <p class="lede">The provisioner installs the toolchain, the apps and the glue between them. New user accounts inherit all of it.</p>
+    </div>
+
+    <div class="stack">
+      <div>
+        <h3>Runtimes</h3>
+        <p class="sub">Managed system-wide by mise</p>
+        <ul>
+          <li class="v">Node LTS</li><li class="v">Python 3.12</li><li class="v">Go</li>
+          <li>Ruby</li><li>clang</li><li>Docker + Compose</li>
+        </ul>
+      </div>
+      <div>
+        <h3>Terminal</h3>
+        <p class="sub">Fast tools, themed to match</p>
+        <ul>
+          <li>Starship</li><li>lazygit</li><li>lazydocker</li><li>btop</li><li>bat</li><li>eza</li><li>fd</li><li>fzf</li><li>ripgrep</li><li>zoxide</li><li>neovim</li><li>tmux</li><li>gh</li>
+        </ul>
+      </div>
+      <div>
+        <h3>Apps</h3>
+        <p class="sub">Installed from apt and Flathub</p>
+        <ul>
+          <li>VS Code</li><li>Chromium</li><li>Obsidian</li><li>LibreOffice</li><li>OBS Studio</li><li>Kdenlive</li><li>Mission Center</li><li>CopyQ</li><li>LocalSend</li><li>Flameshot</li><li>MPV</li><li>Pinta</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="mouse">
+      <div><h3>Mouse-first</h3><p>Nothing in the daily workflow needs a terminal. The terminal is there for the agents.</p></div>
+      <div><h3>Clipboard history</h3><p>CopyQ keeps 1000 entries across reboots, including images, searchable from the tray.</p></div>
+      <div><h3>Maintenance</h3><p><code>zom update</code> refreshes apt, Flatpak, runtimes and models. <code>zom-menu</code> does it with buttons.</p></div>
+      <div><h3>Safe to re-run</h3><p>Every installer module is guarded, so running it again after an update changes nothing it doesn't need to.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= INSTALL ======================= -->
+<section id="install">
+  <div class="wrap">
+    <div class="head">
+      <p class="eyebrow"><span class="dot"></span>~/install</p>
+      <h2>Two ways in.</h2>
+      <p class="lede">Turn an existing Zorin OS 18 install into Noctra with one command, or build an installer ISO with everything baked in.</p>
+    </div>
+
+    <div class="paths">
+      <div class="path">
+        <p class="tag">Already on Zorin OS 18</p>
+        <h3>Run the installer</h3>
+        <p>Clones the repository, then runs the provisioner module by module. Read it first if you prefer: <code>git clone https://github.com/dazeb/noctraos</code>.</p>
+        <div class="term-line">
+          <code id="oneliner">curl -fsSL https://raw.githubusercontent.com/dazeb/zorin-ai/main/boot.sh | bash</code>
+          <button type="button" id="copy" aria-label="Copy install command">Copy</button>
+        </div>
+        <ul class="steps">
+          <li><span><strong>Flags.</strong> <code>--skip-ai</code> leaves out Ollama and models. <code>--skip-gui</code> leaves out apps and theming.</span></li>
+          <li><span><strong>Afterward.</strong> Log out and back in so the new start menu loads.</span></li>
+        </ul>
+      </div>
+
+      <div class="path">
+        <p class="tag">Fresh disk</p>
+        <h3>Build the Noctra ISO</h3>
+        <p>A remastered Zorin OS 18.1 image that installs the workstation on first login. There is no hosted download yet, so you build it yourself.</p>
+        <div class="term-line">
+          <code>sudo ./iso/build-zorin-ai-iso.sh Zorin-OS-18.1-Core-64-bit.iso noctra.iso</code>
+        </div>
+        <ul class="steps">
+          <li><span><strong>Interactive.</strong> Click through the normal installer. A terminal on first login builds the rest.</span></li>
+          <li><span><strong>Unattended.</strong> Set <code>ZORIN_AI_UNATTENDED=1</code> at build time. Boot, wait, and land on a finished desktop. Bake throwaway credentials only.</span></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="reqs">
+      <div><b>Zorin OS 18.x</b>tested on 18.1</div>
+      <div><b>25 GB</b>free disk</div>
+      <div><b>8 GB RAM</b>16 GB recommended</div>
+      <div><b>Network</b>apt, Flathub, GitHub</div>
+    </div>
+    <p class="version">Release v0.3.0. Tested end to end in a clean VM: full install, repeat runs, first-boot provisioning, and an unattended install from the custom ISO.</p>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <p>Noctra OS is built on Zorin OS and is not affiliated with or endorsed by Zorin Group. Agent names and logos belong to their respective projects. No license has been selected yet.</p>
+    <nav>
+      <a href="https://github.com/dazeb/noctraos">GitHub</a>
+      <a href="#top">Top ↑</a>
+    </nav>
+  </div>
+</footer>
+
+<script>
+(function () {
+  var walls = [
+    { name: "neon-rift", flip: true },
+    { name: "crimson-dunes", flip: false },
+    { name: "glacier-facet", flip: true },
+    { name: "aurora-peaks", flip: false },
+    { name: "sunset-peaks", flip: false }
+  ];
+  var i = 0;
+  var img = document.getElementById("wp");
+  var label = document.getElementById("wp-name");
+  var btn = document.getElementById("bg-next");
+
+  walls.forEach(function (w) { var p = new Image(); p.src = "img/" + w.name + ".webp"; });
+
+  btn.addEventListener("click", function () {
+    i = (i + 1) % walls.length;
+    var w = walls[i];
+    img.classList.add("fade");
+    setTimeout(function () {
+      img.src = "img/" + w.name + ".webp";
+      img.classList.toggle("flip", w.flip);
+      label.textContent = w.name;
+      img.classList.remove("fade");
+    }, 220);
+  });
+
+  var copy = document.getElementById("copy");
+  var cmd = document.getElementById("oneliner");
+  copy.addEventListener("click", function () {
+    var done = function () { copy.textContent = "Copied"; setTimeout(function () { copy.textContent = "Copy"; }, 1600); };
+    var fallback = function () {
+      var r = document.createRange(); r.selectNodeContents(cmd);
+      var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+      copy.textContent = "Press Ctrl+C"; setTimeout(function () { copy.textContent = "Copy"; }, 2200);
+    };
+    try { navigator.clipboard.writeText(cmd.textContent).then(done, fallback); } catch (e) { fallback(); }
+  });
+})();
+</script>
+</body>
+</html>
