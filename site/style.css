@@ -35,6 +35,7 @@ p { margin: 0; }
 .eyebrow { font: 500 0.8125rem/1 var(--mono); letter-spacing: 0.04em; color: var(--amber); display: flex; align-items: center; gap: 10px; margin: 0 0 18px; }
 .eyebrow .dot { width: 8px; height: 8px; background: var(--amber); clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%); flex: none; }
 .muted { color: var(--muted); }
+.soon { display: inline-block; vertical-align: middle; margin-left: 6px; padding: 4px 7px; border: 1px solid #5a4310; border-radius: 3px; color: var(--amber-hot); font: 500 0.6875rem/1 var(--mono); letter-spacing: 0.05em; text-transform: uppercase; white-space: nowrap; }
 
 /* ---------- header ---------- */
 .nav { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20; background: color-mix(in srgb, var(--bg) 90%, transparent); backdrop-filter: blur(12px); border-bottom: 1px solid var(--line); }
