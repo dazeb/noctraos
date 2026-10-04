@@ -258,8 +258,10 @@ step "6/7 refreshing ISO metadata"
 # files that actually ship — including the new squashfs, not the extracted original.
 mv "$WORK/filesystem.squashfs" "$ISO_TREE/casper/filesystem.squashfs"
 stat -c %s "$ISO_TREE/casper/filesystem.squashfs" > "$ISO_TREE/casper/filesystem.size"
-( cd "$ISO_TREE" && find . -type f ! -name md5sum.txt ! -name boot.cat -print0 \
-    | xargs -0 md5sum > md5sum.txt.new && mv md5sum.txt.new md5sum.txt )
+# Excluded like the stock list: the file itself (and its temp), boot.cat, and
+# isolinux.bin, which xorriso patches (boot-info-table) while writing the image.
+( cd "$ISO_TREE" && find . -type f ! -name 'md5sum.txt*' ! -name boot.cat ! -name isolinux.bin -print0 \
+    | xargs -0 md5sum > ../md5sum.new && mv ../md5sum.new md5sum.txt )
 
 step "7/7 writing $OUT_ISO (boot equipment replayed from source ISO)"
 # xorriso refuses to overwrite a non-empty -outdev — remove the previous image.
