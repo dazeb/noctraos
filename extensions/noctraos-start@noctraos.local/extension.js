@@ -7,7 +7,7 @@ import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
 const MENU_UUID = 'zorin-menu@zorinos.com';
-const AGENTS = ['noctraos-claude', 'noctraos-codex', 'noctraos-opencode',
+const AGENTS = ['noctraos-hermes', 'noctraos-claude', 'noctraos-codex', 'noctraos-opencode',
     'noctraos-grok', 'noctraos-gemini', 'noctraos-qwen'];
 const RECENT_LIMIT = 8;
 const WIDTH = 560;

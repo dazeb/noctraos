@@ -162,6 +162,17 @@ cmd_doctor() {
     bad "Super+Space search: missing (re-run the installer)"
   fi
 
+  if command -v noctraos-hermes >/dev/null 2>&1; then
+    hs="$(noctraos-hermes status 2>/dev/null || true)"
+    if printf '%s\n' "$hs" | grep -q '^runtime: ok' && printf '%s\n' "$hs" | grep -q '^app:     ok'; then
+      ok "Hermes Desktop: installed ($(printf '%s\n' "$hs" | sed -n 's/^primary: //p'))"
+    else
+      bad "Hermes Desktop: not fully installed (run: noctraos-hermes install)"
+    fi
+  else
+    bad "Hermes Desktop: launcher missing (re-run the installer)"
+  fi
+
   if command -v flatpak >/dev/null 2>&1; then
     flatpak list --app 2>/dev/null | grep -q MissionCenter \
       && ok "Mission Center: installed" || bad "Mission Center: missing"
