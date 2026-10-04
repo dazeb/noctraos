@@ -28,6 +28,11 @@ These override the mockup where they differ.
   date/notification menu), which also covers the mockup's "notification" label.
 - **Top bar, right:** running-app indicators and the tray icons (network,
   volume, power, CopyQ and other indicators).
+  *Styling (done):* the whole shell theme is recoloured from the Zorin blue to the
+  NoctraOS palette at build time (`configs/theme/shell-remap.json`, property-aware:
+  text becomes foreground, fills become amber), corners are 0 px everywhere
+  (`palette.json` radius 0), and the quick-settings and calendar/notification menus
+  match the top bar.
 - **Bottom dock:** floating and centred: Start button, then application icons.
 - **Start menu:** shows **recent files** as well as apps, and is closer to
   macOS (a launcher grid with a Recents area, not a Windows-style tree) than to
@@ -88,8 +93,17 @@ and a Super+Space hint. Sharp, monospace, palette from `palette.json`. The Start
 button opens it; Esc, a click outside, or the button again close it.
 Verified on VM 114 with a virtual mouse and keyboard: open, close three ways,
 gear to Settings, a recent file opening.
-Not yet built: user name and weather, "New users start here" and its help
-page, an apps list, customisation. Untested: launching an agent from the row and
+Since then: the header shows the **user's name** and an opt-in **weather** readout
+(Open-Meteo, keyless; `+ weather` opens a small dialog to pick a city and units,
+which can also remove it), a dismissible **"New users start here"** strip opens a
+local help page (`help/index.html`, installed to `/usr/local/share/noctraos/help/`).
+Settings live in `org.gnome.shell.extensions.noctraos-start` (`show-name`,
+`show-start-here`, `weather*`). Verified on VM 114: live weather (13°C, Leeds),
+the dialog, the strip, and the help page (rendered headlessly). Opening the page
+from the strip on a fresh autologin system hits the **locked-keyring prompt** the
+first time a browser starts (Chromium), so that bug now sits in the new-user path.
+Not yet built: an apps list and a settings page for customisation (today it is
+the in-panel controls and GSettings). Untested: launching an agent from the row and
 *All apps*. The panel replaces the Zorin Menu popup by overriding its
 `_menu.toggle`/`open`, a private API, so a Zorin Menu update could break it (the
 stock menu then simply keeps working).

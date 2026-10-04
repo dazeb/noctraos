@@ -1,0 +1,181 @@
+#!/usr/bin/python3
+"""Weather for the Start panel (Open-Meteo, no API key).
+
+  noctraos-weather --fetch   print current conditions as JSON (cached 15 min)
+  noctraos-weather --setup   choose a city, units, or remove weather
+
+Opt-in: nothing is requested until a city is chosen. Only the typed city name
+(to find it) and its coordinates (to get the forecast) leave the machine.
+"""
+import argparse
+import json
+import os
+from pathlib import Path
+import sys
+import time
+import urllib.parse
+import urllib.request
+
+SCHEMA = 'org.gnome.shell.extensions.noctraos-start'
+CACHE = Path(os.environ.get('XDG_CACHE_HOME', Path.home() / '.cache')) / 'noctraos' / 'weather.json'
+TTL = 15 * 60
+GEOCODE = 'https://geocoding-api.open-meteo.com/v1/search'
+FORECAST = 'https://api.open-meteo.com/v1/forecast'
+
+
+def get_json(url, params):
+    request = urllib.request.Request(url + '?' + urllib.parse.urlencode(params),
+                                     headers={'User-Agent': 'NoctraOS-Start'})
+    with urllib.request.urlopen(request, timeout=6) as response:
+        return json.load(response)
+
+
+def settings():
+    from gi.repository import Gio
+    return Gio.Settings.new(SCHEMA)
+
+
+def fetch():
+    s = settings()
+    if not s.get_boolean('weather'):
+        print(json.dumps({'ok': False, 'reason': 'disabled'}))
+        return
+    lat, lon = s.get_double('weather-lat'), s.get_double('weather-lon')
+    units = s.get_string('weather-units')
+    key = [lat, lon, units]
+    try:
+        cached = json.loads(CACHE.read_text())
+    except (OSError, ValueError):
+        cached = None
+    if cached and cached.get('key') == key and time.time() - cached.get('at', 0) < TTL:
+        print(json.dumps(dict(cached['data'], cached=True)))
+        return
+    try:
+        current = get_json(FORECAST, {
+            'latitude': lat, 'longitude': lon, 'current': 'temperature_2m,weather_code,is_day',
+            'temperature_unit': 'fahrenheit' if units == 'imperial' else 'celsius'})['current']
+        data = {'ok': True, 'temp': round(current['temperature_2m']),
+                'unit': 'F' if units == 'imperial' else 'C', 'code': current['weather_code'],
+                'day': bool(current.get('is_day', 1)), 'city': s.get_string('weather-city')}
+    except (OSError, ValueError, KeyError):
+        # Offline or the service is down: show the last known reading rather than nothing.
+        if cached and cached.get('key') == key:
+            print(json.dumps(dict(cached['data'], cached=True, stale=True)))
+        else:
+            print(json.dumps({'ok': False, 'reason': 'unavailable'}))
+        return
+    CACHE.parent.mkdir(parents=True, exist_ok=True)
+    CACHE.write_text(json.dumps({'key': key, 'at': time.time(), 'data': data}))
+    print(json.dumps(data))
+
+
+def find_cities(name):
+    results = get_json(GEOCODE, {'name': name, 'count': 6, 'language': 'en', 'format': 'json'}).get('results', [])
+    return [{'label': ', '.join(p for p in (r['name'], r.get('admin1'), r.get('country')) if p),
+             'city': r['name'], 'lat': r['latitude'], 'lon': r['longitude']} for r in results]
+
+
+def setup():
+    import gi
+    gi.require_version('Gtk', '3.0')
+    from gi.repository import Gio, Gtk
+    s = settings()
+    dialog = Gtk.Dialog(title='Weather', modal=True)
+    dialog.set_default_size(420, -1)
+    area = dialog.get_content_area()
+    area.set_spacing(10)
+    area.set_border_width(18)
+
+    def label(text):
+        item = Gtk.Label(label=text, xalign=0, wrap=True)
+        area.pack_start(item, False, False, 0)
+        return item
+
+    label('Show the weather in the Start panel. Only the city you type (to find it) and its '
+          'coordinates (to get the forecast) are sent to Open-Meteo. Nothing else leaves this computer.')
+    row = Gtk.Box(spacing=8)
+    entry = Gtk.Entry(placeholder_text='City, for example Leeds', hexpand=True,
+                      text=s.get_string('weather-city'))
+    find = Gtk.Button(label='Find')
+    row.pack_start(entry, True, True, 0)
+    row.pack_start(find, False, False, 0)
+    area.pack_start(row, False, False, 0)
+    matches = Gtk.ComboBoxText()
+    area.pack_start(matches, False, False, 0)
+    units = Gtk.ComboBoxText()
+    units.append('metric', 'Celsius (°C)')
+    units.append('imperial', 'Fahrenheit (°F)')
+    units.set_active_id(s.get_string('weather-units'))
+    area.pack_start(units, False, False, 0)
+    status = label('')
+    found = []
+
+    def search(*_):
+        name = entry.get_text().strip()
+        if not name:
+            return
+        status.set_text('Searching…')
+        while Gtk.events_pending():
+            Gtk.main_iteration()
+        try:
+            found[:] = find_cities(name)
+        except (OSError, ValueError, KeyError):
+            found[:] = []
+            status.set_text('Could not reach the weather service. Check your connection.')
+            return
+        matches.remove_all()
+        for item in found:
+            matches.append_text(item['label'])
+        if found:
+            matches.set_active(0)
+            matches.show()
+            status.set_text('')
+        else:
+            status.set_text('No city found with that name.')
+    find.connect('clicked', search)
+    entry.connect('activate', search)
+    if s.get_boolean('weather'):
+        dialog.add_button('Remove weather', Gtk.ResponseType.REJECT)
+    dialog.add_button('Cancel', Gtk.ResponseType.CANCEL)
+    save = dialog.add_button('Save', Gtk.ResponseType.OK)
+    save.get_style_context().add_class('suggested-action')
+    dialog.show_all()
+    matches.hide()
+    while True:
+        response = dialog.run()
+        if response == Gtk.ResponseType.OK:
+            if not found:
+                search()
+            if not found:
+                continue  # keep the dialog open with the message showing
+            choice = found[max(matches.get_active(), 0)]
+            s.set_string('weather-city', choice['city'])
+            s.set_double('weather-lat', choice['lat'])
+            s.set_double('weather-lon', choice['lon'])
+            s.set_string('weather-units', units.get_active_id() or 'metric')
+            s.set_boolean('weather', True)
+        elif response == Gtk.ResponseType.REJECT:
+            s.set_boolean('weather', False)
+        else:
+            break
+        CACHE.unlink(missing_ok=True)
+        Gio.Settings.sync()
+        break
+    dialog.destroy()
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument('--fetch', action='store_true')
+    group.add_argument('--setup', action='store_true')
+    args = parser.parse_args()
+    fetch() if args.fetch else setup()
+
+
+if __name__ == '__main__':
+    try:
+        main()
+    except Exception as error:
+        print(f'noctraos-weather: {error}', file=sys.stderr)
+        sys.exit(1)

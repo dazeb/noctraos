@@ -15,7 +15,7 @@ starting reference, not a replacement compositor or a copy of Omarchy branding.
 | Text | `#bebebe`; secondary text `#8a8a8d` |
 | Accent | `#e68e0d` amber; dark text on solid accent buttons |
 | Typography | JetBrainsMono Nerd Font in the shell, terminal, and editor; GTK retains application fonts |
-| Geometry | 4 px maximum corners; menu rows retain mouse-friendly padding |
+| Geometry | 0 px corners everywhere (sharp); menu rows retain mouse-friendly padding |
 | Identity | Existing AI menu sections, white glyphs, and polygon wallpapers |
 
 The desktop uses Omarchy's palette roles. Terminal ANSI colors remain distinct

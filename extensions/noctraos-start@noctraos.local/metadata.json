@@ -3,6 +3,7 @@
   "name": "Noctra Start",
   "description": "Compact Start panel above the dock: pinned AI agents and recent files.",
   "shell-version": ["46"],
+  "settings-schema": "org.gnome.shell.extensions.noctraos-start",
   "version": 1,
   "url": "https://github.com/dazeb/noctraos"
 }

@@ -20,3 +20,11 @@
 .noctra-start-text-button { padding: 4px 8px; border-radius: 0; color: #bebebe; }
 .noctra-start-text-button:hover, .noctra-start-text-button:focus { background-color: #2a2a2a; color: #e68e0d; }
 .noctra-start-hint { font-size: 10px; color: #8a8a8d; }
+
+.noctra-start-user { font-size: 12px; color: #bebebe; padding-right: 10px; }
+.noctra-start-weather { padding: 4px 8px; border-radius: 0; color: #8a8a8d; font-size: 12px; margin-right: 2px; }
+.noctra-start-weather:hover, .noctra-start-weather:focus { background-color: #2a2a2a; color: #e68e0d; }
+.noctra-start-weather-icon { padding-right: 6px; }
+.noctra-start-here { margin: 8px 8px 0; background-color: #1a1a1a; border-left: 2px solid #e68e0d; border-radius: 0; }
+.noctra-start-here-open { font-size: 11px; font-weight: bold; color: #e68e0d; padding: 7px 10px; border-radius: 0; }
+.noctra-start-here-open:hover, .noctra-start-here-open:focus { background-color: #2a2a2a; }

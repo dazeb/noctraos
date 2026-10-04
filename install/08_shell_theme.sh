@@ -49,6 +49,7 @@ if [ -f "$BASE_THEME/gnome-shell/gnome-shell.css" ]; then
   if sudo python3 "$REPO_ROOT/scripts/build-desktop-theme.py" \
     --base "$BASE_THEME/gnome-shell" --output "$THEME_DIR/gnome-shell" \
     --overlay "$REPO_ROOT/configs/theme/gnome-shell.css" --css-name gnome-shell.css \
+    --remap "$REPO_ROOT/configs/theme/shell-remap.json" --palette "$PALETTE" \
     --radius "$(jq -r '.radius' "$PALETTE")"; then
     if as_user gsettings list-schemas 2>/dev/null | grep '^org\.gnome\.shell\.extensions\.user-theme$' >/dev/null; then
       theme_set org.gnome.shell.extensions.user-theme name "'$THEME_NAME'"

@@ -41,10 +41,14 @@ for f in "$REPO_ROOT"/search/*.py; do
   install_if_changed 644 "$f" "/usr/local/share/noctraos-search/$(basename "$f")"
 done
 install_if_changed 755 "$REPO_ROOT/bin/noctraos-search" /usr/local/bin/noctraos-search
+install_if_changed 755 "$REPO_ROOT/bin/noctraos-weather" /usr/local/bin/noctraos-weather
+install_if_changed 644 "$REPO_ROOT/help/index.html" /usr/local/share/noctraos/help/index.html
 install_if_changed 755 "$REPO_ROOT/branding/setup-branding.py" /usr/local/share/noctraos/setup-branding.py
 
-SCHEMA_FILE="org.gnome.shell.extensions.noctraos-search.gschema.xml"
-install_if_changed 644 "$REPO_ROOT/configs/gsettings/$SCHEMA_FILE" "/usr/share/glib-2.0/schemas/$SCHEMA_FILE"
+for SCHEMA_FILE in org.gnome.shell.extensions.noctraos-search.gschema.xml \
+                   org.gnome.shell.extensions.noctraos-start.gschema.xml; do
+  install_if_changed 644 "$REPO_ROOT/configs/gsettings/$SCHEMA_FILE" "/usr/share/glib-2.0/schemas/$SCHEMA_FILE"
+done
 if [ "$CHANGED" -eq 1 ] || [ ! -f /usr/share/glib-2.0/schemas/gschemas.compiled ]; then
   sudo glib-compile-schemas /usr/share/glib-2.0/schemas
 fi

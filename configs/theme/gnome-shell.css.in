@@ -41,7 +41,7 @@ stage { font-family: "$font"; font-size: 10pt; color: $foreground; }
   background-color: $accent; color: $panel;
 }
 .button:insensitive, .quick-toggle:insensitive { color: $muted; }
-.slider { -barlevel-background-color: $border; -barlevel-active-background-color: $accent; }
+.slider { color: $accent; -barlevel-background-color: $border; -barlevel-active-background-color: $accent; }
 .toggle-switch:checked { background-color: $accent; }
 .notification-banner, .modal-dialog {
   background-color: $background; color: $foreground;

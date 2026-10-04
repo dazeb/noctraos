@@ -66,7 +66,7 @@ is curated.
 ## The look
 
 The main desktop design follows **Omarchy Matte Black**: charcoal surfaces,
-restrained borders, amber focus and active states, compact 4 px corners, and
+restrained borders, amber focus and active states, sharp (0 px) corners, and
 JetBrains Mono in the shell and terminals. GNOME remains the desktop.
 
 - **NoctraOS-Dark** derives from the installed Zorin Shell and GTK themes, then
