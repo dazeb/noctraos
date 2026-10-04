@@ -45,9 +45,17 @@ install_theme_file "$REPO_ROOT/configs/theme/index.theme" "$THEME_DIR/index.them
 if [ -f "$THEME_DIR/gtk-3.0/gtk.css" ]; then
   theme_set org.gnome.desktop.interface gtk-theme "'$THEME_NAME'"
 fi
-# Neutral grey icons from Zorin's own set (the stock Adwaita folders are blue).
+# Neutral grey icons: Zorin's own ZorinGrey-Dark, plus a small derived theme that
+# fixes the few icons that still come out bright (the cyan Desktop folder).
 if [ -d /usr/share/icons/ZorinGrey-Dark ]; then
-  theme_set org.gnome.desktop.interface icon-theme "'ZorinGrey-Dark'"
+  ICON_SRC="$REPO_ROOT/assets/icons/noctraos-theme"
+  ICON_DIR="/usr/share/icons/NoctraOS"
+  install_theme_file "$ICON_SRC/index.theme" "$ICON_DIR/index.theme"
+  for icon in "$ICON_SRC"/scalable/places/*.svg; do
+    install_theme_file "$icon" "$ICON_DIR/scalable/places/$(basename "$icon")"
+  done
+  sudo gtk-update-icon-cache -q -t -f "$ICON_DIR" 2>/dev/null || true
+  theme_set org.gnome.desktop.interface icon-theme "'NoctraOS'"
 else
   warn "ZorinGrey-Dark icon theme not found — icons left as is"
 fi
