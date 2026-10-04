@@ -34,8 +34,19 @@ keep a conventional desktop and make it powerful instead.
 One overlay is meant to reach the whole system: **applications, files and
 folders, clipboard history, the web, browser history, and more**, with a
 settings panel for sources and indexed locations. Shipped today: applications,
-files and folders, clipboard history (CopyQ) and web search. **Browser history
-and other sources are not built yet.** It is the main thing a new user should learn, and the reference
+files and folders, clipboard history (CopyQ), web search, and **opt-in browser
+history** (Chromium family and Firefox). Other sources are not built yet.
+
+### Browser history is opt-in and set up after first use
+
+A new user has no browser configured at first login, so onboarding cannot ask.
+Instead, once a supported browser has history on the account, the Super+Space
+overlay shows a small "Finish setup" notice: *search your browser history too?
+Choose your browser.* **Set up** opens a short dialog (which browser(s), and
+"Search my history" or "No thanks"); **Not now** dismisses it for good. The
+choice is reversible in Search settings. History is copied into the user's
+private cache (`~/.cache/noctraos-search/history`, mode 0700) and searched
+locally; nothing is uploaded. It is the main thing a new user should learn, and the reference
 for the visual theme.
 
 Status: in the repo and installed by `install/09_super_search.sh` — two GNOME

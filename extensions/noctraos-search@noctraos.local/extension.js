@@ -59,6 +59,7 @@ export default class SearchExtension extends Extension {
         }
         this._items = [];
         this._entry = null;
+        this._banner = null;
     }
 
     _toggle() {
@@ -91,6 +92,8 @@ export default class SearchExtension extends Extension {
         });
         header.add_child(cog);
         dialog.contentLayout.add_child(header);
+        this._banner = this._buildSetupBanner();
+        dialog.contentLayout.add_child(this._banner);
         const scroll = new St.ScrollView({style_class: 'noctra-search-scroll',
             overlay_scrollbars: true, x_expand: true});
         scroll.set_policy(St.PolicyType.NEVER, St.PolicyType.AUTOMATIC);
@@ -116,6 +119,7 @@ export default class SearchExtension extends Extension {
                 this._cancel();
                 this._dialog = null;
                 this._entry = null;
+                this._banner = null;
             }
         });
         dialog.setInitialKeyFocus(this._entry.clutter_text);
@@ -124,6 +128,56 @@ export default class SearchExtension extends Extension {
             return;
         }
         this._render([], '↑↓ Choose · Enter Open/copy · Esc Close');
+        this._maybeShowSetupBanner();
+    }
+
+    // One-time offer to search browser history. Shown only when a browser with
+    // history exists and the question has not been answered yet.
+    _buildSetupBanner() {
+        const banner = new St.BoxLayout({style_class: 'noctra-search-banner', x_expand: true, visible: false});
+        const text = new St.Label({style_class: 'noctra-search-banner-text', x_expand: true,
+            y_align: Clutter.ActorAlign.CENTER,
+            text: 'Finish setup: search your browser history too? Choose your browser — it stays on this computer.'});
+        text.clutter_text.set_line_wrap(true);
+        banner.add_child(text);
+        const setup = new St.Button({label: 'Set up', style_class: 'noctra-search-banner-button',
+            reactive: true, can_focus: true});
+        setup.connect('clicked', () => {
+            this._close();
+            this._spawn(['noctraos-search', '--setup-history']);
+        });
+        const later = new St.Button({label: 'Not now', style_class: 'noctra-search-banner-button',
+            reactive: true, can_focus: true});
+        later.connect('clicked', () => {
+            this._settings.set_string('history-setup', 'dismissed');
+            banner.hide();
+        });
+        banner.add_child(setup);
+        banner.add_child(later);
+        return banner;
+    }
+
+    _maybeShowSetupBanner() {
+        if (this._settings.get_string('history-setup') !== 'unset')
+            return;
+        const dialog = this._dialog;
+        try {
+            const process = Gio.Subprocess.new(['noctraos-search', '--status'],
+                Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE);
+            process.communicate_utf8_async(null, null, (source, result) => {
+                try {
+                    const [, stdout] = source.communicate_utf8_finish(result);
+                    if (this._dialog !== dialog || !source.get_successful())
+                        return;
+                    if (JSON.parse(stdout).history.prompt)
+                        this._banner?.show();
+                } catch (error) {
+                    // The offer is optional; search works without it.
+                }
+            });
+        } catch (error) {
+            // Same: never block or break search over the setup offer.
+        }
     }
 
     _key(event) {
@@ -262,7 +316,8 @@ export default class SearchExtension extends Extension {
         this._list.destroy_all_children();
         this._rows = [];
         let previousKind = '';
-        const headings = {app: 'Applications', file: 'Files and folders', clipboard: 'Clipboard', web: 'Web'};
+        const headings = {app: 'Applications', file: 'Files and folders', history: 'Browser history',
+            clipboard: 'Clipboard', web: 'Web'};
         for (const [index, item] of items.entries()) {
             if (item.kind !== previousKind) {
                 this._list.add_child(new St.Label({text: headings[item.kind],

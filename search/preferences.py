@@ -6,6 +6,69 @@ gi.require_version('Gtk', '3.0')
 gi.require_version('Gdk', '3.0')
 from gi.repository import Gdk, Gio, Gtk
 
+import browsers
+
+
+def choose_history(settings, parent=None):
+    """Ask which browser(s) to search. Closing the dialog changes nothing."""
+    from main import request_index
+    found = browsers.detected()
+    dialog = Gtk.Dialog(title='Search your browser history?', transient_for=parent, modal=True)
+    dialog.set_default_size(460, -1)
+    area = dialog.get_content_area()
+    area.set_spacing(12)
+    area.set_border_width(20)
+
+    def label(text):
+        item = Gtk.Label(label=text, xalign=0, wrap=True)
+        area.pack_start(item, False, False, 0)
+
+    label('Find pages you have visited from Super+Space. Titles and addresses are read from your '
+          'browser on this computer and searched locally. Nothing is uploaded, and you can change '
+          'this later in Search settings.')
+    boxes = {}
+    if found:
+        label('Which browser do you use?')
+        chosen = set(settings.get_strv('history-browsers'))
+        if not chosen:
+            default = browsers.default_browser()
+            chosen = {default} if default in {b['id'] for b in found} else {b['id'] for b in found}
+        for browser in found:
+            check = Gtk.CheckButton(label=browser['name'], active=browser['id'] in chosen)
+            area.pack_start(check, False, False, 0)
+            boxes[browser['id']] = check
+        yes = dialog.add_button('Search my history', Gtk.ResponseType.OK)
+        yes.get_style_context().add_class('suggested-action')
+        dialog.add_button('No thanks', Gtk.ResponseType.REJECT)
+
+        def update(*_):
+            yes.set_sensitive(any(box.get_active() for box in boxes.values()))
+        for box in boxes.values():
+            box.connect('toggled', update)
+        update()
+    else:
+        label('No browser history found yet. Use a browser for a while, then set this up again.')
+        dialog.add_button('Close', Gtk.ResponseType.CLOSE)
+    dialog.show_all()
+    response = dialog.run()
+    dialog.destroy()
+    if response == Gtk.ResponseType.OK:
+        settings.set_strv('history-browsers', [b for b, box in boxes.items() if box.get_active()])
+        settings.set_boolean('history', True)
+        settings.set_string('history-setup', 'configured')
+    elif response == Gtk.ResponseType.REJECT:
+        settings.set_boolean('history', False)
+        settings.set_string('history-setup', 'dismissed')
+    else:
+        return
+    Gio.Settings.sync()
+    request_index()
+
+
+def show_history_setup(settings):
+    Gtk.init([])
+    choose_history(settings)
+
 
 def show_settings(settings):
     from main import request_index
@@ -35,7 +98,7 @@ def show_settings(settings):
         toggles = {}
         for key, title in [('apps', 'Applications and system settings'),
                            ('files', 'Files and folders'), ('clipboard', 'Clipboard and CopyQ text history'),
-                           ('web', 'Web search'), ('hidden', 'Include hidden files and folders'),
+                           ('web', 'Web search'), ('history', 'Browser history'), ('hidden', 'Include hidden files and folders'),
                            ('contents', 'Search inside small text files (up to 128 KiB)')]:
             row = Gtk.Box(spacing=12)
             row.pack_start(Gtk.Label(label=title, xalign=0), True, True, 0)
@@ -44,6 +107,10 @@ def show_settings(settings):
             row.pack_end(switch, False, False, 0)
             box.pack_start(row, False, False, 0)
             toggles[key] = switch
+        choose = Gtk.Button(label='Choose browsers…', halign=Gtk.Align.START)
+        choose.connect('clicked', lambda _button: (choose_history(settings, window),
+                                                   toggles['history'].set_active(settings.get_boolean('history'))))
+        box.pack_start(choose, False, False, 0)
         label('Search folders — one absolute path per line. Use / for the whole accessible system.')
         roots = Gtk.TextView(wrap_mode=Gtk.WrapMode.WORD_CHAR)
         roots.get_accessible().set_name('Search folders')
@@ -144,11 +211,15 @@ def show_settings(settings):
                 notice.set_text('That shortcut is used by ' + ', '.join(name.replace('-', ' ') for name in conflicts) + '. Choose another.')
                 return
             changed = any(settings.get_boolean(k) != toggles[k].get_active()
-                          for k in ('files', 'hidden', 'contents')) or paths != settings.get_strv('roots')
+                          for k in ('files', 'hidden', 'contents', 'history')) or paths != settings.get_strv('roots')
             settings.delay()
             for name, toggle in toggles.items():
                 settings.set_boolean(name, toggle.get_active())
             settings.set_strv('roots', paths)
+            if toggles['history'].get_active():
+                if not settings.get_strv('history-browsers'):
+                    settings.set_strv('history-browsers', [b['id'] for b in browsers.detected()])
+                settings.set_string('history-setup', 'configured')
             settings.set_strv('toggle-search', [accelerator])
             settings.set_string('web-provider', provider.get_active_text())
             settings.set_int('max-results', count.get_value_as_int())

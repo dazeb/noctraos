@@ -8,6 +8,9 @@
     <key name="web" type="b"><default>true</default><summary>Offer web search</summary></key>
     <key name="roots" type="as"><default>['/']</default><summary>Folders to index</summary></key>
     <key name="hidden" type="b"><default>false</default><summary>Include hidden files</summary></key>
+    <key name="history" type="b"><default>false</default><summary>Search browser history</summary></key>
+    <key name="history-browsers" type="as"><default>[]</default><summary>Browsers whose history is searched</summary></key>
+    <key name="history-setup" type="s"><choices><choice value='unset'/><choice value='configured'/><choice value='dismissed'/></choices><default>'unset'</default><summary>Whether the browser-history question has been answered</summary></key>
     <key name="contents" type="b"><default>false</default><summary>Index UTF-8 text file contents up to 128 KiB</summary></key>
     <key name="web-provider" type="s"><default>'DuckDuckGo'</default><summary>Search engine</summary></key>
     <key name="max-results" type="i"><range min="5" max="30"/><default>12</default><summary>Maximum results per source</summary></key>

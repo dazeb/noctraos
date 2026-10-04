@@ -42,7 +42,7 @@ Prefer to review first: `git clone https://github.com/dazeb/noctraos && cd noctr
 | Task manager | Mission Center (Flathub) — the familiar Task-Manager role: CPU/RAM/GPU and running apps |
 | Runtimes | [mise](https://mise.jdx.dev) managing Node LTS, Python 3.12, Go — system-wide, for every user |
 | Mouse ergonomics | Nautilus right-click: *Open in VS Code*, *Ask AI to Explain* (sends the file to local Ollama, answers in a dialog), *Open Terminal Here* |
-| **Super+Space search** | One overlay that searches apps, files and folders, CopyQ clipboard history, and the web; settings in *Search settings* (the gear). Installed by module 09 |
+| **Super+Space search** | One overlay that searches apps, files and folders, CopyQ clipboard history, the web, and (opt-in, offered after first browser use) your Chromium/Firefox browser history; settings in *Search settings* (the gear). Installed by module 09 |
 | Clipboard | [CopyQ](https://hluk.github.io/CopyQ/) permanent clipboard history — tray-resident, survives reboots, searchable, image support, 1000 entries |
 | Desktop | NoctraOS-Dark shell theme, AI-first start menu, white menu icons, neon polygonal 4K wallpapers, dark mode, minimize/maximize/close window buttons, pinned taskbar |
 | Maintenance | `zom` CLI + `zom-menu` GUI panel |

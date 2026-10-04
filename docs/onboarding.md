@@ -33,7 +33,7 @@ learning.
 |---|--------|---------|---------------|
 | 1 | **Welcome** — one line on what NoctraOS is, a *Start* button, a *Skip* link | Set expectations | Click |
 | 2 | **Press Windows + Space** — large keycap graphic, short copy: "Search everything from one place." | Teach the hero feature by doing it | The user opens the overlay once (see *Detecting the keypress*) |
-| 3 | **What can it find?** — four tappable examples that open the overlay with a query filled in: an app ("files"), a file by name, something from clipboard history, a web search | Show the range; each is one click | Click *Next* (no forced interaction) |
+| 3 | **What can it find?** — four tappable examples that open the overlay with a query filled in: an app ("files"), a file by name, something from clipboard history, a web search. Browser history is not an example here: it is offered later (below) | Show the range; each is one click | Click *Next* (no forced interaction) |
 | 4 | **Where things are** — a compact, mouse-only map of familiar things: Start button (N, bottom-left), Task Manager → Mission Center, File Explorer → Files, screenshots, system tray. **No shortcut list** | Reassure; nothing to relearn | Click *Next* |
 | 5 | **Your AI is local** — status of the local model (installed / downloading, with progress), the Agents menu, how to open it | Introduce the AI half without blocking on the download | Click *Done*; if provisioning is still running, show "Finishing setup in the background" |
 
@@ -57,6 +57,15 @@ extension watches). To be chosen during implementation; D-Bus is cleaner.
 File search is only as good as the index. Screen 3 must handle the first-boot
 case where the index is still building: show "Still indexing your files — try
 this one in a minute" and keep the app and web examples enabled.
+
+## After onboarding: finishing search setup
+
+Browser history cannot be set up during onboarding because a new user has no
+browser history yet. The overlay itself carries the offer (built): when a
+supported browser has history and the question is unanswered, a small "Finish
+setup" notice appears under the search box with **Set up** / **Not now**. See
+[objectives.md](objectives.md#browser-history-is-opt-in-and-set-up-after-first-use).
+Onboarding screen 2/3 should not mention it, and must not depend on it.
 
 ## Implementation sketch
 

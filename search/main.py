@@ -6,6 +6,7 @@ import subprocess
 import sys
 import time
 
+import browsers
 from core import build_index, cache_dir, index_state, search_clipboard, search_files
 
 SCHEMA = 'org.gnome.shell.extensions.noctraos-search'
@@ -18,7 +19,8 @@ def get_settings():
 
 def options(settings):
     return {key: settings.get_value(key).unpack() for key in
-            ('apps', 'files', 'clipboard', 'web', 'roots', 'hidden', 'contents', 'max-results')}
+            ('apps', 'files', 'clipboard', 'web', 'roots', 'hidden', 'contents', 'max-results',
+             'history', 'history-browsers')}
 
 
 def request_index(restart=True):
@@ -66,6 +68,8 @@ def main():
     commands.add_argument('--ensure-index', action='store_true')
     commands.add_argument('--settings', action='store_true')
     commands.add_argument('--setup', action='store_true')
+    commands.add_argument('--status', action='store_true')
+    commands.add_argument('--setup-history', action='store_true')
     args = parser.parse_args()
     settings = get_settings()
     config = options(settings)
@@ -76,8 +80,26 @@ def main():
         from preferences import show_settings
         show_settings(settings)
         return
+    if args.setup_history:
+        from preferences import show_history_setup
+        show_history_setup(settings)
+        return
+    if args.status:
+        setup = settings.get_string('history-setup')
+        found = browsers.detected()
+        default = browsers.default_browser()
+        print(json.dumps({'history': {
+            'setup': setup, 'enabled': config['history'],
+            'browsers': [dict(b, default=b['id'] == default) for b in found],
+            # Only ask once there is something to search.
+            'prompt': setup == 'unset' and bool(found)}}))
+        return
     directory = cache_dir()
     if args.index or args.ensure_index:
+        if config['history']:
+            browsers.refresh_history(directory, config['history-browsers'])
+        else:
+            browsers.clear_history(directory)
         if config['files']:
             current, updated = index_state(directory, config)
             if args.index or not current or time.time() - updated > 900:
@@ -95,6 +117,13 @@ def main():
             notices.append(notice)
         if config['files'] and not index_state(directory, config)[0]:
             request_index(restart=False)
+        if config['history']:
+            browsers.refresh_history(directory, config['history-browsers'], max_age=120)
+            pages, notice = browsers.search_history(directory, query, config['history-browsers'],
+                                                    config['max-results'])
+            results.extend(pages)
+            if notice:
+                notices.append(notice)
         if config['clipboard']:
             clips, notice = search_clipboard(query, config['max-results'])
             results.extend(clips)
