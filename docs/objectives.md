@@ -84,6 +84,15 @@ radii, monospace accents, amber for focus and selection). See
 (libadwaita apps, overview, wallpapers, boot/login/lock screens, ISO menus,
 installer, stock icons) are tracked in the README roadmap.
 
+## Decisions
+
+- **Stay on GNOME** (Zorin base) until the current experience is complete.
+  Moving to KDE Plasma was considered and deferred; revisit with a time-boxed
+  spike only after the GNOME work is done.
+- **After the GNOME work**, fix the autologin keyring prompt (a locked login
+  keyring makes apps like Chromium ask for a password on first use).
+- **Target desktop layout** is in [desktop-layout.md](desktop-layout.md).
+
 ## Non-goals
 
 - A tiling window manager or keyboard-only workflow (that is Omarchy's lane).
