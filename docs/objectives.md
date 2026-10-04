@@ -50,8 +50,8 @@ First login must put Super+Space front and center: show the shortcut, let the
 user try it right there, and show what it can find (apps, files, clipboard,
 web). Then a short tour of the other things a switcher needs to know (start
 button, Mission Center as the task manager, the agents menu, local AI
-models). Flow, copy and implementation are still to be designed. Today the
-ISO first boot only runs the provisioner in a terminal.
+models). The draft flow is in [onboarding.md](onboarding.md); nothing is built yet.
+Today the ISO first boot only runs the provisioner in a terminal.
 
 ## Delivery
 

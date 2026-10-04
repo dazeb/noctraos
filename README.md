@@ -240,7 +240,8 @@ first-boot provisioning from the ISO, unattended install from the custom ISO).
 Current release: **v0.3.0**.
 
 On the roadmap, in priority order: a first-run
-onboarding flow that puts Super+Space front and center; the full-ISO
+onboarding flow that puts Super+Space front and center
+([draft](docs/onboarding.md)); the full-ISO
 experience (boot, installer, login); the dark + amber reskin built around the
 Super+Space look; more agent launchers (Aider, Goose — non-npm install
 paths). Reskin items still to do before it is consistent everywhere: libadwaita/GTK 4 apps,
