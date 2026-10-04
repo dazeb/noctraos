@@ -78,8 +78,9 @@ Today the ISO first boot only runs the provisioner in a terminal.
 ## Visual direction
 
 Dark with slight orange highlights, streamlined and consistent everywhere,
-derived from the Super+Space overlay (near-black surfaces, small corner
-radii, monospace accents, amber for focus and selection). See
+derived from the Super+Space overlay (near-black surfaces, **sharp corners —
+one small radius system-wide, no rounded dock or menus**, monospace accents,
+amber for focus and selection). See
 `docs/theme-design.md` and `configs/theme/palette.json`. Remaining gaps
 (libadwaita apps, overview, wallpapers, boot/login/lock screens, ISO menus,
 installer, stock icons) are tracked in the README roadmap.

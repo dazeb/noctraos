@@ -16,16 +16,25 @@ how we read it, what differs from the image today, and what is still open.
    *"redesigned for AI applications"*.
 4. Plain near-black background, light outlines. Nothing else on screen.
 
-## How we read it
+## Decisions (owner, 2026-10-04)
 
-- The top bar carries status only: network, volume/power and the clock on the
-  right; notifications in the centre (the area where GNOME shows notification
-  banners). Moving these off the bottom bar leaves the dock for launching.
-- The dock keeps the Windows habit (Start on the left of the icons, running
-  apps as icons) while centring it, as Windows 11 does.
-- The Start menu is for **browsing and launching**; Super+Space is for
-  **searching**. They must not duplicate each other. The AI-first menu (Agents,
-  Local LLM, models) is the Start menu's job.
+These override the mockup where they differ.
+
+- **Sharp corners everywhere**, very opinionated: dock, Start button, Start
+  menu, top bar, overlay, dialogs. The mockup's rounding is a wireframe
+  artifact. One radius (2 px today) across the whole system.
+- **Top bar, left:** Show Desktop.
+- **Top bar, centre:** the **clock**. Notifications open from it (GNOME's
+  date/notification menu), which also covers the mockup's "notification" label.
+- **Top bar, right:** running-app indicators and the tray icons (network,
+  volume, power, CopyQ and other indicators).
+- **Bottom dock:** floating and centred: Start button, then application icons.
+- **Start menu:** shows **recent files** as well as apps, and is closer to
+  macOS (a launcher grid with a Recents area, not a Windows-style tree) than to
+  Windows. Redesigned around AI applications: Agents and Local LLM come first.
+  Browsing and launching only; Super+Space remains the search surface.
+- **Wallpaper:** the current set stays; better ones are welcome at any time
+  (the generator is `assets/wallpapers/generate-wallpapers.py`).
 
 ## Today versus the mockup
 
@@ -33,11 +42,13 @@ how we read it, what differs from the image today, and what is still open.
 |---|---|---|
 | Bar at the top | none (Zorin Taskbar replaces the stock top panel) | thin full-width bar with notifications, network, clock |
 | Bottom bar | full-width, 48 px, square corners; icons left-aligned; tray and clock at the right | floating, centred, rounded; Start plus app icons only |
-| Tray, network, volume, power, clock | bottom right | top right |
+| Clock | bottom right | top centre |
+| Tray, network, volume, power, running-app indicators | bottom right | top right |
+| Show Desktop | bottom right edge | top left |
 | Start button | Noctra "N" (extension) | rounded "Start" button inside the dock |
 | Start menu | stock Zorin Menu, compact styling | large rounded popup redesigned around AI apps |
-| Corner radius | 2 px everywhere (matches the Super+Space overlay) | clearly rounded dock, button and popup |
-| Wallpaper | purple/magenta neon scenes | plain dark |
+| Corner radius | 2 px everywhere (matches the Super+Space overlay) | **decided: sharp, 2 px** (mockup shows rounded) |
+| Wallpaper | purple/magenta neon scenes | **decided: keep current**, add better ones over time |
 
 ## Feasibility on GNOME (read from the live settings, not yet tried)
 
@@ -55,15 +66,15 @@ how we read it, what differs from the image today, and what is still open.
 
 ## Open questions
 
-1. **Rounded or sharp?** The mockup is rounded; the Super+Space overlay and the
-   whole palette work so far use 2 px corners. Pick one radius and apply it
-   everywhere, including the overlay.
-2. **What goes in the centre of the top bar?** The notification area only, or
-   the clock too (GNOME's default), or a Super+Space hint?
-3. **Does the dock need running-app indicators, window previews, a Show Desktop
-   button?** (Today it has all three.)
-4. **Where do the tray indicators (CopyQ, Connect, etc.) live** — top bar?
-5. **Should the Start menu also list recent files and Super+Space results,** or
-   stay a pure launcher?
-6. **Plain dark wallpaper** replacing the neon set: confirm, and whether the
-   user can still pick their own.
+1. **"Running-app indicators" in the top bar:** an icon strip of open apps
+   (with window previews on hover?) or just a mark for which apps are open?
+   And does the dock then show only pinned launchers, or also a dot under
+   running ones?
+2. **Start menu, macOS-like:** a full-screen/centred grid like Launchpad, or a
+   panel anchored above the dock? How many recent files, and which types
+   (documents only, or everything)?
+3. **Where does the AI emphasis sit in the Start menu:** a pinned Agents row
+   on top, a local-model status tile, or both?
+4. **Top bar technique** (still to prove on the VM): restore GNOME's stock
+   panel beside the taskbar, or build our own top-bar extension that takes the
+   tray, clock and Show Desktop out of the taskbar.
