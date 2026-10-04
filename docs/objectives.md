@@ -24,7 +24,7 @@ keep a conventional desktop and make it powerful instead.
    menu, an editor wired to local AI, and file actions such as *Ask AI to
    Explain*.
 4. **One keybind, promoted heavily: Super+Space.** It is the only shortcut
-   users need to learn. NoctraOS is mouse-first; everything else is reachable
+   users need to learn. NoctraOS is AI-first; everything else is reachable
    by mouse and through Super+Space itself. Everything else should feel familiar.
 5. **A distribution, not a script.** The deliverable is a bootable ISO that
    installs and boots into the finished experience.

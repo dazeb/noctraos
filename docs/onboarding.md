@@ -22,7 +22,7 @@ learning.
 3. **Always skippable, always reopenable** — from the start menu ("Welcome to
    NoctraOS"), and by typing "welcome" in Super+Space.
 4. **Under two minutes**, five screens or fewer, no account, no telemetry.
-5. **One keybind.** NoctraOS is mouse-first. Super+Space is the only shortcut
+5. **One keybind.** NoctraOS is AI-first. Super+Space is the only shortcut
    we teach; everything else is reachable with the mouse (and through Super+Space).
 6. **Windows vocabulary.** Say "Windows key" (it is the Super key), "Task
    Manager" (Mission Center), "Start button" (the N).
