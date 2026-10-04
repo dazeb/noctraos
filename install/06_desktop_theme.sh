@@ -46,6 +46,7 @@ sudo mkdir -p /usr/local/share/applications /usr/share/desktop-directories \
               /usr/local/share/icons/hicolor/scalable/apps \
               /usr/local/bin
 sudo install -m 755 "$REPO_ROOT/bin/noctraos-agent" /usr/local/bin/noctraos-agent
+sudo install -m 755 "$REPO_ROOT/bin/noctraos-hermes" /usr/local/bin/noctraos-hermes
 for f in "$REPO_ROOT"/configs/applications/*.desktop; do
   [ -f "$f" ] && sudo install -m 644 "$f" /usr/local/share/applications/
 done
@@ -58,7 +59,7 @@ for i in "$REPO_ROOT"/assets/icons/noctraos-*.svg; do
 done
 sudo update-desktop-database >/dev/null 2>&1 || true
 sudo gtk-update-icon-cache -q -t -f /usr/local/share/icons/hicolor 2>/dev/null || true
-log "OK: Agents section — Codex, Claude Code, OpenCode, Grok, Gemini CLI, Qwen Code (install-on-first-use)"
+log "OK: Agents section — Hermes, Codex, Claude Code, OpenCode, Grok, Gemini CLI, Qwen Code (Hermes preinstalled by module 11, the rest install-on-first-use)"
 
 log "Installing AI-first application menu (replaces stock category tree)..."
 sudo install -m 644 "$REPO_ROOT/configs/applications/noctraos-local-llm.directory" \
