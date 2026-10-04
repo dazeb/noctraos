@@ -111,7 +111,7 @@ if [ -f "$DEFAULT_WP" ]; then
   gs org.gnome.desktop.background picture-uri-dark "file://$DEFAULT_WP"
   gs org.gnome.desktop.background picture-options 'zoom'
   [ -f "$LOCK_WP" ] && gs org.gnome.desktop.screensaver picture-uri "file://$LOCK_WP"
-  log "Wallpaper set (cycle with: zom bg next)"
+  log "Wallpaper set (cycle with: noc bg next)"
 fi
 
 if as_user gsettings list-keys org.gnome.desktop.interface 2>/dev/null \

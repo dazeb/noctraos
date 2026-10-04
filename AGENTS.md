@@ -22,7 +22,7 @@ anonymously. Never make it private, never commit secrets.
 boot.sh                     remote fetcher: clones repo to ~/.local/share/zorin-ai,
                             runs install.sh; env: ZORIN_AI_REPO_URL, ZORIN_AI_BRANCH, ZORIN_AI_HOME
 install.sh                  orchestrator: logging, TARGET_USER resolution, flags
-                            (--skip-ai, --skip-gui), runs modules 00-07 + 08
+                            (--skip-ai, --skip-gui, --skip-gpu), runs modules 00-02, 02b, 03-08
 install/
   lib.sh                    shared helpers: log/warn/die, as_user(), apt_install(),
                             desktop_file_exists(). Modules MUST source it.
@@ -30,18 +30,22 @@ install/
   01_system.sh              apt core + python build deps, Flathub, Nerd Font
   02_mise.sh                mise binary, profile.d + bash.bashrc hooks, runtimes,
                             Herdr, Starship, lazygit, lazydocker
+  02b_gpu_drivers.sh        GPU detect + NVIDIA driver/CUDA or AMD ROCm (thin wrapper
+                            over bin/noc-gpu; before 03 so Ollama sees the GPU)
   03_ai_core.sh             Ollama + qwen2.5-coder:7b + nomic-embed-text
   04_gui_apps.sh            VSCodium + extensions, Mission Center, Chatbox .deb
   04_workstation_apps.sh    Omarchy-style Ubuntu/Flathub workstation app set
   05_mouse_ergonomics.sh    Nautilus right-click scripts
   06_desktop_theme.sh       gsettings ergonomics, wallpapers, Agents menu,
                             AI-first /etc/xdg/menus/gnome-applications.menu
-  07_persistence.sh         /etc/skel defaults, zom + zom-menu install
+  07_persistence.sh         /etc/skel defaults, noc + noc-menu install
   08_shell_theme.sh         ZorinAI-Dark shell + GTK themes (derived, not
                             shipped), white menu icons, terminal/app palette
 bin/
-  zom                       CLI: update | doctor | models [list|pull|rm|gui] | bg [list|next|set]
-  zom-menu                  zenity control panel
+  noc                       CLI: update | doctor | models [list|pull|rm|gui] | bg [list|next|set] | gpu
+  noc-gpu                   GPU engine: detect [--json] | install [--dry-run] | status [--smoke];
+                            self-contained (installed to /usr/local/bin), sourceable for tests
+  noc-menu                  zenity control panel
   zorin-ai-agent            agent launcher wrapper: installs npm package on
                             first use, then execs the agent
 configs/
@@ -126,7 +130,7 @@ iso/preseed/zorin-ai.seed.in  Ubiquity/d-i seed template for the above
 # static checks (docker shellcheck — not installed on this host)
 bash -n boot.sh install.sh install/*.sh bin/* configs/nautilus-scripts/*
 docker run --rm -v "$PWD:/mnt" koalaman/shellcheck:stable --severity=warning \
-  boot.sh install.sh install/*.sh bin/zom bin/zom-menu bin/zorin-ai-agent \
+  boot.sh install.sh install/*.sh bin/noc bin/noc-menu bin/noc-gpu bin/zorin-ai-agent \
   configs/nautilus-scripts/*
 
 # wallpaper iteration (venv at ~/workspace/scratch/zorin-img-venv: pillow+numpy)
@@ -200,6 +204,21 @@ tail -f /root/zai-build.log
   firstboot flow blocks at the next sudo prompt. Autologin builds bake
   NOPASSWD sudoers; interactive first boots are fine (user is watching).
 
+- **GPU module (`bin/noc-gpu`)**: the driver comes from Ubuntu (`ubuntu-drivers`,
+  signed, no DKMS) and ONLY the CUDA toolkit from NVIDIA's repo; the pin file
+  `zorin-ai-cuda-toolkit-only` blocks that repo's driver packages — never remove
+  it (mixed Ubuntu/NVIDIA `libnvidia-*` breaks the driver). Module 02b must run
+  BEFORE 03: Ollama's installer exits early only if `nvidia-smi` exists, else it
+  installs NVIDIA's DKMS `cuda-drivers` over ours. CUDA 13 dropped
+  Maxwell/Pascal/Volta, so those stay on driver 580 + CUDA 12.9. NVIDIA's debs do
+  not create `/usr/local/cuda`; `ensure_cuda_symlink` does.
+- **GPU testing**: test VMs have no GPU, so they only prove the "no GPU → skip,
+  idempotent" path. Real coverage = `python3 -m unittest discover -s tests`
+  (fixture lspci via `NOC_GPU_LSPCI_FILE`, `--dry-run`) plus a disposable
+  `ubuntu:24.04` container for the AMD/apt path. The NVIDIA driver step needs real
+  hardware; on this dev box `noc gpu install --dry-run` is safe (it detects the
+  active driver + manual CUDA 13.3 and touches nothing).
+
 ## Verification checklist for any change
 
 1. `bash -n` + shellcheck (docker) clean on touched scripts.
@@ -218,7 +237,7 @@ tail -f /root/zai-build.log
   pve-root is at 90% — free space before the next build.
 - VM 110 `zai-zerotouch-test` (192.168.8.138, dazeb/zorin-test-2026, DHCP!):
   installed **fully zero-touch** from the v0.3 ISO on 2026-09-27 (boot →
-  install → reboot → autologin → provision, no interaction; `zom doctor`
+  install → reboot → autologin → provision, no interaction; `noc doctor`
   all green). It is the v0.3 reference install. VM 114 (192.168.8.187) is
   the v0.2 reference.
 - Roadmap ideas: Aider/Goose launchers (non-npm install paths), custom

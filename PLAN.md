@@ -26,7 +26,7 @@ curl -fsSL https://RAW-BOOTSTRAP-URL/boot.sh | bash
    VSCodium (Continue.dev), Nautilus context menus, and the Chatbox desktop client.
 5. Polyglot runtimes (Node LTS, Python 3.12, Go) managed by `mise`, system-wide.
 6. New user accounts inherit the developer defaults via `/etc/skel`.
-7. `zom` / `zom-menu` provide CLI + GUI maintenance (update, doctor, models).
+7. `noc` / `noc-menu` provide CLI + GUI maintenance (update, doctor, models).
 
 ---
 
@@ -43,7 +43,7 @@ boot.sh (remote one-liner)
              ├─ install/04_gui_apps.sh           VSCodium, Mission Center, Chatbox (--skip-gui)
              ├─ install/05_mouse_ergonomics.sh   Nautilus right-click scripts      (--skip-gui)
              ├─ install/06_desktop_theme.sh      gsettings: Win/KDE parity         (--skip-gui)
-             └─ install/07_persistence.sh        /etc/skel sync + zom CLI
+             └─ install/07_persistence.sh        /etc/skel sync + noc CLI
 ```
 
 **Execution model**
@@ -68,8 +68,8 @@ zorin-ai/
 ├── boot.sh                # remote fetcher / repo updater
 ├── install.sh             # orchestrator (logging, flags, user resolution)
 ├── bin/
-│   ├── zom                # management CLI (update | doctor | models)
-│   └── zom-menu           # zenity control panel (mouse-first maintenance)
+│   ├── noc                # management CLI (update | doctor | models)
+│   └── noc-menu           # zenity control panel (mouse-first maintenance)
 ├── install/
 │   ├── lib.sh             # shared helpers: log/warn/die, as_user, apt_install
 │   ├── 00_preflight.sh
@@ -209,7 +209,7 @@ Each module: **objective → actions → idempotence guard → acceptance check.
   generated 4K low-poly scenes in `assets/wallpapers/` — sunset-peaks,
   neon-rift, aurora-peaks, crimson-dunes, glacier-facet — installed to
   `/usr/local/share/backgrounds/zorin-ai/`, default + lock-screen set via
-  `picture-uri[-dark]`; cycle with `zom bg next`); accent color attempted via
+  `picture-uri[-dark]`; cycle with `noc bg next`); accent color attempted via
   `org.gnome.desktop.interface accent-color` (warn-not-die — key absent on some
   Zorin builds); pin favorites filtered to desktop entries that actually exist;
   enable DING desktop-icons keys (`show-home`, `show-trash`) when the schema exists.
@@ -232,36 +232,36 @@ Each module: **objective → actions → idempotence guard → acceptance check.
 
 ### 07_persistence
 - **Actions:** sync `configs/` outputs into `/etc/skel/` (`.config/mise/config.toml`,
-  `.continue/config.yaml`, `.local/share/nautilus/scripts/*`); install `zom` +
-  `zom-menu` to `/usr/local/bin`; install a `zom-menu.desktop` launcher.
+  `.continue/config.yaml`, `.local/share/nautilus/scripts/*`); install `noc` +
+  `noc-menu` to `/usr/local/bin`; install a `noc-menu.desktop` launcher.
 - **Guard:** `install -m` overwrites are idempotent.
 - **Accept:** `useradd -m testuser` + `su - testuser` sees mise config, Continue config
-  and Nautilus scripts; `zom doctor` runs green.
+  and Nautilus scripts; `noc doctor` runs green.
 
 ---
 
-## 6. `zom` CLI
+## 6. `noc` CLI
 
 | Command | Behaviour |
 |---------|-----------|
-| `zom update` | apt update+upgrade → Flatpak apps → `mise up`/`mise install` → `ollama pull` for every installed model |
-| `zom doctor` | Health report: OS, Ollama API + model count, mise + current runtimes, VSCodium, Flatpak apps, NVIDIA GPU presence, disk free |
-| `zom models` | `list` / `pull <model>` / `rm <model>` |
-| `zom models gui` | zenity picker over a curated preset list (qwen2.5-coder 7b/14b, llama3.2:3b, gemma2:2b, deepseek-coder, phi4-mini) |
-| `zom-menu` | zenity control panel (Update / Doctor / Models / About) launching actions in a terminal window |
+| `noc update` | apt update+upgrade → Flatpak apps → `mise up`/`mise install` → `ollama pull` for every installed model |
+| `noc doctor` | Health report: OS, Ollama API + model count, mise + current runtimes, VSCodium, Flatpak apps, NVIDIA GPU presence, disk free |
+| `noc models` | `list` / `pull <model>` / `rm <model>` |
+| `noc models gui` | zenity picker over a curated preset list (qwen2.5-coder 7b/14b, llama3.2:3b, gemma2:2b, deepseek-coder, phi4-mini) |
+| `noc-menu` | zenity control panel (Update / Doctor / Models / About) launching actions in a terminal window |
 
 ---
 
 ## 7. Milestones
 
-- **M0 — scaffold:** repo tree, PLAN, all modules, configs, zom CLI,
+- **M0 — scaffold:** repo tree, PLAN, all modules, configs, noc CLI,
   every upstream source verified live. *(done 2026-09-25)*
 - **M1 — static QA:** `bash -n` clean on all scripts. *(done; shellcheck still to install)*
 - **M2 — VM validation:** *(done 2026-09-25)* — clean Zorin OS 18.1 VM (Proxmox, 4 vCPU /
   5→7 GiB / 64 GB on zfs), installer driven over VNC. **Four full installer runs:**
   run 1 progressed to module 04 (host unplugged by a Proxmox node reboot mid-run),
   runs 2–4 proved resumability + idempotence (every guard fired, ollama model pull
-  resumed from partial). Final state all green: `zom doctor` clean, mise runtimes
+  resumed from partial). Final state all green: `noc doctor` clean, mise runtimes
   resolve in login shells (node 24.21.0 / python 3.12.14 / go 1.27.1), ollama healthy
   with qwen2.5-coder:7b + nomic-embed-text (embedding endpoint returns 768-dim vectors),
   all 5 VSCodium extensions, Mission Center + Chatbox 1.23.5, gsettings verified
@@ -312,7 +312,7 @@ Each module: **objective → actions → idempotence guard → acceptance check.
 6. New terminal: `node -v` / `python -V` / `go version` resolve via mise.
 7. Window buttons on the right; dark theme; pinned favorites on the panel.
 8. `sudo useradd -m qa1 && sudo su - qa1` → mise + Continue + Nautilus scripts present.
-9. `zom update` completes; `zom doctor` all green; `zom models gui` pulls a model.
+9. `noc update` completes; `noc doctor` all green; `noc models gui` pulls a model.
 
 ## 9. Deviations from the source spec (corrections)
 
@@ -345,9 +345,9 @@ Each module: **objective → actions → idempotence guard → acceptance check.
     interactive `sudo -v` when a terminal is available.
 11. **Chatbox's deb package/desktop IDs differ from its old Flathub IDs** — package is
     `xyz.chatboxapp.app` and the launcher is `xyz.chatboxapp.app.desktop`; modules 04
-    and 06 (and `zom doctor`) use the real IDs.
+    and 06 (and `noc doctor`) use the real IDs.
 12. **`/usr/local/share/applications` does not exist on a fresh system** — module 07
-    creates it before installing the `zom-menu.desktop` launcher.
+    creates it before installing the `noc-menu.desktop` launcher.
 13. **`zorin-menu.desktop` does not exist on Zorin 18.1** (menu is built into the
     shell) — the favorites candidate list skips missing entries with a warning; on
     18.1 the panel gets the five real launchers.
@@ -370,8 +370,8 @@ Each module: **objective → actions → idempotence guard → acceptance check.
 | Risk | Mitigation |
 |------|-----------|
 | `qwen2.5-coder:7b` is a ~4.7 GB download | 25 GB preflight floor; `--skip-ai` flag; model overridable via `ZORIN_AI_MODEL` |
-| No GPU / unsupported GPU | Ollama falls back to CPU; `zom doctor` reports what it detected |
-| Upstream outages (GitHub, GitLab, Flathub, chatboxai CDN) | preflight probes network; per-step warnings allow partial installs; `zom update` retries later |
+| No GPU / unsupported GPU | Ollama falls back to CPU; `noc doctor` reports what it detected |
+| Upstream outages (GitHub, GitLab, Flathub, chatboxai CDN) | preflight probes network; per-step warnings allow partial installs; `noc update` retries later |
 | Zorin schema drift across 17.x | module 06 steps are warn-not-die; favorites filtered to existing entries |
 | First `mise install python` compiles from source (slow) | build deps pre-installed; expectation set in module log output |
 | Vendor .deb URL drift (Chatbox) | version resolved from the GitHub release tag at install time, not hardcoded |

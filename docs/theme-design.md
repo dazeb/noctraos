@@ -85,7 +85,7 @@ session, then rebuild and boot-test the ISO from the published repository.
   also produced no changes on its second theme-module pass.
 - GTK 3 and GTK 4 reported no CSS parsing diagnostics. After reboot, GNOME Shell
   loaded ZorinAI-Dark without theme-parser errors; the menu and terminal were
-  inspected. `zom doctor` was green.
+  inspected. `noc doctor` was green.
 - The reference VM is restored after testing. These worktree changes have not
   been published or baked into a new ISO.
 

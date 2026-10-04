@@ -1,0 +1,786 @@
+#!/usr/bin/env bash
+# noc-gpu — detect NVIDIA / AMD GPUs and install the compute stack local LLMs need.
+#
+#   noc-gpu detect [--json]      list GPUs and the install plan (read-only)
+#   noc-gpu install [options]    install what the detected hardware needs
+#   noc-gpu status [--smoke]     verify driver + CUDA/ROCm (used by `noc doctor`)
+#
+# install options:
+#   --dry-run        print every action, change nothing
+#   --runtime-only   libraries only, skip compilers/dev headers (smaller)
+#   --vendor V       nvidia | amd | all   (default: all detected)
+#
+# Design:
+#   NVIDIA  driver  = Ubuntu's signed packages via `ubuntu-drivers` (Secure Boot safe,
+#                     matched to the running kernel, no DKMS in the normal case)
+#           CUDA    = NVIDIA's apt repo, TOOLKIT ONLY. The repo's driver packages are
+#                     pinned off so they can never replace Ubuntu's driver.
+#   AMD     driver  = in-kernel amdgpu (already in Ubuntu), no amdgpu-dkms
+#           ROCm    = AMD's apt repo, pinned to one resolved release so `apt upgrade`
+#                     never jumps a ROCm major.
+#   Anything else (VM display adapters, Intel) is ignored.
+#
+# Environment: ZORIN_AI_GPU_PROFILE=runtime|full  ZORIN_AI_GPU_VENDORS=nvidia|amd|all
+#              ZORIN_AI_CUDA_VERSION=12.9  ZORIN_AI_ROCM_VERSION=7.2.4
+#              NOC_GPU_LSPCI_FILE=<file>   (tests: read lspci -Dnn output from a file)
+set -uo pipefail
+
+VERSION="0.1.0"
+
+say()  { printf '\033[1;36mnoc-gpu\033[0m %s\n' "$*"; }
+ok()   { printf '  \033[32mOK\033[0m  %s\n' "$*"; }
+bad()  { printf '  \033[31m!!\033[0m  %s\n' "$*"; }
+note() { printf '  \033[33m..\033[0m  %s\n' "$*"; }
+warn() { printf '\033[1;33mnoc-gpu WARN\033[0m %s\n' "$*" >&2; }
+have() { command -v "$1" >/dev/null 2>&1; }
+
+DRY_RUN=0
+PROFILE="${ZORIN_AI_GPU_PROFILE:-full}"
+VENDORS="${ZORIN_AI_GPU_VENDORS:-all}"
+TARGET_USER="${TARGET_USER:-${SUDO_USER:-$(id -un)}}"
+SUDO=""
+[ "$(id -u)" -ne 0 ] && SUDO="sudo"
+
+PROFILE_FILE="/etc/profile.d/zorin-ai-gpu.sh"
+APT_OPTS=(-o DPkg::Lock::Timeout=300)   # first boot races unattended-upgrades for the lock
+APT_DIRTY=0
+FAILED=0
+
+# ---------------------------------------------------------------- helpers ----
+
+# Execute (or, in --dry-run, print) a command.
+run() {
+  if [ "$DRY_RUN" -eq 1 ]; then
+    printf '  \033[2m[dry-run]\033[0m %s\n' "$*"
+    return 0
+  fi
+  "$@"
+}
+sx() { run $SUDO "$@"; }
+
+apt_install() {
+  sx env DEBIAN_FRONTEND=noninteractive apt-get "${APT_OPTS[@]}" install -y "$@"
+}
+apt_refresh() {
+  if [ "$APT_DIRTY" -eq 1 ]; then
+    sx apt-get "${APT_OPTS[@]}" update -y && APT_DIRTY=0
+  fi
+}
+pkg_installed() { dpkg-query -W -f='${db:Status-Abbrev}' "$1" 2>/dev/null | grep '^ii' >/dev/null; }
+
+# Install stdin as a root-owned file iff content changed (idempotent).
+# Returns 0 = written, 1 = already up to date, 2 = write failed.
+write_root_file() {
+  local path="$1" mode="$2" tmp
+  tmp="$(mktemp)"; cat >"$tmp"
+  if [ -f "$path" ] && cmp -s "$tmp" "$path"; then
+    rm -f "$tmp"; ok "$path already up to date"; return 1
+  fi
+  if [ "$DRY_RUN" -eq 1 ]; then
+    printf '  \033[2m[dry-run]\033[0m write %s\n' "$path"; rm -f "$tmp"; return 0
+  fi
+  if ! $SUDO install -D -m "$mode" "$tmp" "$path"; then
+    rm -f "$tmp"; warn "could not write $path"; FAILED=1; return 2
+  fi
+  rm -f "$tmp"
+}
+
+os_field() { ( . /etc/os-release 2>/dev/null; printf '%s' "${!1:-}" ); }
+codename() {
+  local c; c="$(os_field UBUNTU_CODENAME)"
+  [ -n "$c" ] || c="$(os_field VERSION_CODENAME)"
+  printf '%s' "$c"
+}
+secure_boot_on() { have mokutil && mokutil --sb-state 2>/dev/null | grep -i 'enabled' >/dev/null; }
+
+want_vendor() { [ "$VENDORS" = all ] || [ "$VENDORS" = "$1" ]; }
+
+need_disk_gb() {
+  local need="$1" avail
+  avail="$(df -BG --output=avail /opt 2>/dev/null | tail -n 1 | tr -dc '0-9')"
+  [ -z "$avail" ] && return 0
+  if [ "$avail" -lt "$need" ]; then
+    warn "Only ${avail}GiB free; this step needs ~${need}GiB."
+    return 1
+  fi
+}
+
+# -------------------------------------------------------------- detection ----
+
+GPU_BDF=(); GPU_VID=(); GPU_DID=(); GPU_NAME=(); GPU_FAMILY=(); GPU_TIER=(); GPU_NOTE=(); GPU_OVERRIDE=()
+
+lspci_text() {
+  if [ -n "${NOC_GPU_LSPCI_FILE:-}" ]; then cat "$NOC_GPU_LSPCI_FILE"; return; fi
+  have lspci || return 1
+  lspci -Dnn 2>/dev/null
+}
+
+# NVIDIA: chip code in the PCI name → generation → what CUDA can do with it.
+#   modern       Turing and newer: current driver branch + CUDA 13.x
+#   legacy       Maxwell/Pascal/Volta: last supported by the 580 driver + CUDA 12.x
+#   unsupported  Kepler and older: no usable CUDA
+# Prints "family tier note".
+classify_nvidia() {
+  local n="$1" code=""
+  if [[ "$n" =~ (^|[^A-Za-z0-9])(GB|GH|AD|GA|TU|GV|GP|GM|GK|GF|GT|G8|G9|NV)[0-9]{1,3} ]]; then
+    code="${BASH_REMATCH[2]}"
+  fi
+  case "$code" in
+    GB) echo "blackwell modern -" ;;
+    GH) echo "hopper modern -" ;;
+    AD) echo "ada modern -" ;;
+    GA) echo "ampere modern -" ;;
+    TU) echo "turing modern -" ;;
+    GV) echo "volta legacy CUDA_12_ONLY" ;;
+    GP) echo "pascal legacy CUDA_12_ONLY" ;;
+    GM) echo "maxwell legacy CUDA_12_ONLY" ;;
+    GK) echo "kepler unsupported TOO_OLD" ;;
+    GF) echo "fermi unsupported TOO_OLD" ;;
+    GT|G8|G9|NV) echo "tesla unsupported TOO_OLD" ;;
+    *)  echo "unknown modern ASSUMED_MODERN" ;;
+  esac
+}
+
+# AMD: codename in the PCI name → LLVM gfx target → ROCm usability.
+#   rocm       supported by ROCm
+#   override   same ISA family as a supported part; runs with HSA_OVERRIDE_GFX_VERSION
+#   vulkan     no ROCm path (integrated/older); llama.cpp's Vulkan backend still works
+# Prints "gfx tier override-version note".
+classify_amd() {
+  case "$1" in
+    *"Strix Halo"*|*"8060S"*|*"8050S"*)  echo "gfx1151 rocm - -" ;;
+    *"Navi 48"*)                         echo "gfx1201 rocm - -" ;;
+    *"Navi 44"*)                         echo "gfx1200 rocm - -" ;;
+    *"Navi 31"*)                         echo "gfx1100 rocm - -" ;;
+    *"Navi 32"*)                         echo "gfx1101 rocm - -" ;;
+    *"Navi 33"*)                         echo "gfx1102 rocm - -" ;;
+    *"Navi 21"*)                         echo "gfx1030 rocm - -" ;;
+    *"Navi 22"*)                         echo "gfx1031 override 10.3.0 -" ;;
+    *"Navi 23"*)                         echo "gfx1032 override 10.3.0 -" ;;
+    *"Navi 24"*)                         echo "gfx1034 override 10.3.0 -" ;;
+    *"Aqua Vanjaram"*|*MI300*)           echo "gfx942 rocm - -" ;;
+    *MI35[0-9]*)                         echo "gfx950 rocm - -" ;;
+    *Aldebaran*|*MI2[0-9]0*)             echo "gfx90a rocm - -" ;;
+    *Arcturus*|*MI100*)                  echo "gfx908 rocm - -" ;;
+    *"Vega 20"*)                         echo "gfx906 rocm - -" ;;
+    *"Vega 10"*)                         echo "gfx900 vulkan - ROCM_DROPPED" ;;
+    *"Navi 10"*|*"Navi 12"*|*"Navi 14"*) echo "gfx101x vulkan - RDNA1" ;;
+    *Polaris*|*Ellesmere*|*Baffin*|*Lexa*|*Tonga*|*Fiji*|*Hawaii*|*Bonaire*|*Tahiti*|*Pitcairn*|*Oland*|*Verde*)
+                                         echo "legacy vulkan - PRE_VEGA" ;;
+    *Cezanne*|*Renoir*|*Lucienne*|*Barcelo*|*Picasso*|*Raven*|*"Vega Series"*|*"Vega Mobile"*)
+                                         echo "gfx90c vulkan - IGPU" ;;
+    *Rembrandt*|*Phoenix*|*"Hawk Point"*|*Raphael*|*"Granite Ridge"*|*Mendocino*|*"Dragon Range"*|*"Strix Point"*|*"Radeon Graphics"*)
+                                         echo "rdna-igpu vulkan - IGPU" ;;
+    *)                                   echo "unknown rocm - ASSUMED_SUPPORTED" ;;
+  esac
+}
+
+scan_gpus() {
+  GPU_BDF=(); GPU_VID=(); GPU_DID=(); GPU_NAME=(); GPU_FAMILY=(); GPU_TIER=(); GPU_NOTE=(); GPU_OVERRIDE=()
+  local text line fam tier ovr nt
+  local re='^([^ ]+) [^[]*\[03(00|02|80)\]: (.*) \[([0-9a-f]{4}):([0-9a-f]{4})\]'
+  if ! text="$(lspci_text)"; then
+    warn "lspci not found — install pciutils to detect GPUs"
+    return 1
+  fi
+  while IFS= read -r line; do
+    [[ "$line" =~ $re ]] || continue
+    local bdf="${BASH_REMATCH[1]}" name="${BASH_REMATCH[3]}"
+    local vid="${BASH_REMATCH[4]}" did="${BASH_REMATCH[5]}"
+    case "$vid" in
+      10de) read -r fam tier nt <<<"$(classify_nvidia "$name")"; ovr="-" ;;
+      1002) read -r fam tier ovr nt <<<"$(classify_amd "$name")" ;;
+      *)    continue ;;   # Intel, virtio, QXL, VMware… not ours
+    esac
+    GPU_BDF+=("$bdf"); GPU_VID+=("$vid"); GPU_DID+=("$did"); GPU_NAME+=("$name")
+    GPU_FAMILY+=("$fam"); GPU_TIER+=("$tier"); GPU_NOTE+=("$nt"); GPU_OVERRIDE+=("$ovr")
+  done <<<"$text"
+  return 0
+}
+
+# Vendor-level plan from the per-GPU tiers. Mixed generations: the oldest supported
+# card decides, because one driver branch has to drive all of them.
+NV_TIER="none"; AMD_TIER="none"; AMD_OVERRIDE=""
+plan_vendors() {
+  NV_TIER="none"; AMD_TIER="none"; AMD_OVERRIDE=""
+  local i has_modern=0 has_legacy=0 has_unsup=0 has_rocm=0 has_ovr=0 has_vk=0
+  for i in "${!GPU_BDF[@]}"; do
+    case "${GPU_VID[$i]}:${GPU_TIER[$i]}" in
+      10de:modern)      has_modern=1 ;;
+      10de:legacy)      has_legacy=1 ;;
+      10de:unsupported) has_unsup=1 ;;
+      1002:rocm)        has_rocm=1 ;;
+      1002:override)    has_ovr=1; AMD_OVERRIDE="${GPU_OVERRIDE[$i]}" ;;
+      1002:vulkan)      has_vk=1 ;;
+    esac
+  done
+  if   [ "$has_legacy" -eq 1 ]; then NV_TIER="legacy"
+  elif [ "$has_modern" -eq 1 ]; then NV_TIER="modern"
+  elif [ "$has_unsup" -eq 1 ]; then NV_TIER="unsupported"; fi
+  if   [ "$has_rocm" -eq 1 ]; then AMD_TIER="rocm"
+  elif [ "$has_ovr" -eq 1 ];  then AMD_TIER="override"
+  elif [ "$has_vk" -eq 1 ];   then AMD_TIER="vulkan"; fi
+  # A Navi 2x part running next to a native-ROCm one needs no override.
+  [ "$AMD_TIER" = "rocm" ] && AMD_OVERRIDE=""
+  return 0
+}
+
+# CUDA series for a GPU tier + driver branch:  13 | 12 | none.
+#   Maxwell/Pascal/Volta were dropped in CUDA 13 → stay on 12.x.
+#   CUDA 13 needs driver >= 580; CUDA 12.x runs on >= 525 (minor-version compat).
+pick_cuda_series() {
+  local tier="$1" branch="${2:-}"
+  case "$tier" in modern|legacy) ;; *) echo none; return ;; esac
+  [ "$tier" = legacy ] && { echo 12; return; }
+  [[ "$branch" =~ ^[0-9]+$ ]] || { echo 13; return; }   # unknown yet: ubuntu-drivers picks a current one
+  if   [ "$branch" -ge 580 ]; then echo 13
+  elif [ "$branch" -ge 525 ]; then echo 12
+  else echo none; fi
+}
+
+nvidia_installed_branch() {
+  local pkg
+  pkg="$(dpkg-query -W -f='${db:Status-Abbrev} ${Package}\n' 'nvidia-driver-[0-9]*' 2>/dev/null \
+         | awk '$1=="ii" {print $2}' | grep -v server | head -n 1)"
+  if [[ "$pkg" =~ nvidia-driver-([0-9]+) ]]; then echo "${BASH_REMATCH[1]}"; return; fi
+  if have nvidia-smi; then
+    nvidia-smi --query-gpu=driver_version --format=csv,noheader 2>/dev/null | head -n 1 | cut -d. -f1
+  fi
+}
+
+nvidia_recommended_branch() {
+  have ubuntu-drivers || return 0
+  local rec
+  rec="$(ubuntu-drivers devices 2>/dev/null | awk '/recommended/ {print $3; exit}')"
+  [[ "$rec" =~ nvidia-driver-([0-9]+) ]] && echo "${BASH_REMATCH[1]}"
+  return 0
+}
+
+nvidia_driver_active() { have nvidia-smi && nvidia-smi -L >/dev/null 2>&1; }
+
+find_nvcc() {
+  if have nvcc; then command -v nvcc; return 0; fi
+  local f
+  for f in /usr/local/cuda/bin/nvcc /usr/local/cuda-*/bin/nvcc; do
+    [ -x "$f" ] && { echo "$f"; return 0; }
+  done
+  return 1
+}
+nvcc_release() { "$1" --version 2>/dev/null | sed -n 's/.*release \([0-9]*\.[0-9]*\).*/\1/p' | head -n 1; }
+
+# ------------------------------------------------------------- detect cmd ----
+
+print_detection() {
+  local i
+  if [ "${#GPU_BDF[@]}" -eq 0 ]; then
+    note "no NVIDIA or AMD GPU found — local models will run on the CPU"
+    return
+  fi
+  for i in "${!GPU_BDF[@]}"; do
+    local vendor="NVIDIA"; [ "${GPU_VID[$i]}" = 1002 ] && vendor="AMD"
+    local verdict=""
+    case "${GPU_VID[$i]}:${GPU_TIER[$i]}" in
+      10de:modern)      verdict="CUDA 13 capable" ;;
+      10de:legacy)      verdict="CUDA 12 only (Maxwell/Pascal/Volta: last driver branch 580)" ;;
+      10de:unsupported) verdict="too old for CUDA — CPU only" ;;
+      1002:rocm)        verdict="ROCm supported (${GPU_FAMILY[$i]})" ;;
+      1002:override)    verdict="ROCm via HSA_OVERRIDE_GFX_VERSION=${GPU_OVERRIDE[$i]} (${GPU_FAMILY[$i]})" ;;
+      1002:vulkan)      verdict="no ROCm path (${GPU_FAMILY[$i]}) — Vulkan backend" ;;
+    esac
+    [ "${GPU_NOTE[$i]}" = ASSUMED_MODERN ] && verdict="$verdict, model not in PCI database: assuming current generation, verified after install"
+    [ "${GPU_NOTE[$i]}" = ASSUMED_SUPPORTED ] && verdict="$verdict, model not in PCI database: assuming ROCm support, verified after install"
+    printf '  [%s] %s  %s  %s\n        %s\n' "$i" "${GPU_BDF[$i]}" "$vendor" "${GPU_NAME[$i]}" "$verdict"
+  done
+}
+
+print_plan() {
+  local branch series
+  case "$NV_TIER" in
+    none) ;;
+    unsupported) note "NVIDIA: GPU predates CUDA support — nothing will be installed" ;;
+    *)
+      branch="$(nvidia_installed_branch)"; [ -n "$branch" ] || branch="$(nvidia_recommended_branch)"
+      series="$(pick_cuda_series "$NV_TIER" "$branch")"
+      note "NVIDIA: Ubuntu signed driver${branch:+ (branch $branch)} + CUDA toolkit ${ZORIN_AI_CUDA_VERSION:-${series}.x}" ;;
+  esac
+  case "$AMD_TIER" in
+    none) ;;
+    rocm)     note "AMD: in-kernel amdgpu + ROCm ${ZORIN_AI_ROCM_VERSION:-(latest for this release)} + Vulkan" ;;
+    override) note "AMD: ROCm + Vulkan, HSA_OVERRIDE_GFX_VERSION=$AMD_OVERRIDE set for Ollama" ;;
+    vulkan)   note "AMD: Mesa Vulkan only (ROCm does not support this part)" ;;
+  esac
+}
+
+cmd_detect() {
+  local json=0
+  [ "${1:-}" = "--json" ] && json=1
+  scan_gpus || return 1
+  plan_vendors
+  if [ "$json" -eq 1 ]; then
+    have jq || { bad "--json needs jq"; return 1; }
+    local i objs=()
+    for i in "${!GPU_BDF[@]}"; do
+      objs+=("$(jq -n --arg bdf "${GPU_BDF[$i]}" --arg vid "${GPU_VID[$i]}" --arg did "${GPU_DID[$i]}" \
+        --arg name "${GPU_NAME[$i]}" --arg family "${GPU_FAMILY[$i]}" --arg tier "${GPU_TIER[$i]}" \
+        --arg override "${GPU_OVERRIDE[$i]}" \
+        '{bdf:$bdf, vendor:(if $vid=="10de" then "nvidia" else "amd" end), vendor_id:$vid, device_id:$did,
+          name:$name, family:$family, tier:$tier, hsa_override:(if $override=="-" then null else $override end)}')")
+    done
+    printf '%s\n' "${objs[@]:-}" | jq -s --arg nv "$NV_TIER" --arg amd "$AMD_TIER" --arg ovr "$AMD_OVERRIDE" \
+      '{gpus: map(select(. != null)), plan: {nvidia: $nv, amd: $amd, amd_hsa_override: (if $ovr=="" then null else $ovr end)}}'
+    return 0
+  fi
+  say "GPU detection"
+  print_detection
+  [ "${#GPU_BDF[@]}" -gt 0 ] && { say "Install plan"; print_plan; }
+  return 0
+}
+
+# ------------------------------------------------------------ NVIDIA stack ----
+
+nvidia_repo_id() {
+  case "$(codename)" in
+    jammy)    echo ubuntu2204 ;;
+    noble)    echo ubuntu2404 ;;
+    resolute) echo ubuntu2604 ;;
+    *)        return 1 ;;
+  esac
+}
+
+install_nvidia_driver() {
+  if nvidia_driver_active; then
+    ok "NVIDIA driver already active ($(nvidia-smi --query-gpu=driver_version --format=csv,noheader | head -n 1)) — leaving it alone"
+    return 0
+  fi
+  if [ -n "$(nvidia_installed_branch)" ] && pkg_installed "nvidia-utils-$(nvidia_installed_branch)"; then
+    ok "NVIDIA driver packages installed (branch $(nvidia_installed_branch)) — reboot to load them"
+    return 0
+  fi
+  if ! have ubuntu-drivers; then
+    apt_install ubuntu-drivers-common || { bad "could not install ubuntu-drivers-common"; return 1; }
+  fi
+  say "Installing the NVIDIA driver (Ubuntu signed packages)…"
+  if sx ubuntu-drivers install; then
+    :
+  else
+    warn "ubuntu-drivers found no prebuilt signed driver for this kernel; retrying with DKMS"
+    secure_boot_on && warn "Secure Boot is ON: a DKMS-built module must be enrolled via MOK on next boot, or the driver will not load."
+    sx ubuntu-drivers install --include-dkms || { bad "NVIDIA driver install failed"; return 1; }
+  fi
+  [ "$DRY_RUN" -eq 1 ] && return 0
+  if [ -z "$(nvidia_installed_branch)" ]; then
+    bad "ubuntu-drivers reported success but no nvidia-driver package is installed"
+    return 1
+  fi
+  ok "NVIDIA driver installed (branch $(nvidia_installed_branch))"
+}
+
+# NVIDIA's repo ships its own driver packages too; pin them to never-install so only
+# the toolkit comes from there and Ubuntu's driver can't be swapped out underneath.
+setup_cuda_repo() {
+  local rid arch="x86_64" base keyring
+  rid="$(nvidia_repo_id)" || { bad "no NVIDIA CUDA repo mapping for release '$(codename)'"; return 1; }
+  base="https://developer.download.nvidia.com/compute/cuda/repos/$rid/$arch"
+  if ! pkg_installed cuda-keyring; then
+    say "Adding the NVIDIA CUDA apt repository ($rid)…"
+    keyring="$(mktemp --suffix=.deb)"
+    if [ "$DRY_RUN" -eq 0 ]; then
+      curl -fsSL -o "$keyring" "$base/cuda-keyring_1.1-1_all.deb" || { bad "could not download cuda-keyring"; rm -f "$keyring"; return 1; }
+    fi
+    sx dpkg -i "$keyring" || { bad "cuda-keyring install failed"; return 1; }
+    rm -f "$keyring"
+    APT_DIRTY=1
+  else
+    ok "NVIDIA CUDA apt repository already configured"
+  fi
+  write_root_file /etc/apt/preferences.d/zorin-ai-cuda-toolkit-only 644 <<'EOF' && APT_DIRTY=1
+# zorin-ai: take ONLY the CUDA toolkit from NVIDIA's repo. The graphics driver comes
+# from Ubuntu (signed, kernel-matched); never let this repo replace it.
+Package: nvidia-* libnvidia-* xserver-xorg-video-nvidia-* cuda-drivers cuda-drivers-* nvidia-open
+Pin: origin developer.download.nvidia.com
+Pin-Priority: -1
+EOF
+  return 0
+}
+
+latest_toolkit_pkg() {
+  local series="$1"
+  apt-cache pkgnames "cuda-toolkit-${series}-" 2>/dev/null \
+    | grep -E "^cuda-toolkit-${series}-[0-9]+\$" | sort -V | tail -n 1
+}
+
+install_cuda_toolkit() {
+  local nvcc rel series branch pkg
+  if nvcc="$(find_nvcc)"; then
+    rel="$(nvcc_release "$nvcc")"
+    ok "CUDA toolkit already present: $nvcc (release ${rel:-?}) — not touching it"
+    return 0
+  fi
+  branch="$(nvidia_installed_branch)"; [ -n "$branch" ] || branch="$(nvidia_recommended_branch)"
+  series="$(pick_cuda_series "$NV_TIER" "$branch")"
+  if [ -n "${ZORIN_AI_CUDA_VERSION:-}" ]; then
+    pkg="cuda-toolkit-${ZORIN_AI_CUDA_VERSION//./-}"
+  elif [ "$series" = none ]; then
+    warn "Driver branch ${branch:-?} is too old for any supported CUDA toolkit (need >= 525). Skipping the toolkit."
+    return 0
+  fi
+  need_disk_gb 12 || return 1
+  [ "$(dpkg --print-architecture)" = amd64 ] || { warn "CUDA repo setup supports amd64 only"; return 0; }
+  setup_cuda_repo || return 1
+  apt_refresh || { bad "apt update failed"; return 1; }
+  if [ -z "${pkg:-}" ]; then
+    pkg="$(latest_toolkit_pkg "$series")"
+    [ "$DRY_RUN" -eq 1 ] && [ -z "$pkg" ] && pkg="cuda-toolkit-${series}-<latest>"
+  fi
+  [ -n "$pkg" ] || { bad "no cuda-toolkit-${series}-* package found in the repo"; return 1; }
+  if [ "$PROFILE" = runtime ]; then pkg="${pkg/cuda-toolkit-/cuda-libraries-}"; fi
+  if pkg_installed "$pkg"; then ok "$pkg already installed"; return 0; fi
+  say "Installing $pkg (CUDA toolkit, multi-GB download)…"
+  apt_install "$pkg" || { bad "$pkg install failed"; return 1; }
+  sx ldconfig
+  ensure_cuda_symlink
+  ok "$pkg installed"
+}
+
+# The packages install /usr/local/cuda-X.Y but not the unversioned /usr/local/cuda
+# that PATH, CMake and llama.cpp builds expect. Point it at the newest install.
+ensure_cuda_symlink() {
+  [ -e /usr/local/cuda ] && return 0
+  local newest
+  newest="$(ls -d /usr/local/cuda-[0-9]*.[0-9]* 2>/dev/null | sort -V | tail -n 1)"
+  [ -n "$newest" ] || return 0
+  sx ln -sfn "$newest" /usr/local/cuda
+}
+
+setup_nvidia() {
+  want_vendor nvidia || return 0
+  case "$NV_TIER" in none) return 0 ;; esac
+  say "NVIDIA: ${NV_TIER} tier"
+  if [ "$NV_TIER" = unsupported ]; then
+    warn "This NVIDIA GPU is too old for CUDA (and for Ollama). Leaving the open-source nouveau driver; models run on the CPU."
+    return 0
+  fi
+  install_nvidia_driver || { FAILED=1; return 1; }
+  install_cuda_toolkit  || { FAILED=1; return 1; }
+  if [ "$DRY_RUN" -eq 0 ] && ! nvidia_driver_active; then
+    request_reboot "NVIDIA driver installed — the kernel module loads after a reboot"
+  fi
+}
+
+# -------------------------------------------------------------- AMD stack ----
+
+# Highest ROCm release directory that actually has a repo for this Ubuntu codename.
+resolve_rocm_version() {
+  local cn="$1" v
+  if [ -n "${ZORIN_AI_ROCM_VERSION:-}" ]; then echo "$ZORIN_AI_ROCM_VERSION"; return 0; fi
+  local listing
+  listing="$(curl -fsSL --max-time 20 https://repo.radeon.com/rocm/apt/ 2>/dev/null)" || return 1
+  while IFS= read -r v; do
+    if curl -fsI --max-time 15 -o /dev/null "https://repo.radeon.com/rocm/apt/$v/dists/$cn/Release"; then
+      echo "$v"; return 0
+    fi
+  done < <(grep -o 'href="[0-9][0-9.]*/"' <<<"$listing" | sed 's/href="//; s/\/"//' | sort -rV)
+  return 1
+}
+
+setup_rocm_repo() {
+  local cn rocm_v
+  cn="$(codename)"
+  [ -n "$cn" ] || { bad "cannot determine the Ubuntu codename"; return 1; }
+  rocm_v="$(resolve_rocm_version "$cn")" || { bad "no ROCm apt repo found for '$cn'"; return 1; }
+  say "ROCm repository: $rocm_v ($cn)"
+  if [ ! -s /etc/apt/keyrings/rocm.gpg ]; then
+    if [ "$DRY_RUN" -eq 0 ]; then
+      have gpg || apt_install gnupg
+      sx mkdir -p /etc/apt/keyrings
+      curl -fsSL https://repo.radeon.com/rocm/rocm.gpg.key | gpg --dearmor | $SUDO tee /etc/apt/keyrings/rocm.gpg >/dev/null \
+        || { bad "could not fetch the ROCm signing key"; return 1; }
+    else
+      run "fetch https://repo.radeon.com/rocm/rocm.gpg.key -> /etc/apt/keyrings/rocm.gpg"
+    fi
+  fi
+  write_root_file /etc/apt/sources.list.d/rocm.list 644 <<EOF && APT_DIRTY=1
+deb [arch=amd64 signed-by=/etc/apt/keyrings/rocm.gpg] https://repo.radeon.com/rocm/apt/$rocm_v $cn main
+EOF
+  write_root_file /etc/apt/preferences.d/rocm-pin-600 644 <<'EOF' && APT_DIRTY=1
+Package: *
+Pin: release o=repo.radeon.com
+Pin-Priority: 600
+EOF
+  return 0
+}
+
+ensure_amd_groups() {
+  local g missing=()
+  for g in render video; do
+    getent group "$g" >/dev/null || continue
+    id -nG "$TARGET_USER" | tr ' ' '\n' | grep -x "$g" >/dev/null || missing+=("$g")
+  done
+  if [ "${#missing[@]}" -eq 0 ]; then
+    ok "$TARGET_USER is already in render + video"
+    return 0
+  fi
+  sx usermod -aG "$(IFS=,; echo "${missing[*]}")" "$TARGET_USER" || return 1
+  [ "$DRY_RUN" -eq 1 ] || ok "added $TARGET_USER to: ${missing[*]} (takes effect at next login)"
+  request_relogin
+}
+
+setup_amd_ollama_override() {
+  [ -n "$AMD_OVERRIDE" ] || return 0
+  write_root_file /etc/systemd/system/ollama.service.d/zorin-ai-gpu.conf 644 <<EOF && NEED_RELOAD=1
+# zorin-ai: this Radeon is not on ROCm's official list but shares the ISA of one that is.
+[Service]
+Environment="HSA_OVERRIDE_GFX_VERSION=$AMD_OVERRIDE"
+EOF
+  if [ "${NEED_RELOAD:-0}" -eq 1 ]; then
+    sx systemctl daemon-reload
+    systemctl is-active --quiet ollama 2>/dev/null && sx systemctl restart ollama
+  fi
+  return 0
+}
+
+setup_amd() {
+  want_vendor amd || return 0
+  case "$AMD_TIER" in none) return 0 ;; esac
+  say "AMD: ${AMD_TIER} tier"
+  # Vulkan is the universal fallback and costs almost nothing.
+  apt_install mesa-vulkan-drivers vulkan-tools libvulkan1 || warn "Vulkan packages failed to install"
+  if [ "$AMD_TIER" = vulkan ]; then
+    note "ROCm does not support this GPU; llama.cpp's Vulkan backend (and Ollama's experimental OLLAMA_VULKAN=1) can use it."
+    return 0
+  fi
+  [ "$(dpkg --print-architecture)" = amd64 ] || { warn "ROCm repo setup supports amd64 only"; return 0; }
+  need_disk_gb 15 || { FAILED=1; return 1; }
+  setup_rocm_repo || { FAILED=1; return 1; }
+  apt_refresh || { bad "apt update failed"; FAILED=1; return 1; }
+  local pkgs=(rocm-hip-runtime rocminfo rocm-smi-lib)
+  [ "$PROFILE" = full ] && pkgs=(rocm-hip-sdk rocminfo rocm-smi-lib)
+  local p all_in=1
+  for p in "${pkgs[@]}"; do pkg_installed "$p" || all_in=0; done
+  if [ "$all_in" -eq 1 ]; then
+    ok "ROCm packages already installed (${pkgs[*]})"
+  else
+    say "Installing ROCm (${pkgs[*]}), multi-GB download…"
+    apt_install "${pkgs[@]}" || { bad "ROCm install failed"; FAILED=1; return 1; }
+  fi
+  write_root_file /etc/ld.so.conf.d/zorin-ai-rocm.conf 644 <<'EOF' && sx ldconfig
+/opt/rocm/lib
+/opt/rocm/lib64
+EOF
+  ensure_amd_groups || FAILED=1
+  setup_amd_ollama_override
+}
+
+# ---------------------------------------------------------- shared wrap-up ----
+
+write_env_profile() {
+  write_root_file "$PROFILE_FILE" 644 <<'EOF'
+# zorin-ai: GPU compute toolchains on PATH (written by noc-gpu; safe to re-run).
+if [ -d /usr/local/cuda/bin ]; then
+  export CUDA_HOME=/usr/local/cuda
+  case ":$PATH:" in *:/usr/local/cuda/bin:*) ;; *) PATH="/usr/local/cuda/bin:$PATH" ;; esac
+fi
+if [ -d /opt/rocm/bin ]; then
+  export ROCM_PATH=/opt/rocm
+  case ":$PATH:" in *:/opt/rocm/bin:*) ;; *) PATH="$PATH:/opt/rocm/bin" ;; esac
+fi
+export PATH
+EOF
+  # Desktop terminals are non-login shells and never read profile.d (same as mise).
+  if [ -f /etc/bash.bashrc ] && ! grep 'zorin-ai gpu' /etc/bash.bashrc >/dev/null; then
+    if [ "$DRY_RUN" -eq 1 ]; then
+      run "append gpu PATH block to /etc/bash.bashrc"
+    else
+      $SUDO tee -a /etc/bash.bashrc >/dev/null <<'EOF'
+
+# >>> zorin-ai gpu >>> (managed block; do not edit)
+if [ -n "${PS1:-}" ] && [ -r /etc/profile.d/zorin-ai-gpu.sh ]; then
+  . /etc/profile.d/zorin-ai-gpu.sh
+fi
+# <<< zorin-ai gpu <<<
+EOF
+    fi
+  fi
+  return 0
+}
+
+request_reboot() {
+  warn "$1"
+  [ "$DRY_RUN" -eq 1 ] && return 0
+  $SUDO touch /var/run/reboot-required
+  grep -qx 'zorin-ai-gpu' /var/run/reboot-required.pkgs 2>/dev/null \
+    || echo 'zorin-ai-gpu' | $SUDO tee -a /var/run/reboot-required.pkgs >/dev/null
+}
+RELOGIN=0
+request_relogin() { RELOGIN=1; }
+
+cmd_install() {
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --dry-run)      DRY_RUN=1 ;;
+      --runtime-only) PROFILE=runtime ;;
+      --vendor)       shift; VENDORS="${1:-}" ;;
+      *) echo "unknown option: $1"; return 2 ;;
+    esac
+    shift
+  done
+  case "$VENDORS" in all|nvidia|amd) ;; *) echo "--vendor must be nvidia, amd or all"; return 2 ;; esac
+
+  if ! have lspci && [ -z "${NOC_GPU_LSPCI_FILE:-}" ]; then
+    apt_install pciutils || { bad "pciutils is required to detect GPUs"; return 1; }
+  fi
+  scan_gpus || return 1
+  plan_vendors
+  say "GPU detection"
+  print_detection
+  if [ "$NV_TIER" = none ] && [ "$AMD_TIER" = none ]; then
+    say "Nothing to install."
+    return 0
+  fi
+  [ "$DRY_RUN" -eq 1 ] && say "DRY RUN — no changes will be made"
+  print_plan
+
+  setup_nvidia
+  setup_amd
+  write_env_profile
+
+  echo
+  if [ "$FAILED" -ne 0 ]; then
+    bad "GPU setup finished with errors — fix the cause and re-run: noc gpu install"
+    return 1
+  fi
+  say "GPU setup complete."
+  [ -f /var/run/reboot-required ] && grep -q 'zorin-ai-gpu' /var/run/reboot-required.pkgs 2>/dev/null \
+    && note "Reboot required before the GPU is usable (nvidia kernel module)."
+  [ "$RELOGIN" -eq 1 ] && note "Log out and back in so the new render/video group membership applies."
+  note "Verify afterwards with: noc gpu status --smoke"
+  return 0
+}
+
+# ------------------------------------------------------------------ status ----
+
+SMOKE_DIR=""
+cuda_smoke() {
+  local nvcc="$1"
+  SMOKE_DIR="$(mktemp -d)"
+  cat >"$SMOKE_DIR/probe.cu" <<'EOF'
+#include <cstdio>
+#include <cuda_runtime.h>
+int main() {
+  int n = 0;
+  cudaError_t e = cudaGetDeviceCount(&n);
+  if (e != cudaSuccess) { printf("cudaGetDeviceCount: %s\n", cudaGetErrorString(e)); return 1; }
+  for (int i = 0; i < n; i++) {
+    cudaDeviceProp p; cudaGetDeviceProperties(&p, i);
+    printf("%s (sm_%d%d, %zu MiB)\n", p.name, p.major, p.minor, (size_t)(p.totalGlobalMem >> 20));
+  }
+  return n ? 0 : 1;
+}
+EOF
+  local out
+  if ! "$nvcc" -o "$SMOKE_DIR/probe" "$SMOKE_DIR/probe.cu" 2>"$SMOKE_DIR/err"; then
+    bad "CUDA smoke test: nvcc failed to compile ($(head -n 1 "$SMOKE_DIR/err"))"; rm -rf "$SMOKE_DIR"; return 1
+  fi
+  if out="$("$SMOKE_DIR/probe" 2>&1)"; then
+    ok "CUDA smoke test: compiled and ran — $out"
+  else
+    bad "CUDA smoke test: built but no usable device ($out)"; rm -rf "$SMOKE_DIR"; return 1
+  fi
+  rm -rf "$SMOKE_DIR"
+}
+
+status_nvidia() {
+  local rc=0 nvcc rel smi_cuda
+  if nvidia_driver_active; then
+    ok "NVIDIA driver loaded: $(nvidia-smi --query-gpu=name,driver_version,memory.total,compute_cap --format=csv,noheader | head -n 1)"
+    smi_cuda="$(nvidia-smi 2>/dev/null | sed -n 's/.*CUDA Version: \([0-9]*\)\.\([0-9]*\).*/\1.\2/p' | head -n 1)"
+  elif have nvidia-smi || [ -n "$(nvidia_installed_branch)" ]; then
+    bad "NVIDIA driver installed but not loaded — reboot (nouveau/old module still active?)"; rc=1
+  else
+    bad "NVIDIA GPU present but no driver installed — run: noc gpu install"; return 1
+  fi
+  if nvcc="$(find_nvcc)"; then
+    rel="$(nvcc_release "$nvcc")"
+    ok "CUDA toolkit: nvcc $rel ($nvcc)"
+    if [ -n "${smi_cuda:-}" ] && [ -n "$rel" ] && [ "${rel%%.*}" -gt "${smi_cuda%%.*}" ]; then
+      bad "toolkit CUDA $rel is newer than the driver supports (CUDA $smi_cuda) — update the driver"; rc=1
+    fi
+    [ "${1:-}" = smoke ] && { nvidia_driver_active && { cuda_smoke "$nvcc" || rc=1; }; }
+  else
+    bad "CUDA toolkit (nvcc) not found — run: noc gpu install"; rc=1
+  fi
+  if secure_boot_on; then note "Secure Boot is on (fine with Ubuntu's signed driver)"; fi
+  return "$rc"
+}
+
+status_amd() {
+  local rc=0 gfx
+  if [ ! -e /dev/kfd ]; then
+    bad "/dev/kfd missing — amdgpu/KFD not active for a ROCm GPU (kernel too old, or GPU unsupported)"; rc=1
+  else
+    ok "/dev/kfd present"
+  fi
+  if have rocminfo; then
+    gfx="$(rocminfo 2>/dev/null | awk '/Name:.*gfx[0-9a-f]+/ {print $2}' | sort -u | tr '\n' ' ')"
+    if [ -n "$gfx" ]; then ok "ROCm sees: $gfx"; else
+      bad "rocminfo lists no GPU agent (are you in the render group? log out/in; then: rocminfo)"; rc=1
+    fi
+  else
+    bad "ROCm not installed — run: noc gpu install"; rc=1
+  fi
+  if getent group render >/dev/null; then
+    id -nG "$TARGET_USER" | tr ' ' '\n' | grep -x render >/dev/null \
+      && ok "$TARGET_USER is in the render group" || { bad "$TARGET_USER is not in the render group (log out/in after install)"; rc=1; }
+  fi
+  return "$rc"
+}
+
+cmd_status() {
+  local smoke=""
+  [ "${1:-}" = "--smoke" ] && smoke="smoke"
+  scan_gpus || return 1
+  plan_vendors
+  local rc=0
+  if [ "${#GPU_BDF[@]}" -eq 0 ]; then
+    note "GPU: none detected (NVIDIA/AMD) — Ollama runs on the CPU"
+    return 0
+  fi
+  local i
+  for i in "${!GPU_BDF[@]}"; do ok "GPU: ${GPU_NAME[$i]}"; done
+  case "$NV_TIER" in
+    modern|legacy) status_nvidia "$smoke" || rc=1 ;;
+    unsupported)   note "NVIDIA GPU is too old for CUDA" ;;
+  esac
+  case "$AMD_TIER" in
+    rocm|override) status_amd || rc=1 ;;
+    vulkan)        have vulkaninfo && note "AMD GPU uses Vulkan only (no ROCm)" || note "AMD GPU: Vulkan tools not installed" ;;
+  esac
+  [ -f /var/run/reboot-required ] && grep -q 'zorin-ai-gpu' /var/run/reboot-required.pkgs 2>/dev/null \
+    && { bad "reboot pending for the GPU driver"; rc=1; }
+  return "$rc"
+}
+
+# -------------------------------------------------------------------- main ----
+
+usage() {
+  cat <<EOF
+noc-gpu $VERSION — NVIDIA CUDA / AMD ROCm setup for local LLMs
+
+  noc gpu detect [--json]     show detected GPUs and the install plan
+  noc gpu install [--dry-run] [--runtime-only] [--vendor nvidia|amd|all]
+  noc gpu status [--smoke]    verify the stack (--smoke compiles + runs a CUDA probe)
+EOF
+}
+
+main() {
+  case "${1:-help}" in
+    detect)  shift; cmd_detect "$@" ;;
+    install) shift; cmd_install "$@" ;;
+    status)  shift; cmd_status "$@" ;;
+    --version|-v) echo "noc-gpu $VERSION" ;;
+    *) usage ;;
+  esac
+}
+
+# Sourced by tests: define functions only.
+if [ "${BASH_SOURCE[0]}" = "$0" ]; then main "$@"; fi

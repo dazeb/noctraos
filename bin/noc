@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
-# zom — zorin-ai workstation management CLI.
-#   zom update        apt + Flatpak + mise runtimes + AI models
-#   zom doctor        health check of the whole stack
-#   zom models        list | pull <model> | rm <model> | gui
+# noc — zorin-ai workstation management CLI.
+#   noc update        apt + Flatpak + mise runtimes + AI models
+#   noc doctor        health check of the whole stack
+#   noc models        list | pull <model> | rm <model> | gui
+#   noc gpu           detect | install | status  (NVIDIA CUDA / AMD ROCm for local LLMs)
 set -uo pipefail
 
 VERSION="0.1.0"
@@ -11,7 +12,7 @@ MODEL_PRESETS=("qwen2.5-coder:7b" "qwen2.5-coder:14b" "llama3.2:3b" "gemma2:2b" 
 
 ok()   { printf '  \033[32mOK\033[0m  %s\n' "$*"; }
 bad()  { printf '  \033[31m!!\033[0m  %s\n' "$*"; }
-info() { printf '\033[1;36mzom\033[0m %s\n' "$*"; }
+info() { printf '\033[1;36mnoc\033[0m %s\n' "$*"; }
 
 WALLPAPER_DIR="/usr/local/share/backgrounds/zorin-ai"
 
@@ -47,7 +48,7 @@ cmd_bg() {
       ;;
     set)
       local f="${2:-}"
-      [ -z "$f" ] && { echo "usage: zom bg set <filename-or-path>"; exit 1; }
+      [ -z "$f" ] && { echo "usage: noc bg set <filename-or-path>"; exit 1; }
       [ -f "$f" ] || f="$WALLPAPER_DIR/$(basename "$f")"
       [ -f "$f" ] || { bad "no such wallpaper: $2"; exit 1; }
       with_bus gsettings set org.gnome.desktop.background picture-uri "file://$f"
@@ -70,7 +71,7 @@ cmd_bg() {
       cmd_bg set "$next"
       ;;
     *)
-      echo "usage: zom bg [list | next | set <name>]"
+      echo "usage: noc bg [list | next | set <name>]"
       ;;
   esac
 }
@@ -160,10 +161,12 @@ cmd_doctor() {
       && ok "Mission Center: installed" || bad "Mission Center: missing"
   fi
 
-  if command -v nvidia-smi >/dev/null 2>&1; then
+  if command -v noc-gpu >/dev/null 2>&1; then
+    noc-gpu status || true
+  elif command -v nvidia-smi >/dev/null 2>&1; then
     ok "GPU: NVIDIA $(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -n 1)"
   else
-    info "GPU: no NVIDIA driver detected — Ollama will run on CPU"
+    info "GPU: noc-gpu not installed and no NVIDIA driver detected — Ollama will run on CPU"
   fi
 
   ok "Disk free on /: $(df -h / | awk 'NR==2 {print $4}')"
@@ -179,12 +182,12 @@ cmd_models() {
       ;;
     pull)
       local m="${2:-}"
-      [ -z "$m" ] && { echo "usage: zom models pull <model>"; exit 1; }
+      [ -z "$m" ] && { echo "usage: noc models pull <model>"; exit 1; }
       ollama pull "$m"
       ;;
     rm|remove|delete)
       local m="${2:-}"
-      [ -z "$m" ] && { echo "usage: zom models rm <model>"; exit 1; }
+      [ -z "$m" ] && { echo "usage: noc models rm <model>"; exit 1; }
       ollama rm "$m"
       ;;
     gui)
@@ -204,7 +207,7 @@ cmd_models() {
       [ -n "$choice" ] && ollama pull "$choice"
       ;;
     *)
-      echo "usage: zom models [list | pull <model> | rm <model> | gui]"
+      echo "usage: noc models [list | pull <model> | rm <model> | gui]"
       ;;
   esac
 }
@@ -214,14 +217,17 @@ case "${1:-help}" in
   doctor) cmd_doctor ;;
   models) shift; cmd_models "$@" ;;
   bg)     shift; cmd_bg "$@" ;;
-  --version|-v) echo "zom $VERSION" ;;
+  gpu)    shift; command -v noc-gpu >/dev/null 2>&1 && exec noc-gpu "$@" \
+            || { bad "noc-gpu not installed (re-run the installer)"; exit 1; } ;;
+  --version|-v) echo "noc $VERSION" ;;
   *)
-    echo "zom $VERSION — zorin-ai workstation manager"
+    echo "noc $VERSION — zorin-ai workstation manager"
     echo ""
-    echo "  zom update      update apt, Flatpak apps, mise runtimes, AI models"
-    echo "  zom doctor      health check of the whole stack"
-    echo "  zom models      manage local AI models (list | pull | rm | gui)"
-    echo "  zom bg          cycle or set the wallpaper (list | next | set)"
-    echo "  zom-menu        the same maintenance tasks from a GUI panel"
+    echo "  noc update      update apt, Flatpak apps, mise runtimes, AI models"
+    echo "  noc doctor      health check of the whole stack"
+    echo "  noc models      manage local AI models (list | pull | rm | gui)"
+    echo "  noc bg          cycle or set the wallpaper (list | next | set)"
+    echo "  noc gpu         GPU setup for local LLMs (detect | install | status)"
+    echo "  noc-menu        the same maintenance tasks from a GUI panel"
     ;;
 esac
