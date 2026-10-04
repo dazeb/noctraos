@@ -22,7 +22,9 @@ learning.
 3. **Always skippable, always reopenable** — from the start menu ("Welcome to
    NoctraOS"), and by typing "welcome" in Super+Space.
 4. **Under two minutes**, five screens or fewer, no account, no telemetry.
-5. **Windows vocabulary.** Say "Windows key" (it is the Super key), "Task
+5. **One keybind.** NoctraOS is mouse-first. Super+Space is the only shortcut
+   we teach; everything else is reachable with the mouse (and through Super+Space).
+6. **Windows vocabulary.** Say "Windows key" (it is the Super key), "Task
    Manager" (Mission Center), "Start button" (the N).
 
 ## Flow
@@ -32,7 +34,7 @@ learning.
 | 1 | **Welcome** — one line on what NoctraOS is, a *Start* button, a *Skip* link | Set expectations | Click |
 | 2 | **Press Windows + Space** — large keycap graphic, short copy: "Search everything from one place." | Teach the hero feature by doing it | The user opens the overlay once (see *Detecting the keypress*) |
 | 3 | **What can it find?** — four tappable examples that open the overlay with a query filled in: an app ("files"), a file by name, something from clipboard history, a web search | Show the range; each is one click | Click *Next* (no forced interaction) |
-| 4 | **Where things are** — a compact table of familiar things and where they live now: Start button (N, bottom-left), Task Manager → Mission Center, File Explorer → Files, Windows+V clipboard history, Windows+E, Alt+Tab, Windows+L | Reassure; nothing to relearn | Click *Next* |
+| 4 | **Where things are** — a compact, mouse-only map of familiar things: Start button (N, bottom-left), Task Manager → Mission Center, File Explorer → Files, screenshots, system tray. **No shortcut list** | Reassure; nothing to relearn | Click *Next* |
 | 5 | **Your AI is local** — status of the local model (installed / downloading, with progress), the Agents menu, how to open it | Introduce the AI half without blocking on the download | Click *Done*; if provisioning is still running, show "Finishing setup in the background" |
 
 After *Done*: no nagging. One non-modal hint — the start menu's search box
@@ -78,20 +80,41 @@ this one in a minute" and keep the app and web examples enabled.
    the point, but it must never trap someone whose keyboard layout or hardware
    (some laptops, VMs, remote sessions) swallows the shortcut. Keep a visible
    "It's not working" escape that explains the shortcut and the settings.
-2. **Shortcut parity (verify on a VM before screen 4 claims them):**
-   Windows+E, Windows+D, Windows+L, Alt+Tab, Ctrl+Shift+Esc → Mission Center,
-   Windows+V, Windows+Shift+S → screenshot tool. Only list what actually works.
+2. **Shortcut parity** — resolved: we do not promise any. See the audit below.
 3. **Languages.** Copy is English only for now.
 4. **Provisioning offline.** The "full ISO" goal means the model and runtimes
    should eventually be baked in, which would shorten or remove the waiting
    period this design uses. The welcome flow still stands without it.
 
-## Clipboard history (Windows+V)
+## Shortcut audit (VM 114, 2026-10-04)
 
-Windows users expect Windows+V. GNOME already uses Super+V for the
-notification tray, so supporting it means rebinding that (to Super+N) and
-making Super+V open the search overlay scoped to clipboard history. That fits
-the product: one surface, two doors.
+Checked from the live GSettings configuration (not by pressing every key).
+Per the "one keybind" principle none of these is taught or added; this just
+records what a switcher who tries a habit will find.
+
+| Windows habit | On NoctraOS today |
+|---|---|
+| Windows key alone | Opens the Shell overview (the Zorin Menu hotkey is off) |
+| Alt+Tab | Works (also Super+Tab) |
+| Windows+L lock | Works |
+| Windows+Arrows | Maximize / restore / tile left and right work |
+| Windows+1..9 | Launches or focuses taskbar apps (Zorin taskbar) |
+| Print | Screenshot UI (Flameshot is also installed) |
+| Windows+Space | **NoctraOS search** (input-source switch moved to Shift+Super+Space) |
+| Windows+V | Notification tray (GNOME default), **not** clipboard history |
+| Windows+E (Files) | Not bound |
+| Windows+D (show desktop) | Not bound (Windows+H minimizes the window) |
+| Ctrl+Shift+Esc (Task Manager) | Not bound; Mission Center is a taskbar app |
+| Windows+Shift+S (region screenshot) | Not bound; Print opens the screenshot UI |
+| Windows+R (Run) | Not bound; Super+Space does it |
+
+The unbound ones all have a mouse route, and the ones worth a keyboard route
+(apps, files, clipboard) already go through Super+Space.
+
+## Clipboard history
+
+Clipboard history is reached through Super+Space, not a second shortcut (no
+Windows+V rebinding). The open question is the backend, not the door.
 
 **Should we build our own permanent clipboard, like KDE's Klipper?** We would
 be building a daemon that watches the clipboard, stores text and images,

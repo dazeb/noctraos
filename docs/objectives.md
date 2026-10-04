@@ -23,16 +23,19 @@ keep a conventional desktop and make it powerful instead.
 3. **AI is built in, not bolted on.** Local models (Ollama), a curated agents
    menu, an editor wired to local AI, and file actions such as *Ask AI to
    Explain*.
-4. **One new idea, promoted heavily: Super+Space.** Search the whole system
-   from one keystroke. Everything else should feel familiar.
+4. **One keybind, promoted heavily: Super+Space.** It is the only shortcut
+   users need to learn. NoctraOS is mouse-first; everything else is reachable
+   by mouse and through Super+Space itself. Everything else should feel familiar.
 5. **A distribution, not a script.** The deliverable is a bootable ISO that
    installs and boots into the finished experience.
 
 ## Headline feature: Super+Space
 
-One overlay searches **applications, files and folders, clipboard history
-(CopyQ), and the web**, with a settings panel for sources and indexed
-locations. It is the main thing a new user should learn, and the reference
+One overlay is meant to reach the whole system: **applications, files and
+folders, clipboard history, the web, browser history, and more**, with a
+settings panel for sources and indexed locations. Shipped today: applications,
+files and folders, clipboard history (CopyQ) and web search. **Browser history
+and other sources are not built yet.** It is the main thing a new user should learn, and the reference
 for the visual theme.
 
 Status: in the repo and installed by `install/09_super_search.sh` — two GNOME
