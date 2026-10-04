@@ -198,6 +198,12 @@ tail -f /root/noctraos-build.log
   purge/autoremove, user data stays. Legacy `Open_in_VSCodium` Nautilus scripts
   are deleted by modules 05/07. Settings and Continue config are only seeded
   when missing, so existing installs keep their old copies.
+- **Top bar + dock come from settings, not patches.** `branding/setup-branding.py`
+  (once per account, marker `desktop-layout-v1`) turns on the Zorin Taskbar's
+  `stockgs-keep-top-panel`, makes it a centred dock (`panel-lengths` -1) and trims
+  its elements; `noctraos-branding` adds Show Desktop and flattens the top bar.
+  To change the layout for an existing account, delete the marker and re-run the
+  script (or edit the taskbar settings).
 - **CopyQ must run with `QT_QPA_PLATFORM=xcb`.** As a native-Wayland client it
   logs "Failed to activate Wayland clipboard" and records nothing on GNOME
   (no wlr-data-control). The autostart entry sets it; keep it that way.

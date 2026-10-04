@@ -27,3 +27,9 @@
 .zorin-menu .main-box .menu-user-avatar { border-radius: 2px; }
 .zorintaskbarMainPanel { background-color: #0d0d0d; color: #bebebe; }
 .zorintaskbarMainPanel .panel-button { border-radius: 2px; }
+/* Top bar: compact, flat, sharp. No hover effects; an open menu is marked in amber. */
+#panel { background-color: #0d0d0d; height: 28px; font-size: 12px; box-shadow: none; }
+#panel .panel-button, #panel .panel-button:hover, #panel .panel-button:focus {
+  background-color: transparent; border-radius: 0; box-shadow: none; padding: 0 8px; }
+#panel .panel-button:active, #panel .panel-button:checked { background-color: transparent; color: #e68e0d; }
+#panel .system-status-icon { icon-size: 16px; }

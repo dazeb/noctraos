@@ -50,31 +50,57 @@ These override the mockup where they differ.
 | Corner radius | 2 px everywhere (matches the Super+Space overlay) | **decided: sharp, 2 px** (mockup shows rounded) |
 | Wallpaper | purple/magenta neon scenes | **decided: keep current**, add better ones over time |
 
-## Feasibility on GNOME (read from the live settings, not yet tried)
+## Spike result: top bar + floating dock (works, 2026-10-04)
 
-- A centred, partial-width dock looks supported: the Zorin Taskbar (a Dash to
-  Panel fork) exposes `panel-lengths`, `panel-anchors`, `panel-sizes`,
-  `panel-position` and `global-border-radius`. Whether it can look like the
-  floating, rounded dock in the mockup needs a try.
-- A **second bar at the top is the hard part.** The taskbar replaces the stock
-  top panel rather than sitting beside it. Options to investigate: re-enable the
-  stock panel and hide the taskbar's tray and clock; or write a small top-bar
-  extension of our own. Neither is verified.
-- The Start menu redesign is real work: restyling the Zorin Menu is not
-  enough for a new layout, so this likely means our own menu extension (the
-  search overlay is already one).
+Proved on VM 114 with settings plus a few lines in the branding extension. No
+patching of Zorin code.
+
+- **Top bar = the stock GNOME panel, kept.** The Zorin Taskbar has a
+  `stockgs-keep-top-panel` setting. With it on, the stock panel stays at the top
+  and keeps what it already does well: the **clock in the centre** with the
+  notification/calendar menu, the **tray strip** (zorin-appindicator, so CopyQ
+  and other indicators land top right) and the network/volume/power menu.
+- **Dock = the taskbar, shrunk.** `panel-lengths` of -1 ("dock mode") makes it
+  hug its icons; `panel-anchors` MIDDLE centres it; `panel-sizes` 40, `panel-margin`
+  6, and the taskbar elements trimmed to the Start button plus app icons
+  (`panel-element-positions`).
+- **Show Desktop, top left:** a small button added to the panel's left box by
+  `noctraos-branding`, replacing Activities. Verified with a virtual mouse: the
+  first click minimizes the open window, the second restores it.
+- **Flat top bar:** 28 px, no hover effects, an open menu marked in amber, 0
+  radius (extension stylesheet).
+- **Applied once per account** by `branding/setup-branding.py` (marker
+  `~/.config/noctraos/desktop-layout-v1`), so later user changes are kept.
+  Verified from the repo scripts: install run, layout applied, session restart,
+  screenshot.
+- **Known limits:** the settings are keyed to monitor "0" (the primary), so a
+  second monitor keeps the stock full-width taskbar; no multi-monitor test yet.
+  Show Desktop remembers the windows it minimized for the current workspace only.
+
+## Start menu spec (owner, 2026-10-04) — not built
+
+- A **panel above the dock** (not full screen). Compact, edgy, sharp corners,
+  **terminal (monospace) font**.
+- **Top right of the panel: the user's name and the weather**, so it feels
+  welcoming.
+- A **"New users start here"** section that opens a help page showing how to use
+  the OS.
+- A **pinned Agents row** (Codex, Claude Code, OpenCode, Grok, Gemini CLI, Qwen
+  Code), then the apps, then **recent files** (macOS-like, not a Windows tree).
+- **Customisable:** users can add or remove widgets such as weather and time.
+- Browsing and launching only; Super+Space stays the search.
+
+Notes for when we build it: the weather needs a data source and a location. A
+keyless service (such as Open-Meteo) works, but location should be a user choice
+(typed city or an opt-in lookup), not silent. The help page can be a local HTML
+or app page reachable from the onboarding flow as well.
 
 ## Open questions
 
-1. **"Running-app indicators" in the top bar:** an icon strip of open apps
-   (with window previews on hover?) or just a mark for which apps are open?
-   And does the dock then show only pinned launchers, or also a dot under
-   running ones?
-2. **Start menu, macOS-like:** a full-screen/centred grid like Launchpad, or a
-   panel anchored above the dock? How many recent files, and which types
-   (documents only, or everything)?
-3. **Where does the AI emphasis sit in the Start menu:** a pinned Agents row
-   on top, a local-model status tile, or both?
-4. **Top bar technique** (still to prove on the VM): restore GNOME's stock
-   panel beside the taskbar, or build our own top-bar extension that takes the
-   tray, clock and Show Desktop out of the taskbar.
+1. **Start menu size and grid:** how wide/tall is the panel, and are apps a grid
+   or a list under the Agents row?
+2. **Recent files:** how many, and which types (documents only, or everything)?
+3. **Dock behaviour:** running apps show as icons in the dock with a dot today;
+   keep that, or move all running state to the top bar?
+4. **Customisation UI:** a settings page, a right-click on the panel, or both?
+5. **Help page:** the same as onboarding screen 4, or a longer reference?
