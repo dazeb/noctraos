@@ -68,5 +68,25 @@ class DesktopThemeTests(unittest.TestCase):
             self.assertIn("12px", (base / "gtk.css").read_text())
 
 
+    def test_recolor_is_property_aware_and_leaves_unmapped_colors(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            palette = root / "palette.json"
+            palette.write_text('{"colors": {"accent": "#e68e0d", "foreground": "#bebebe", "panel": "#0d0d0d"}}')
+            remap = root / "remap.json"
+            remap.write_text('{"hex": {"#bde6fb": {"color": "foreground", "default": "accent"}, '
+                             '"#161c1f": "panel"}, "rgb": {"189, 230, 251": "255, 255, 255"}}')
+            css = MODULE.recolor(
+                ".a { color: #BDE6FB; background-color: #bde6fb; border: 1px solid #bde6fb; "
+                "x: rgba(189, 230, 251, 0.5); y: #fb7c7c; z: #161c1f; }",
+                MODULE.load_remap(remap, palette))
+            self.assertIn("color: #bebebe;", css)             # text keeps a readable colour
+            self.assertIn("background-color: #e68e0d;", css)  # fills take the accent
+            self.assertIn("1px solid #e68e0d", css)
+            self.assertIn("rgba(255, 255, 255, 0.5)", css)
+            self.assertIn("y: #fb7c7c", css)                  # unmapped colours are untouched
+            self.assertIn("z: #0d0d0d", css)
+
+
 if __name__ == "__main__":
     unittest.main()
