@@ -34,6 +34,8 @@ if [ ! -f /etc/skel/.config/btop/btop.conf ]; then
 fi
 sudo install -m 644 "$REPO_ROOT/configs/autostart/copyq.desktop" \
   /etc/skel/.config/autostart/copyq.desktop
+sudo python3 "$REPO_ROOT/scripts/seed-password-store.py" /etc/skel >/dev/null \
+  || warn "Could not seed the keyring-free password store for new users"
 for src in "$REPO_ROOT/configs/nautilus-scripts/"*; do
   [ -f "$src" ] || continue
   sudo install -m 755 "$src" "/etc/skel/.local/share/nautilus/scripts/$(basename "$src")"

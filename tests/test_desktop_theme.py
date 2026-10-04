@@ -88,5 +88,38 @@ class DesktopThemeTests(unittest.TestCase):
             self.assertIn("z: #0d0d0d", css)
 
 
+class PasswordStoreTests(unittest.TestCase):
+    def setUp(self):
+        spec = importlib.util.spec_from_file_location(
+            "seed_password_store", Path(__file__).resolve().parents[1] / "scripts/seed-password-store.py")
+        self.seed = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.seed)
+
+    def test_creates_both_files_and_is_idempotent(self):
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            self.assertTrue(self.seed.chromium_flags(home) and self.seed.vscode_argv(home))
+            self.assertFalse(self.seed.chromium_flags(home) or self.seed.vscode_argv(home))
+            flags = (home / ".var/app/org.chromium.Chromium/config/chromium-flags.conf").read_text()
+            self.assertEqual(flags, "--password-store=basic\n")
+
+    def test_keeps_existing_flags_and_comments(self):
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            conf = home / ".var/app/org.chromium.Chromium/config/chromium-flags.conf"
+            conf.parent.mkdir(parents=True)
+            conf.write_text("--enable-features=Foo\n")
+            argv = home / ".vscode/argv.json"
+            argv.parent.mkdir(parents=True)
+            argv.write_text("// header comment\n{\n\t// note\n\t\"enable-crash-reporter\": true\n}\n")
+            self.seed.chromium_flags(home)
+            self.seed.vscode_argv(home)
+            self.assertEqual(conf.read_text(), "--enable-features=Foo\n--password-store=basic\n")
+            text = argv.read_text()
+            self.assertIn("// header comment", text)
+            self.assertIn('"password-store": "basic",', text)
+            self.assertIn('"enable-crash-reporter": true', text)
+
+
 if __name__ == "__main__":
     unittest.main()

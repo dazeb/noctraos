@@ -214,9 +214,17 @@ tail -f /root/noctraos-build.log
   logs "Failed to activate Wayland clipboard" and records nothing on GNOME
   (no wlr-data-control). The autostart entry sets it; keep it that way.
 - **Autologin leaves the login keyring locked**, so apps that use the Secret
-  Service (Chromium/Chrome, etc.) show an "Authentication required" prompt on
-  first use. Seen on VM 114 with Chromium; it also swallows keystrokes in
-  synthetic-input tests (press Escape first). Not yet addressed.
+  Service show an "Authentication required" prompt on first use. Fixed for what we
+  install by using a non-keyring store (`scripts/seed-password-store.py`, run by
+  modules 04 and 07): Chromium (Flatpak) gets `--password-store=basic` in
+  `chromium-flags.conf`, VS Code gets `"password-store": "basic"` in
+  `~/.vscode/argv.json`. Measured on VM 114 with `dbus-monitor`: Chromium made 5
+  Secret Service calls and showed the prompt before, 0 and no prompt after.
+  VS Code made 0 calls at startup either way (the setting is preventive; it only
+  matters when something stores a secret). **Not covered:** any browser the user
+  installs themselves (Brave, Chrome, Edge) still prompts, and saved browser
+  passwords in the basic store are only obfuscated, not protected by a keyring —
+  an accepted trade-off. Firefox does not use the Secret Service.
 - **Driving the VM desktop for tests**: over SSH, unlock the session
   (`gdbus call ... org.gnome.ScreenSaver.SetActive false`), take screenshots with
   `gnome-screenshot -f`, inject keys through `/dev/uinput` (needs sudo). Never

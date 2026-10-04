@@ -99,9 +99,9 @@ which can also remove it), a dismissible **"New users start here"** strip opens 
 local help page (`help/index.html`, installed to `/usr/local/share/noctraos/help/`).
 Settings live in `org.gnome.shell.extensions.noctraos-start` (`show-name`,
 `show-start-here`, `weather*`). Verified on VM 114: live weather (13°C, Leeds),
-the dialog, the strip, and the help page (rendered headlessly). Opening the page
-from the strip on a fresh autologin system hits the **locked-keyring prompt** the
-first time a browser starts (Chromium), so that bug now sits in the new-user path.
+the dialog, the strip, and the help page (rendered headlessly). The page opens in the default browser; the locked-keyring prompt that Chromium
+used to show on first start is now fixed for the browsers we install (see
+AGENTS.md); a browser the user installs themselves (Brave, Chrome) can still prompt.
 Not yet built: an apps list and a settings page for customisation (today it is
 the in-panel controls and GSettings). Untested: launching an agent from the row and
 *All apps*. The panel replaces the Zorin Menu popup by overriding its
