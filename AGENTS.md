@@ -139,6 +139,17 @@ iso/preseed/noctraos.seed.in  Ubiquity/d-i seed template for the above
   `~dazeb/.ssh/authorized_keys`; do not add keys to or touch the Proxmox node.
   Verified 2026-10-04: static checks, full `install.sh` run + idempotent
   second run, and `zom doctor` all green on VM 114 this way.
+- **API-only access to the node** (no shell): a Proxmox API token (`root@pam!claude`) over
+  `https://192.168.8.195:8006` works from the cloud container once the home router
+  advertises `192.168.8.0/24` to the tailnet and the container runs
+  `tailscale set --accept-routes`; run `tailscaled --tun=userspace-networking
+  --socks5-server=localhost:1055` and curl with `-x socks5h://localhost:1055` (clear
+  `no_proxy`, or curl bypasses the SOCKS proxy). Uploads go through that relayed tunnel at
+  ~1 MB/s, so a 3.6 GB ISO takes about an hour. Boot-testing without a shell: create a
+  throwaway VM via the API (UEFI, ISO on `ide2`), grab frames with
+  `iso/pve-console-shot.py`, then delete the VM. ISOs for this are kept in the
+  `noctraos-isos` directory storage (`/local-zfs/noctraos-isos`; `local` has no room). The
+  node has ~4 GiB free RAM: one 3 GiB test VM at a time, nothing else.
 - **ISO build** runs on the node, not here. Scratch MUST be on
   `/local-zfs` (`WORK_BASE=/local-zfs/iso-build`) — pve-root has ~8 GiB free
   and the build needs ~25 GiB. The zfs pool is HDD-backed: unsquashfs and
