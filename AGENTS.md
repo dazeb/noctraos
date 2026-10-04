@@ -320,7 +320,9 @@ tail -f /root/noctraos-build.log
 - **GPU module (`bin/noc-gpu`)**: the driver comes from Ubuntu (`ubuntu-drivers`,
   signed, no DKMS) and ONLY the CUDA toolkit from NVIDIA's repo; the pin file
   `noctraos-cuda-toolkit-only` blocks that repo's driver packages — never remove
-  it (mixed Ubuntu/NVIDIA `libnvidia-*` breaks the driver). Module 02b must run
+  it (mixed Ubuntu/NVIDIA `libnvidia-*` breaks the driver). It is written BEFORE the
+  repo is registered and a failed write aborts (`write_apt_file`); AMD models that are
+  not positively recognised default to Vulkan, never to a ~15 GiB ROCm install. Module 02b must run
   BEFORE 03: Ollama's installer exits early only if `nvidia-smi` exists, else it
   installs NVIDIA's DKMS `cuda-drivers` over ours. CUDA 13 dropped
   Maxwell/Pascal/Volta, so those stay on driver 580 + CUDA 12.9. NVIDIA's debs do

@@ -20,8 +20,8 @@
 #                     never jumps a ROCm major.
 #   Anything else (VM display adapters, Intel) is ignored.
 #
-# Environment: ZORIN_AI_GPU_PROFILE=runtime|full  ZORIN_AI_GPU_VENDORS=nvidia|amd|all
-#              ZORIN_AI_CUDA_VERSION=12.9  ZORIN_AI_ROCM_VERSION=7.2.4
+# Environment: NOCTRAOS_GPU_PROFILE=runtime|full  NOCTRAOS_GPU_VENDORS=nvidia|amd|all
+#              NOCTRAOS_CUDA_VERSION=12.9  NOCTRAOS_ROCM_VERSION=7.2.4  NOCTRAOS_GPU_FORCE_ROCM=1
 #              NOC_GPU_LSPCI_FILE=<file>   (tests: read lspci -Dnn output from a file)
 set -uo pipefail
 
@@ -35,8 +35,8 @@ warn() { printf '\033[1;33mnoc-gpu WARN\033[0m %s\n' "$*" >&2; }
 have() { command -v "$1" >/dev/null 2>&1; }
 
 DRY_RUN=0
-PROFILE="${ZORIN_AI_GPU_PROFILE:-full}"
-VENDORS="${ZORIN_AI_GPU_VENDORS:-all}"
+PROFILE="${NOCTRAOS_GPU_PROFILE:-full}"
+VENDORS="${NOCTRAOS_GPU_VENDORS:-all}"
 TARGET_USER="${TARGET_USER:-${SUDO_USER:-$(id -un)}}"
 SUDO=""
 [ "$(id -u)" -ne 0 ] && SUDO="sudo"
@@ -83,6 +83,16 @@ write_root_file() {
     rm -f "$tmp"; warn "could not write $path"; FAILED=1; return 2
   fi
   rm -f "$tmp"
+}
+
+# write_root_file for apt config that must exist before apt touches the repo: a failed
+# write aborts the caller (return 1) instead of being mistaken for "unchanged".
+write_apt_file() {
+  write_root_file "$@"
+  local rc=$?
+  [ "$rc" -eq 2 ] && return 1
+  [ "$rc" -eq 0 ] && APT_DIRTY=1
+  return 0
 }
 
 os_field() { ( . /etc/os-release 2>/dev/null; printf '%s' "${!1:-}" ); }
@@ -142,7 +152,7 @@ classify_nvidia() {
 }
 
 # AMD: codename in the PCI name → LLVM gfx target → ROCm usability.
-#   rocm       supported by ROCm
+#   rocm       supported by ROCm (only for positively recognised models)
 #   override   same ISA family as a supported part; runs with HSA_OVERRIDE_GFX_VERSION
 #   vulkan     no ROCm path (integrated/older); llama.cpp's Vulkan backend still works
 # Prints "gfx tier override-version note".
@@ -171,7 +181,11 @@ classify_amd() {
                                          echo "gfx90c vulkan - IGPU" ;;
     *Rembrandt*|*Phoenix*|*"Hawk Point"*|*Raphael*|*"Granite Ridge"*|*Mendocino*|*"Dragon Range"*|*"Strix Point"*|*"Radeon Graphics"*)
                                          echo "rdna-igpu vulkan - IGPU" ;;
-    *)                                   echo "unknown rocm - ASSUMED_SUPPORTED" ;;
+    *)
+      # Not positively recognised: do NOT pull a ~15 GiB SDK for hardware that may be
+      # unsupported. Vulkan works regardless; NOCTRAOS_GPU_FORCE_ROCM=1 opts in.
+      if [ "${NOCTRAOS_GPU_FORCE_ROCM:-0}" = 1 ]; then echo "unknown rocm - FORCED_ROCM"
+      else echo "unknown vulkan - UNRECOGNIZED"; fi ;;
   esac
 }
 
@@ -288,7 +302,8 @@ print_detection() {
       1002:vulkan)      verdict="no ROCm path (${GPU_FAMILY[$i]}) — Vulkan backend" ;;
     esac
     [ "${GPU_NOTE[$i]}" = ASSUMED_MODERN ] && verdict="$verdict, model not in PCI database: assuming current generation, verified after install"
-    [ "${GPU_NOTE[$i]}" = ASSUMED_SUPPORTED ] && verdict="$verdict, model not in PCI database: assuming ROCm support, verified after install"
+    [ "${GPU_NOTE[$i]}" = UNRECOGNIZED ] && verdict="unrecognised AMD model: Vulkan only (NOCTRAOS_GPU_FORCE_ROCM=1 to try ROCm anyway)"
+    [ "${GPU_NOTE[$i]}" = FORCED_ROCM ] && verdict="unrecognised AMD model: ROCm forced, verified after install"
     printf '  [%s] %s  %s  %s\n        %s\n' "$i" "${GPU_BDF[$i]}" "$vendor" "${GPU_NAME[$i]}" "$verdict"
   done
 }
@@ -301,11 +316,11 @@ print_plan() {
     *)
       branch="$(nvidia_installed_branch)"; [ -n "$branch" ] || branch="$(nvidia_recommended_branch)"
       series="$(pick_cuda_series "$NV_TIER" "$branch")"
-      note "NVIDIA: Ubuntu signed driver${branch:+ (branch $branch)} + CUDA toolkit ${ZORIN_AI_CUDA_VERSION:-${series}.x}" ;;
+      note "NVIDIA: Ubuntu signed driver${branch:+ (branch $branch)} + CUDA toolkit ${NOCTRAOS_CUDA_VERSION:-${series}.x}" ;;
   esac
   case "$AMD_TIER" in
     none) ;;
-    rocm)     note "AMD: in-kernel amdgpu + ROCm ${ZORIN_AI_ROCM_VERSION:-(latest for this release)} + Vulkan" ;;
+    rocm)     note "AMD: in-kernel amdgpu + ROCm ${NOCTRAOS_ROCM_VERSION:-(latest for this release)} + Vulkan" ;;
     override) note "AMD: ROCm + Vulkan, HSA_OVERRIDE_GFX_VERSION=$AMD_OVERRIDE set for Ollama" ;;
     vulkan)   note "AMD: Mesa Vulkan only (ROCm does not support this part)" ;;
   esac
@@ -381,6 +396,15 @@ setup_cuda_repo() {
   local rid arch="x86_64" base keyring
   rid="$(nvidia_repo_id)" || { bad "no NVIDIA CUDA repo mapping for release '$(codename)'"; return 1; }
   base="https://developer.download.nvidia.com/compute/cuda/repos/$rid/$arch"
+  # The pin goes in FIRST: this repo also ships driver packages, and it must never be
+  # visible to apt (not even briefly) without them being pinned off.
+  write_apt_file /etc/apt/preferences.d/noctraos-cuda-toolkit-only 644 <<'PINEOF' || { bad "could not write the apt pin that keeps NVIDIA's repo from replacing Ubuntu's driver; not adding the repo"; return 1; }
+# noctraos: take ONLY the CUDA toolkit from NVIDIA's repo. The graphics driver comes
+# from Ubuntu (signed, kernel-matched); never let this repo replace it.
+Package: nvidia-* libnvidia-* xserver-xorg-video-nvidia-* cuda-drivers cuda-drivers-* nvidia-open
+Pin: origin developer.download.nvidia.com
+Pin-Priority: -1
+PINEOF
   if ! pkg_installed cuda-keyring; then
     say "Adding the NVIDIA CUDA apt repository ($rid)…"
     keyring="$(mktemp --suffix=.deb)"
@@ -393,13 +417,6 @@ setup_cuda_repo() {
   else
     ok "NVIDIA CUDA apt repository already configured"
   fi
-  write_root_file /etc/apt/preferences.d/noctraos-cuda-toolkit-only 644 <<'EOF' && APT_DIRTY=1
-# noctraos: take ONLY the CUDA toolkit from NVIDIA's repo. The graphics driver comes
-# from Ubuntu (signed, kernel-matched); never let this repo replace it.
-Package: nvidia-* libnvidia-* xserver-xorg-video-nvidia-* cuda-drivers cuda-drivers-* nvidia-open
-Pin: origin developer.download.nvidia.com
-Pin-Priority: -1
-EOF
   return 0
 }
 
@@ -418,8 +435,8 @@ install_cuda_toolkit() {
   fi
   branch="$(nvidia_installed_branch)"; [ -n "$branch" ] || branch="$(nvidia_recommended_branch)"
   series="$(pick_cuda_series "$NV_TIER" "$branch")"
-  if [ -n "${ZORIN_AI_CUDA_VERSION:-}" ]; then
-    pkg="cuda-toolkit-${ZORIN_AI_CUDA_VERSION//./-}"
+  if [ -n "${NOCTRAOS_CUDA_VERSION:-}" ]; then
+    pkg="cuda-toolkit-${NOCTRAOS_CUDA_VERSION//./-}"
   elif [ "$series" = none ]; then
     warn "Driver branch ${branch:-?} is too old for any supported CUDA toolkit (need >= 525). Skipping the toolkit."
     return 0
@@ -469,10 +486,22 @@ setup_nvidia() {
 
 # -------------------------------------------------------------- AMD stack ----
 
-# Highest ROCm release directory that actually has a repo for this Ubuntu codename.
+ROCM_LIST="${NOC_GPU_ROCM_LIST:-/etc/apt/sources.list.d/rocm.list}"
+
+# The ROCm release already recorded in our apt source, if any.
+pinned_rocm_version() {
+  [ -f "$ROCM_LIST" ] || return 0
+  sed -n 's#.*repo\.radeon\.com/rocm/apt/\([0-9][0-9.]*\)[ /].*#\1#p' "$ROCM_LIST" | head -n 1
+}
+
+# Which ROCm release to use: an explicit request, else the one already installed
+# (re-runs stay offline and never cross a ROCm major), else the highest release that
+# has a repo for this Ubuntu codename.
 resolve_rocm_version() {
   local cn="$1" v
-  if [ -n "${ZORIN_AI_ROCM_VERSION:-}" ]; then echo "$ZORIN_AI_ROCM_VERSION"; return 0; fi
+  if [ -n "${NOCTRAOS_ROCM_VERSION:-}" ]; then echo "$NOCTRAOS_ROCM_VERSION"; return 0; fi
+  v="$(pinned_rocm_version)"
+  if [ -n "$v" ]; then echo "$v"; return 0; fi
   local listing
   listing="$(curl -fsSL --max-time 20 https://repo.radeon.com/rocm/apt/ 2>/dev/null)" || return 1
   while IFS= read -r v; do
@@ -488,7 +517,11 @@ setup_rocm_repo() {
   cn="$(codename)"
   [ -n "$cn" ] || { bad "cannot determine the Ubuntu codename"; return 1; }
   rocm_v="$(resolve_rocm_version "$cn")" || { bad "no ROCm apt repo found for '$cn'"; return 1; }
-  say "ROCm repository: $rocm_v ($cn)"
+  if [ -z "${NOCTRAOS_ROCM_VERSION:-}" ] && [ -n "$(pinned_rocm_version)" ]; then
+    say "ROCm repository: keeping pinned release $rocm_v (set NOCTRAOS_ROCM_VERSION to move it)"
+  else
+    say "ROCm repository: $rocm_v ($cn)"
+  fi
   if [ ! -s /etc/apt/keyrings/rocm.gpg ]; then
     if [ "$DRY_RUN" -eq 0 ]; then
       have gpg || apt_install gnupg
@@ -499,10 +532,10 @@ setup_rocm_repo() {
       run "fetch https://repo.radeon.com/rocm/rocm.gpg.key -> /etc/apt/keyrings/rocm.gpg"
     fi
   fi
-  write_root_file /etc/apt/sources.list.d/rocm.list 644 <<EOF && APT_DIRTY=1
+  write_apt_file "$ROCM_LIST" 644 <<EOF || return 1
 deb [arch=amd64 signed-by=/etc/apt/keyrings/rocm.gpg] https://repo.radeon.com/rocm/apt/$rocm_v $cn main
 EOF
-  write_root_file /etc/apt/preferences.d/rocm-pin-600 644 <<'EOF' && APT_DIRTY=1
+  write_apt_file /etc/apt/preferences.d/rocm-pin-600 644 <<'EOF' || return 1
 Package: *
 Pin: release o=repo.radeon.com
 Pin-Priority: 600

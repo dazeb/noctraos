@@ -137,10 +137,12 @@ Installer flags: `--skip-ai` (no Ollama/model downloads), `--skip-gui`
 (headless-ish: skips GUI apps, Nautilus scripts, theme, shell reskin),
 `--skip-gpu` (no GPU driver / CUDA / ROCm step).
 
-GPU variables (read by `noc gpu install`): `ZORIN_AI_GPU_PROFILE=runtime|full`
+GPU variables (read by `noc gpu install`): `NOCTRAOS_GPU_PROFILE=runtime|full`
 (default `full`; `runtime` = libraries only, no compilers/SDK),
-`ZORIN_AI_GPU_VENDORS=nvidia|amd|all`, `ZORIN_AI_CUDA_VERSION` (e.g. `12.9`),
-`ZORIN_AI_ROCM_VERSION` (e.g. `7.2.4`).
+`NOCTRAOS_GPU_VENDORS=nvidia|amd|all`, `NOCTRAOS_CUDA_VERSION` (e.g. `12.9`),
+`NOCTRAOS_ROCM_VERSION` (e.g. `7.2.4`; re-runs otherwise keep the release already
+installed, so they work offline and never jump a ROCm major), and
+`NOCTRAOS_GPU_FORCE_ROCM=1` to try ROCm on an AMD model the installer does not recognise.
 
 ## GPU setup
 
@@ -156,7 +158,7 @@ action first. Machines with no NVIDIA/AMD GPU (VMs, Intel-only) are skipped.
 | NVIDIA Kepler or older | Nothing — too old for CUDA or Ollama; stays on nouveau/CPU |
 | AMD with ROCm support (RX 7000/9000, RX 6800/6900, Strix Halo, Instinct) | In-kernel `amdgpu` + ROCm from AMD's apt repo (HIP SDK), `render`/`video` groups |
 | AMD RX 6500/6600/6700 (Navi 22/23/24) | Same, plus `HSA_OVERRIDE_GFX_VERSION=10.3.0` for the Ollama service |
-| AMD integrated / older (APUs, RDNA1, Vega 10, Polaris) | Mesa Vulkan only — ROCm doesn't support them; llama.cpp's Vulkan backend works |
+| AMD integrated / older (APUs, RDNA1, Vega 10, Polaris) or any model not positively recognised | Mesa Vulkan only — ROCm doesn't support them; llama.cpp's Vulkan backend works |
 
 Design choices worth knowing:
 

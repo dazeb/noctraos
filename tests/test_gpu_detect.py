@@ -26,6 +26,7 @@ AMD_9070 = "0000:0c:00.0 VGA compatible controller [0300]: Advanced Micro Device
 AMD_HALO = "0000:0d:00.0 Display controller [0380]: Advanced Micro Devices, Inc. [AMD/ATI] Strix Halo [Radeon Graphics / Radeon 8050S Graphics / Radeon 8060S Graphics] [1002:1586] (rev c1)"
 AMD_CEZANNE = "0000:0e:00.0 VGA compatible controller [0300]: Advanced Micro Devices, Inc. [AMD/ATI] Cezanne [Radeon Vega Series / Radeon Vega Mobile Series] [1002:1638] (rev c8)"
 AMD_VEGA64 = "0000:0f:00.0 VGA compatible controller [0300]: Advanced Micro Devices, Inc. [AMD/ATI] Vega 10 [Radeon RX Vega 56/64] [1002:687f] (rev c3)"
+AMD_UNKNOWN = "0000:10:00.0 VGA compatible controller [0300]: Advanced Micro Devices, Inc. [AMD/ATI] Device [1002:7999] (rev c0)"
 VM_QXL = "0000:00:02.0 VGA compatible controller [0300]: Red Hat, Inc. QXL paravirtual graphic card [1b36:0100] (rev 05)"
 VM_VIRTIO = "0000:00:03.0 VGA compatible controller [0300]: Red Hat, Inc. Virtio 1.0 GPU [1af4:1050] (rev 01)"
 INTEL_IGPU = "0000:00:02.0 VGA compatible controller [0300]: Intel Corporation UHD Graphics 630 [8086:3e92]"
@@ -43,11 +44,11 @@ def detect(*lines):
     return json.loads(out)
 
 
-def bash_fn(expr):
+def bash_fn(expr, env=None, check=True):
     return subprocess.run(
         ["bash", "-c", f'source "{SCRIPT}"; {expr}'],
-        capture_output=True, text=True, check=True,
-    ).stdout.strip()
+        capture_output=True, text=True, check=check, env={**os.environ, **(env or {})},
+    )
 
 
 class ClassificationTests(unittest.TestCase):
@@ -121,7 +122,70 @@ class PlanTests(unittest.TestCase):
         ]
         for args, expected in cases:
             with self.subTest(args=args):
-                self.assertEqual(bash_fn(f"pick_cuda_series {args}"), expected)
+                self.assertEqual(bash_fn(f"pick_cuda_series {args}").stdout.strip(), expected)
+
+
+class ReviewRegressionTests(unittest.TestCase):
+    def test_unrecognised_amd_device_falls_back_to_vulkan(self):
+        gpu = detect(AMD_UNKNOWN)["gpus"][0]
+        self.assertEqual(gpu["tier"], "vulkan")
+        self.assertEqual(detect(AMD_UNKNOWN)["plan"]["amd"], "vulkan")
+
+    def test_unrecognised_amd_device_can_be_forced_onto_rocm(self):
+        with tempfile.TemporaryDirectory() as d:
+            fixture = Path(d) / "l.txt"
+            fixture.write_text(AMD_UNKNOWN + "\n")
+            out = subprocess.run([str(SCRIPT), "detect", "--json"], capture_output=True, text=True, check=True,
+                                 env={**os.environ, "NOC_GPU_LSPCI_FILE": str(fixture), "NOCTRAOS_GPU_FORCE_ROCM": "1"}).stdout
+        self.assertEqual(json.loads(out)["plan"]["amd"], "rocm")
+
+    def test_unrecognised_amd_never_plans_the_rocm_repo(self):
+        with tempfile.TemporaryDirectory() as d:
+            fixture = Path(d) / "l.txt"
+            fixture.write_text(AMD_UNKNOWN + "\n")
+            out = subprocess.run([str(SCRIPT), "install", "--dry-run"], capture_output=True, text=True,
+                                 env={**os.environ, "NOC_GPU_LSPCI_FILE": str(fixture)}).stdout
+        self.assertNotIn("rocm.list", out)
+
+    def test_rerun_keeps_the_recorded_rocm_release_without_network(self):
+        with tempfile.TemporaryDirectory() as d:
+            lst = Path(d) / "rocm.list"
+            lst.write_text("deb [arch=amd64 signed-by=/etc/apt/keyrings/rocm.gpg] https://repo.radeon.com/rocm/apt/6.4.1 noble main\n")
+            # curl is broken on purpose: a remote lookup would fail the call
+            result = bash_fn('curl() { return 7; }; resolve_rocm_version noble', env={"NOC_GPU_ROCM_LIST": str(lst)})
+            self.assertEqual(result.stdout.strip(), "6.4.1")
+            explicit = bash_fn('resolve_rocm_version noble', env={"NOC_GPU_ROCM_LIST": str(lst), "NOCTRAOS_ROCM_VERSION": "7.2.4"})
+            self.assertEqual(explicit.stdout.strip(), "7.2.4")
+
+    def test_failed_apt_pin_write_aborts_before_the_nvidia_repo_is_added(self):
+        script = """
+        write_root_file() { return 2; }
+        sx() { echo "SX $*"; }
+        pkg_installed() { return 1; }
+        nvidia_repo_id() { echo ubuntu2404; }
+        DRY_RUN=1
+        setup_cuda_repo; echo "rc=$?"
+        """
+        out = bash_fn(script).stdout
+        self.assertIn("rc=1", out)
+        self.assertNotIn("SX dpkg", out)
+
+    def test_apt_pin_is_written_before_the_repo_keyring_is_installed(self):
+        script = """
+        write_root_file() { echo "WRITE $1"; return 0; }
+        sx() { echo "SX $*"; }
+        pkg_installed() { return 1; }
+        nvidia_repo_id() { echo ubuntu2404; }
+        DRY_RUN=1
+        setup_cuda_repo
+        """
+        lines = [l for l in bash_fn(script).stdout.splitlines() if l.startswith(("WRITE", "SX dpkg"))]
+        self.assertEqual(lines[0], "WRITE /etc/apt/preferences.d/noctraos-cuda-toolkit-only")
+        self.assertTrue(lines[1].startswith("SX dpkg"))
+
+    def test_a_real_write_failure_is_reported_as_failure_not_unchanged(self):
+        out = bash_fn('SUDO=""; DRY_RUN=0; echo x | write_apt_file /proc/nonexistent/f 644 2>/dev/null; echo "rc=$?"').stdout
+        self.assertIn("rc=1", out)
 
 
 class DryRunTests(unittest.TestCase):
@@ -132,7 +196,7 @@ class DryRunTests(unittest.TestCase):
             return subprocess.run(
                 [str(SCRIPT), "install", "--dry-run"],
                 env={**os.environ, "NOC_GPU_LSPCI_FILE": str(fixture),
-                     "ZORIN_AI_ROCM_VERSION": "7.2.4", **(extra_env or {})},
+                     "NOCTRAOS_ROCM_VERSION": "7.2.4", **(extra_env or {})},
                 capture_output=True, text=True,
             )
 
@@ -153,7 +217,7 @@ class DryRunTests(unittest.TestCase):
         self.assertNotIn("HSA_OVERRIDE", out)
 
     def test_runtime_profile_skips_the_sdk(self):
-        out = self.run_dry(AMD_7900, extra_env={"ZORIN_AI_GPU_PROFILE": "runtime"}).stdout
+        out = self.run_dry(AMD_7900, extra_env={"NOCTRAOS_GPU_PROFILE": "runtime"}).stdout
         self.assertIn("rocm-hip-runtime", out)
         self.assertNotIn("rocm-hip-sdk", out)
 
@@ -167,7 +231,7 @@ class DryRunTests(unittest.TestCase):
         self.assertIn("Vulkan", out)
 
     def test_vendor_filter(self):
-        out = self.run_dry(AMD_7900, NV_1080, extra_env={"ZORIN_AI_GPU_VENDORS": "amd"}).stdout
+        out = self.run_dry(AMD_7900, NV_1080, extra_env={"NOCTRAOS_GPU_VENDORS": "amd"}).stdout
         self.assertIn("rocm.list", out)
         self.assertNotIn("NVIDIA: legacy tier", out)
 
