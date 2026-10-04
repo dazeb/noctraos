@@ -49,6 +49,7 @@ run_module() {
 run_module 00_preflight.sh
 run_module 01_system.sh
 run_module 02_mise.sh
+run_module 03_gpu_drivers.sh
 
 if [ "$SKIP_AI" -eq 1 ]; then
   log "SKIP 03_ai_core (--skip-ai)"

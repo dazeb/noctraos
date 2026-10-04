@@ -34,6 +34,8 @@ install/
   01_system.sh              apt core + python build deps, Flathub, Nerd Font
   02_mise.sh                mise binary, profile.d + bash.bashrc hooks, runtimes,
                             Herdr, Starship, lazygit, lazydocker
+  03_gpu_drivers.sh         NVIDIA driver (+ opt-in CUDA toolkit) / AMD amdgpu groups; runs before
+                            03_ai_core so Ollama installs its CUDA/ROCm runtime
   03_ai_core.sh             Ollama + qwen2.5-coder:7b + nomic-embed-text
   04_gui_apps.sh            Microsoft VS Code (apt repo) + extensions, Mission Center,
                             CopyQ; retires codium/chatbox/foot (user data kept)

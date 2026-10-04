@@ -167,10 +167,14 @@ cmd_doctor() {
       && ok "Mission Center: installed" || bad "Mission Center: missing"
   fi
 
-  if command -v nvidia-smi >/dev/null 2>&1; then
+  if command -v nvidia-smi >/dev/null 2>&1 && nvidia-smi >/dev/null 2>&1; then
     ok "GPU: NVIDIA $(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -n 1)"
+  elif lsmod 2>/dev/null | awk '$1 == "amdgpu" {f=1} END {exit !f}'; then
+    ok "GPU: AMD (amdgpu driver loaded)"
+  elif command -v nvidia-smi >/dev/null 2>&1; then
+    info "GPU: NVIDIA driver installed but not loaded — reboot"
   else
-    info "GPU: no NVIDIA driver detected — Ollama will run on CPU"
+    info "GPU: no supported driver detected — Ollama will run on CPU"
   fi
 
   ok "Disk free on /: $(df -h / | awk 'NR==2 {print $4}')"

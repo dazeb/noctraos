@@ -229,8 +229,10 @@ iso/                     build script + preseed template for unattended installs
   log out/in (or reboot).
 - **"Ask AI to Explain" is slow the first time** — the model loads into RAM on
   first use (~30 s warm-up; longer on CPU-only machines).
-- **Ollama runs on CPU** — expected without an NVIDIA GPU; `zom doctor` reports
-  what was detected.
+- **Ollama runs on CPU** — expected without a supported GPU; `zom doctor` reports
+  what was detected. NVIDIA and AMD drivers install automatically; reboot once
+  after the first install so they load. Optional CUDA toolkit (nvcc):
+  `NOCTRAOS_CUDA_TOOLKIT=1 bash install.sh`.
 - **Installer says sudo is required over SSH** — headless runs need
   passwordless sudo or recently cached credentials; interactive runs can just
   type the password.
