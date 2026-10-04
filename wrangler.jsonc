@@ -4,8 +4,5 @@
   "compatibility_date": "2026-10-01",
   "assets": {
     "directory": "./site"
-  },
-  "r2_buckets": [
-    { "binding": "download", "bucket_name": "noctra-iso" }
-  ]
+  }
 }
