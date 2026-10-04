@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# The system Python has PyGObject; mise-managed Python may not.
+exec /usr/bin/python3 /usr/local/share/noctraos-search/main.py "$@"

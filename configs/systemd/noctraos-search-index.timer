@@ -1,0 +1,10 @@
+[Unit]
+Description=Refresh the Noctra Search file index
+
+[Timer]
+OnStartupSec=15s
+OnUnitInactiveSec=15min
+Unit=noctraos-search-index.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,17 @@
+/* Matte Black palette from configs/theme/palette.json; native Shell overlay. */
+.noctra-search-dialog { background-color: #121212; color: #bebebe; border: 1px solid #333333; border-radius: 2px; padding: 16px; box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
+.noctra-search-dialog .modal-dialog-content-box { spacing: 12px; }
+.noctra-search-header { spacing: 14px; }
+.noctra-search-entry { font-size: 20px; background-color: transparent; color: #bebebe; border: none; padding: 10px 0; box-shadow: none; }
+.noctra-search-entry:focus { border: none; box-shadow: none; }
+.noctra-search-cog { padding: 10px; border-radius: 2px; color: #8a8a8d; }
+.noctra-search-cog:hover, .noctra-search-cog:focus { background-color: #2a2a2a; color: #e68e0d; }
+.noctra-search-list { spacing: 3px; }
+.noctra-search-heading { color: #8a8a8d; font-size: 11px; padding: 12px 10px 4px; }
+.noctra-search-result { border-radius: 2px; padding: 8px 10px; text-align: left; }
+.noctra-search-result:hover, .noctra-search-result:selected, .noctra-search-result:focus { background-color: #2a2a2a; }
+.noctra-search-result:selected .noctra-search-title, .noctra-search-result:focus .noctra-search-title { color: #e68e0d; }
+.noctra-search-row { spacing: 14px; }
+.noctra-search-title { font-size: 15px; }
+.noctra-search-detail { font-size: 11px; color: #8a8a8d; padding-top: 3px; }
+.noctra-search-notice { font-size: 11px; color: #8a8a8d; padding: 6px 4px 0; }

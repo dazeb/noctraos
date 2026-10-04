@@ -155,6 +155,13 @@ cmd_doctor() {
     bad "VS Code: missing"
   fi
 
+  if command -v noctraos-search >/dev/null 2>&1 \
+     && [ -d /usr/share/gnome-shell/extensions/noctraos-search@noctraos.local ]; then
+    ok "Super+Space search: installed"
+  else
+    bad "Super+Space search: missing (re-run the installer)"
+  fi
+
   if command -v flatpak >/dev/null 2>&1; then
     flatpak list --app 2>/dev/null | grep -q MissionCenter \
       && ok "Mission Center: installed" || bad "Mission Center: missing"

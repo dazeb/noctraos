@@ -44,6 +44,8 @@ install/
   07_persistence.sh         /etc/skel defaults, zom + zom-menu install
   08_shell_theme.sh         NoctraOS-Dark shell + GTK themes (derived, not
                             shipped), white menu icons, terminal/app palette
+  09_super_search.sh        Super+Space search + Noctra start button: installs the
+                            two GNOME Shell extensions, search app, schema, index timer
 bin/
   zom                       CLI: update | doctor | models [list|pull|rm|gui] | bg [list|next|set]
   zom-menu                  zenity control panel
@@ -254,9 +256,10 @@ tail -f /root/noctraos-build.log
   install → reboot → autologin → provision, no interaction; `zom doctor`
   all green). It is the v0.3 reference install. VM 114 (192.168.8.187) is
   the v0.2 reference.
-- VM 114 holds Super+Space search and the Noctra start button as
-  `zorin-ai-search@zorin-ai.local` / `zorin-ai-branding@zorin-ai.local`
-  extensions that are NOT in the repo yet; import and rename them.
+- Super+Space search and the Noctra start button are in the repo
+  (`extensions/`, `search/`, `branding/`, `install/09_super_search.sh`) and
+  verified on VM 114. The pre-rename `zorin-ai-search`/`zorin-ai-branding`
+  files on VM 110 (if any) are stale.
 - Roadmap ideas: first-run onboarding showcasing Super+Space, theme gap list
   (see README), Aider/Goose launchers (non-npm install paths), greeter-bug
   root cause.

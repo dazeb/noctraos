@@ -35,9 +35,14 @@ One overlay searches **applications, files and folders, clipboard history
 locations. It is the main thing a new user should learn, and the reference
 for the visual theme.
 
-Status: built and running on test VM 114 as two GNOME Shell extensions plus
-an indexer (`zorin-ai-search`, `zorin-ai-branding`), but **not yet in this
-repo** — to be imported and renamed to `noctraos`.
+Status: in the repo and installed by `install/09_super_search.sh` — two GNOME
+Shell extensions (`extensions/noctraos-search@noctraos.local`, the overlay;
+`extensions/noctraos-branding@noctraos.local`, the Noctra start button), the
+search app in `search/` (user-owned SQLite index, CopyQ bridge, settings
+window) and a systemd user timer that refreshes the file index. It takes over
+Super+Space and moves the input-source switch to Shift+Super+Space. Verified
+on VM 114 (clean install, idempotent re-run, extensions ACTIVE after a session
+restart). Not yet verified on a fresh ISO install.
 
 ## Onboarding
 

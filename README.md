@@ -42,6 +42,7 @@ Prefer to review first: `git clone https://github.com/dazeb/noctraos && cd noctr
 | Task manager | Mission Center (Flathub) — the familiar Task-Manager role: CPU/RAM/GPU and running apps |
 | Runtimes | [mise](https://mise.jdx.dev) managing Node LTS, Python 3.12, Go — system-wide, for every user |
 | Mouse ergonomics | Nautilus right-click: *Open in VS Code*, *Ask AI to Explain* (sends the file to local Ollama, answers in a dialog), *Open Terminal Here* |
+| **Super+Space search** | One overlay that searches apps, files and folders, CopyQ clipboard history, and the web; settings in *Search settings* (the gear). Installed by module 09 |
 | Clipboard | [CopyQ](https://hluk.github.io/CopyQ/) permanent clipboard history — tray-resident, survives reboots, searchable, image support, 1000 entries |
 | Desktop | NoctraOS-Dark shell theme, AI-first start menu, white menu icons, neon polygonal 4K wallpapers, dark mode, minimize/maximize/close window buttons, pinned taskbar |
 | Maintenance | `zom` CLI + `zom-menu` GUI panel |
@@ -211,6 +212,8 @@ install/                 modules 00–08 + lib.sh (shared helpers)
 bin/                     zom, zom-menu, noctraos-agent
 configs/                 mise, VS Code, Continue.dev, .desktop launchers,
                          XDG menu tree, Nautilus scripts
+extensions/              GNOME Shell extensions: Super+Space search, Noctra start button
+search/                  search app (index, clipboard bridge, settings window)
 assets/wallpapers/       generator + 5 seeded 4K scenes
 assets/icons/            white SVG glyphs (+ overrides/ for stock icon names)
 iso/                     build script + preseed template for unattended installs
@@ -236,8 +239,7 @@ Tested end-to-end on Zorin OS 18.1 (clean VM, full install, idempotent re-runs,
 first-boot provisioning from the ISO, unattended install from the custom ISO).
 Current release: **v0.3.0**.
 
-On the roadmap, in priority order: import the Super+Space search and the
-Noctra start button (currently only on a test VM) into this repo; a first-run
+On the roadmap, in priority order: a first-run
 onboarding flow that puts Super+Space front and center; the full-ISO
 experience (boot, installer, login); the dark + amber reskin built around the
 Super+Space look; more agent launchers (Aider, Goose — non-npm install
