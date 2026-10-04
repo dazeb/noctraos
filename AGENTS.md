@@ -330,14 +330,15 @@ tail -f /root/noctraos-build.log
   (2026-10-04): free tier resolves to `provider=nous` / `nous/welcome` with no signup.
   `model.provider: "auto"` is Hermes' stock default and is NOT an explicit choice
   (`explicit_provider` in the wrapper treats auto/empty as unset).
-- **Hermes onboarding prompt + greeting** (`configs/hermes/onboarding.md`): the wrapper exports
-  it as `HERMES_EPHEMERAL_SYSTEM_PROMPT` until `~/.hermes/.noctraos-onboarded` exists (the prompt
-  tells the agent to create it), and sends one `hermes chat --oneshot -Q --source desktop`
-  greeting first. `--source desktop` is required: the default for `--oneshot` is source
-  `oneshot`, which the desktop's session list hides. A `hermes config set` value that starts with
-  `--` is parsed as a CLI option, so pass lists as JSON (`'["--flag"]'`). Hermes Desktop also
-  has its OWN guided first-run intro ("what should I call you?", "Skip setup"); it currently
-  opens ahead of our greeting session.
+- **Hermes onboarding prompt** (`configs/hermes/onboarding.md`): the wrapper exports it as
+  `HERMES_EPHEMERAL_SYSTEM_PROMPT` until `~/.hermes/.noctraos-onboarded` exists (the prompt
+  tells the agent to create it). There is deliberately no separate greeting turn: Hermes Desktop
+  opens with its OWN guided intro ("what should I call you?", "Skip setup"; hardcoded in
+  `apps/desktop/src/i18n/en.ts`, no supported off switch found), so the prompt starts the tour
+  from the user's first reply instead. A one-shot `hermes chat --oneshot` greeting was tried first:
+  it works but must pass `--source desktop` (the default source `oneshot` is hidden from the
+  desktop's session list) and it never showed ahead of Hermes' own intro. A `hermes config set`
+  value that starts with `--` is parsed as a CLI option, so pass lists as JSON (`'["--flag"]'`).
 - **Hermes Desktop on a VM renders blank unless Electron gets `--no-sandbox
   --disable-dev-shm-usage`** (renderer crash loop, `/dev/shm ... No such process`); the wrapper
   seeds them via `desktop.electron_flags` when `systemd-detect-virt` says VM. Launching over SSH

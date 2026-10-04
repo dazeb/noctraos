@@ -6,8 +6,9 @@
 #
 # First-run onboarding: until ~/.hermes/.noctraos-onboarded exists, the launch
 # sets HERMES_EPHEMERAL_SYSTEM_PROMPT (request-time only, never stored in the
-# chat) from onboarding.md and sends one greeting turn before opening the app.
-# The prompt tells the agent to create that marker when the tour is finished.
+# chat) from onboarding.md. Hermes Desktop opens with its own greeting; the
+# prompt makes the agent start the NoctraOS tour from the user's first reply.
+# The prompt tells the agent to create the marker when the tour is finished.
 #
 # Model defaults, free by design:
 #   1. Hermes' own free tier (Nous · free tier): the desktop mints an anonymous
@@ -27,9 +28,6 @@ INSTALLER_URL="https://hermes-agent.nousresearch.com/install.sh"
 NOUS_URL="https://portal.nousresearch.com"
 ONBOARD_FILE="${NOCTRAOS_HERMES_ONBOARDING:-/usr/local/share/noctraos/hermes/onboarding.md}"
 ONBOARD_DONE="$HERMES_HOME/.noctraos-onboarded"
-GREET_MARK="$HERMES_HOME/.noctraos-greeted"
-GREET_TRIES="$HERMES_HOME/.noctraos-greet-tries"
-GREET_MAX_TRIES=3
 
 # mise-managed node/npm lives behind the profile hooks; the desktop build needs it.
 if [ -f /etc/profile.d/noctraos-mise.sh ]; then
@@ -158,28 +156,6 @@ onboarding_active() {
     && [ -z "${HERMES_EPHEMERAL_SYSTEM_PROMPT:-}" ] && ! config_has agent.system_prompt
 }
 
-# One greeting turn so a welcome conversation is waiting when the app opens.
-# Retried on later launches if it fails (offline, free tier down), up to a cap.
-first_run_greeting() {
-  local tries=0
-  [ -f "$GREET_MARK" ] && return 0
-  [ -r "$GREET_TRIES" ] && tries="$(cat "$GREET_TRIES" 2>/dev/null || echo 0)"
-  [ "$tries" -ge "$GREET_MAX_TRIES" ] 2>/dev/null && return 0
-  echo $((tries + 1)) > "$GREET_TRIES"
-  command -v notify-send >/dev/null 2>&1 \
-    && notify-send -t 6000 --hint=int:transient:1 -i noctraos-agent-hermes "Hermes" "Getting ready to welcome you…" || true
-  say "Sending the first-run greeting..."
-  # --source desktop: the default for --oneshot is "oneshot", which the desktop's
-  # session list hides.
-  if timeout 90 "$HERMES_BIN" chat --oneshot -Q --source desktop \
-      -q "(First launch) Please introduce yourself and start my NoctraOS setup tour." \
-      >/dev/null 2>&1; then
-    : > "$GREET_MARK"
-  else
-    say "WARN: greeting did not go through — will retry on the next launch"
-  fi
-}
-
 cmd_install() {
   install_runtime || { say "ERROR: runtime install failed"; return 1; }
   build_app || { say "ERROR: desktop build failed"; return 1; }
@@ -194,8 +170,7 @@ cmd_status() {
   else echo "primary: Nous free tier (no model.provider set)"; fi
   config_has fallback_providers && echo "fallback: configured" || echo "fallback: none"
   if [ -f "$ONBOARD_DONE" ]; then echo "onboarding: done"
-  elif [ -f "$GREET_MARK" ]; then echo "onboarding: greeted, tour in progress"
-  else echo "onboarding: pending"; fi
+  else echo "onboarding: tour pending"; fi
   ollama_ready && echo "ollama:  $OLLAMA_MODEL ready" || echo "ollama:  $OLLAMA_MODEL not ready"
 }
 
@@ -214,7 +189,6 @@ cmd_launch() {
   if onboarding_active; then
     HERMES_EPHEMERAL_SYSTEM_PROMPT="$(cat "$ONBOARD_FILE")"
     export HERMES_EPHEMERAL_SYSTEM_PROMPT
-    first_run_greeting
   fi
   exec "$HERMES_BIN" desktop --skip-build
 }
