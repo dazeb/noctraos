@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# Shared helpers for zorin-ai install modules. Sourced by install.sh and each module.
+# Shared helpers for noctraos install modules. Sourced by install.sh and each module.
 : "${REPO_ROOT:?REPO_ROOT must be set — run modules via install.sh}"
 : "${TARGET_USER:?TARGET_USER must be set}"
 : "${TARGET_UID:?TARGET_UID must be set}"
 : "${TARGET_HOME:?TARGET_HOME must be set}"
 
-log()  { printf '\033[1;36m[zorin-ai]\033[0m %s\n' "$*"; }
-warn() { printf '\033[1;33m[zorin-ai WARN]\033[0m %s\n' "$*" >&2; }
-die()  { printf '\033[1;31m[zorin-ai ERROR]\033[0m %s\n' "$*" >&2; exit 1; }
+log()  { printf '\033[1;36m[noctraos]\033[0m %s\n' "$*"; }
+warn() { printf '\033[1;33m[noctraos WARN]\033[0m %s\n' "$*" >&2; }
+die()  { printf '\033[1;31m[noctraos ERROR]\033[0m %s\n' "$*" >&2; exit 1; }
 
 have() { command -v "$1" >/dev/null 2>&1; }
 

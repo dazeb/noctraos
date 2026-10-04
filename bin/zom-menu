@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# zom-menu — zenity control panel for zorin-ai (mouse-first maintenance).
+# zom-menu — zenity control panel for noctraos (mouse-first maintenance).
 set -u
 
 term_run() {
@@ -15,12 +15,12 @@ term_run() {
 
 while true; do
   choice="$(zenity --list \
-    --title="zorin-ai control panel" \
+    --title="NoctraOS control panel" \
     --column="Action" --column="What it does" \
     "Update everything"     "apt, Flatpak apps, mise runtimes, AI models" \
     "Health check (doctor)" "Verify Ollama, mise, VS Code, Flatpaks, GPU, disk" \
     "Manage AI models"      "Download models from a GUI picker" \
-    "About"                 "About zorin-ai" \
+    "About"                 "About NoctraOS" \
     --width=560 --height=340 2>/dev/null)" || exit 0
 
   case "$choice" in
@@ -29,8 +29,8 @@ while true; do
     "Manage AI models")      term_run "zom models gui" ;;
     "About")
       zenity --info \
-        --title="zorin-ai" \
-        --text="zorin-ai provisioner\nMouse-first AI developer workstation for Zorin OS.\n\nManage from a terminal with: zom" \
+        --title="NoctraOS" \
+        --text="NoctraOS provisioner\nMouse-first AI developer workstation, built on Zorin OS.\n\nManage from a terminal with: zom" \
         --width=420 2>/dev/null
       ;;
   esac

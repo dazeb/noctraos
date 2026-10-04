@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.gnome.shell.extensions.noctraos-start" path="/org/gnome/shell/extensions/noctraos-start/">
+    <key name="show-name" type="b"><default>true</default><summary>Show the user's name in the Start panel</summary></key>
+    <key name="show-start-here" type="b"><default>true</default><summary>Show the New users start here strip</summary></key>
+    <key name="weather" type="b"><default>false</default><summary>Show the weather (set up with a city first)</summary></key>
+    <key name="weather-city" type="s"><default>''</default><summary>Weather city name</summary></key>
+    <key name="weather-lat" type="d"><default>0.0</default><summary>Weather latitude</summary></key>
+    <key name="weather-lon" type="d"><default>0.0</default><summary>Weather longitude</summary></key>
+    <key name="weather-units" type="s"><choices><choice value='metric'/><choice value='imperial'/></choices><default>'metric'</default><summary>Temperature units</summary></key>
+  </schema>
+</schemalist>

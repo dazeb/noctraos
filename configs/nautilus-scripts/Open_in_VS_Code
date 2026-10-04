@@ -13,7 +13,7 @@ if [ ${#args[@]} -eq 0 ]; then
 fi
 
 if ! command -v code >/dev/null 2>&1; then
-  notify-send "zorin-ai" "VS Code is not installed" 2>/dev/null || true
+  notify-send "noctraos" "VS Code is not installed" 2>/dev/null || true
   exit 1
 fi
 

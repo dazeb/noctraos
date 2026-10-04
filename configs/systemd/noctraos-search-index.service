@@ -1,0 +1,9 @@
+[Unit]
+Description=Index accessible files for Noctra Search
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/noctraos-search --ensure-index
+Nice=19
+IOSchedulingClass=idle
+UMask=0077

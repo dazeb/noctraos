@@ -12,13 +12,13 @@ fi
 log "mise: $(sudo /usr/local/bin/mise --version 2>/dev/null | head -n 1)"
 
 # Login shells (and the GNOME session itself) pick up /etc/profile.d.
-PROFILE_FILE="/etc/profile.d/zorin-ai-mise.sh"
+PROFILE_FILE="/etc/profile.d/noctraos-mise.sh"
 if [ -f "$PROFILE_FILE" ]; then
   log "OK: $PROFILE_FILE already present"
 else
   log "Writing $PROFILE_FILE (mise activate for login shells)..."
   sudo tee "$PROFILE_FILE" >/dev/null <<'EOF'
-# zorin-ai: activate mise for login shells and the desktop session
+# noctraos: activate mise for login shells and the desktop session
 if command -v mise >/dev/null 2>&1; then
   case "$(basename "${SHELL:-bash}")" in
     zsh) eval "$(mise activate zsh)" 2>/dev/null || true ;;
@@ -31,15 +31,15 @@ fi
 # Desktop terminals are interactive NON-login shells; they never read profile.d.
 # /etc/bash.bashrc is sourced by every interactive bash on Ubuntu, so add a
 # marked block there too.
-if [ -f /etc/bash.bashrc ] && ! grep -q 'zorin-ai mise' /etc/bash.bashrc; then
+if [ -f /etc/bash.bashrc ] && ! grep -q 'noctraos mise' /etc/bash.bashrc; then
   log "Adding mise activation to /etc/bash.bashrc (interactive non-login shells)..."
   sudo tee -a /etc/bash.bashrc >/dev/null <<'EOF'
 
-# >>> zorin-ai mise >>> (managed block; do not edit)
+# >>> noctraos mise >>> (managed block; do not edit)
 if [ -n "${PS1:-}" ] && command -v mise >/dev/null 2>&1; then
   eval "$(mise activate bash)" 2>/dev/null || true
 fi
-# <<< zorin-ai mise <<<
+# <<< noctraos mise <<<
 EOF
 fi
 

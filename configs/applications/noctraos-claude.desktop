@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Claude Code
+GenericName=AI Coding Agent
+Comment=Anthropic Claude Code CLI in a terminal
+Exec=gnome-terminal --title="Claude Code" -- /usr/local/bin/noctraos-agent claude
+Icon=noctraos-agent-claude
+Categories=X-NoctraOS-Agents;Development;
+Terminal=false
+StartupNotify=true
+Keywords=claude;anthropic;agent;ai;

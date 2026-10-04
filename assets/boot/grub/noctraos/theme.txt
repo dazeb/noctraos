@@ -1,0 +1,61 @@
+# NoctraOS GRUB theme: flat, square, monospace, amber selection.
+# Colours come from configs/theme/palette.json; images from generate-boot-assets.py.
+
+title-text: ""
+desktop-color: "#121212"
+message-color: "#bebebe"
+message-bg-color: "#0d0d0d"
+terminal-font: "JetBrains Mono Regular 16"
+terminal-left: "0"
+terminal-top: "0"
+terminal-width: "100%"
+terminal-height: "100%"
+terminal-border: "0"
+
++ image {
+    left = 50%-224
+    top = 10%
+    width = 448
+    height = 112
+    file = "logo.png"
+}
+
++ boot_menu {
+    left = 50%-300
+    width = 600
+    top = 32%
+    height = 42%
+    item_font = "JetBrains Mono Regular 16"
+    item_color = "#bebebe"
+    selected_item_font = "JetBrains Mono Regular 16"
+    selected_item_color = "#121212"
+    item_height = 36
+    item_padding = 12
+    item_spacing = 4
+    selected_item_pixmap_style = "select_*.png"
+    menu_pixmap_style = "menu_*.png"
+    scrollbar = false
+}
+
++ label {
+    id = "__timeout__"
+    left = 50%-300
+    width = 600
+    top = 82%
+    height = 20
+    font = "JetBrains Mono Regular 13"
+    color = "#8a8a8d"
+    align = "left"
+    text = "Starting in %d s"
+}
+
++ label {
+    left = 50%-300
+    width = 600
+    top = 100%-44
+    height = 20
+    font = "JetBrains Mono Regular 13"
+    color = "#8a8a8d"
+    align = "left"
+    text = "up/down choose   enter start   e edit   c command line"
+}

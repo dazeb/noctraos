@@ -1,0 +1,201 @@
+#!/usr/bin/env bash
+# noctraos-hermes — Hermes Desktop launcher and installer.
+#   noctraos-hermes            launch the app (installs it first if missing)
+#   noctraos-hermes install    idempotent: runtime + desktop app + model defaults
+#   noctraos-hermes status     print what is installed / configured
+#
+# First-run onboarding: until ~/.hermes/.noctraos-onboarded exists, the launch
+# sets HERMES_EPHEMERAL_SYSTEM_PROMPT (request-time only, never stored in the
+# chat) from onboarding.md. Hermes Desktop opens with its own greeting; the
+# prompt makes the agent start the NoctraOS tour from the user's first reply.
+# The prompt tells the agent to create the marker when the tour is finished.
+#
+# Model defaults, free by design:
+#   1. Hermes' own free tier (Nous · free tier): the desktop mints an anonymous
+#      identity at boot when HERMES_GUEST_ONBOARDING=1, so first launch just works
+#      with no signup. We never set model.provider, which is what lets it win.
+#   2. Local Ollama as a fallback_providers entry, used when the free tier is
+#      unreachable (offline, rate-limited). If the machine has never reached the
+#      free tier and is offline at launch, Ollama becomes the primary instead.
+set -u
+
+HERMES_HOME="${HERMES_HOME:-$HOME/.hermes}"
+RUNTIME="$HERMES_HOME/hermes-agent"
+HERMES_BIN="$HOME/.local/bin/hermes"
+OLLAMA_API="http://127.0.0.1:11434"
+OLLAMA_MODEL="${NOCTRAOS_MODEL:-qwen2.5-coder:7b}"
+INSTALLER_URL="https://hermes-agent.nousresearch.com/install.sh"
+NOUS_URL="https://portal.nousresearch.com"
+ONBOARD_FILE="${NOCTRAOS_HERMES_ONBOARDING:-/usr/local/share/noctraos/hermes/onboarding.md}"
+ONBOARD_DONE="$HERMES_HOME/.noctraos-onboarded"
+
+# mise-managed node/npm lives behind the profile hooks; the desktop build needs it.
+if [ -f /etc/profile.d/noctraos-mise.sh ]; then
+  # shellcheck disable=SC1091
+  . /etc/profile.d/noctraos-mise.sh
+fi
+export PATH="$HOME/.local/bin:$PATH"
+
+say() { printf '[noctraos-hermes] %s\n' "$*"; }
+
+runtime_ready() {
+  [ -f "$RUNTIME/.hermes-bootstrap-complete" ] && [ -x "$HERMES_BIN" ]
+}
+
+app_ready() {
+  local d n
+  for d in linux-unpacked linux-arm64-unpacked; do
+    for n in hermes Hermes; do
+      [ -x "$RUNTIME/apps/desktop/release/$d/$n" ] && return 0
+    done
+  done
+  return 1
+}
+
+ollama_ready() {
+  curl -fsS --max-time 3 "$OLLAMA_API/api/tags" 2>/dev/null \
+    | jq -e --arg m "$OLLAMA_MODEL" '.models[]? | select(.name == $m or .name == ($m + ":latest"))' \
+      >/dev/null 2>&1
+}
+
+# True if config.yaml has the given top-level key, or "section.key" one level down.
+config_has() {
+  local f="$HERMES_HOME/config.yaml"
+  [ -f "$f" ] || return 1
+  case "$1" in
+    *.*)
+      awk -v sec="${1%%.*}" -v k="${1#*.}" '
+        $0 ~ "^"sec":" {m=1; next}
+        /^[^ #\t]/ {m=0}
+        m && $1 == k":" {f=1}
+        END {exit !f}' "$f" ;;
+    *) grep -q "^$1:" "$f" ;;
+  esac
+}
+
+# model.provider counts as explicit only when set to something other than the
+# stock "auto" (or empty): auto is Hermes' default and leaves the free tier in play.
+explicit_provider() {
+  local f="$HERMES_HOME/config.yaml" v
+  [ -f "$f" ] || return 1
+  v="$(awk '
+    /^model:/ {m=1; next}
+    /^[^ #\t]/ {m=0}
+    m && $1 == "provider:" {sub(/^[ \t]*provider:[ \t]*/, ""); sub(/[ \t]*#.*$/, ""); gsub(/["\x27]/, ""); print; exit}' "$f")"
+  [ -n "$v" ] && [ "$v" != "auto" ]
+}
+
+hermes_set() { "$HERMES_BIN" config set "$@" >/dev/null 2>&1; }
+
+install_runtime() {
+  runtime_ready && { say "OK: Hermes runtime present"; return 0; }
+  say "Installing the Hermes runtime (official installer)..."
+  curl -fsSL "$INSTALLER_URL" | bash -s -- --skip-setup || return 1
+  runtime_ready
+}
+
+build_app() {
+  app_ready && { say "OK: Hermes Desktop app already built"; return 0; }
+  say "Building Hermes Desktop — a few minutes, downloads Electron..."
+  "$HERMES_BIN" desktop --build-only || return 1
+  app_ready
+}
+
+# Chromium in a VM (no GPU, no usable sandbox helpers) can crash the renderer
+# ("Renderer process crashed", blank window): /dev/shm shared-memory failures and
+# the sandbox. Hermes already falls back to --no-sandbox by itself when its sandbox
+# fails; on VMs we start there rather than discover it via a blank window.
+# --disable-dev-shm-usage makes Chromium use /tmp. Only seeded on virtual machines,
+# and never over the user's own flags.
+seed_vm_electron_flags() {
+  systemd-detect-virt -q 2>/dev/null || return 0
+  config_has desktop.electron_flags && return 0
+  # A JSON list: a bare "--flag" value would be parsed as a CLI option.
+  hermes_set desktop.electron_flags '["--no-sandbox","--disable-dev-shm-usage"]' \
+    && say "OK: VM detected — Electron starts with --no-sandbox --disable-dev-shm-usage" \
+    || say "WARN: could not set desktop.electron_flags"
+}
+
+# Seeded once (marker), and only when the user has not configured a chain:
+# their own fallback_providers or model.provider always win.
+seed_ollama_fallback() {
+  local marker="$HERMES_HOME/.noctraos-seeded"
+  [ -f "$marker" ] && return 0
+  if ! ollama_ready; then
+    say "Ollama/$OLLAMA_MODEL not ready — skipping local fallback (re-run: noctraos-hermes install)"
+    return 0
+  fi
+  if config_has fallback_providers; then
+    say "OK: fallback_providers already configured — leaving it alone"
+  else
+    hermes_set fallback_providers \
+      "[{\"provider\":\"custom\",\"model\":\"$OLLAMA_MODEL\",\"base_url\":\"$OLLAMA_API/v1\",\"api_key\":\"ollama\"}]" \
+      && say "OK: Ollama ($OLLAMA_MODEL) set as the local fallback" \
+      || say "WARN: could not write fallback_providers"
+  fi
+  : > "$marker"
+}
+
+# Offline on a machine that has never minted a free-tier identity: there is
+# nothing for the free tier to run on, so make local Ollama the primary.
+offline_first_launch_fallback() {
+  grep -q '"nous"' "$HERMES_HOME/auth.json" 2>/dev/null && return 0
+  explicit_provider && return 0
+  curl -fsS --max-time 4 -o /dev/null "$NOUS_URL" 2>/dev/null && return 0
+  ollama_ready || return 0
+  say "Offline and not yet connected to the free tier — using local Ollama"
+  hermes_set model.provider custom
+  hermes_set model.default "$OLLAMA_MODEL"
+  hermes_set model.base_url "$OLLAMA_API/v1"
+}
+
+# Active until the agent drops the done marker; a prompt the user set themselves
+# (env or agent.system_prompt) always wins, so we never shadow it.
+onboarding_active() {
+  [ -r "$ONBOARD_FILE" ] && [ ! -f "$ONBOARD_DONE" ] \
+    && [ -z "${HERMES_EPHEMERAL_SYSTEM_PROMPT:-}" ] && ! config_has agent.system_prompt
+}
+
+cmd_install() {
+  install_runtime || { say "ERROR: runtime install failed"; return 1; }
+  build_app || { say "ERROR: desktop build failed"; return 1; }
+  seed_ollama_fallback
+  seed_vm_electron_flags
+}
+
+cmd_status() {
+  runtime_ready && echo "runtime: ok ($RUNTIME)" || echo "runtime: missing"
+  app_ready && echo "app:     ok" || echo "app:     not built"
+  if explicit_provider; then echo "primary: explicit model.provider in config.yaml"
+  else echo "primary: Nous free tier (no model.provider set)"; fi
+  config_has fallback_providers && echo "fallback: configured" || echo "fallback: none"
+  if [ -f "$ONBOARD_DONE" ]; then echo "onboarding: done"
+  else echo "onboarding: tour pending"; fi
+  ollama_ready && echo "ollama:  $OLLAMA_MODEL ready" || echo "ollama:  $OLLAMA_MODEL not ready"
+}
+
+cmd_launch() {
+  if ! runtime_ready || ! app_ready; then
+    # Desktop entries have no terminal; first-run install needs one to show progress.
+    if [ ! -t 1 ]; then
+      exec gnome-terminal --title="Setting up Hermes" -- "$0" launch
+    fi
+    say "Hermes Desktop is not installed yet — installing now."
+    cmd_install || { read -r -n 1 -s -p "Press any key to close..."; exit 1; }
+  fi
+  offline_first_launch_fallback
+  seed_vm_electron_flags
+  export HERMES_GUEST_ONBOARDING=1
+  if onboarding_active; then
+    HERMES_EPHEMERAL_SYSTEM_PROMPT="$(cat "$ONBOARD_FILE")"
+    export HERMES_EPHEMERAL_SYSTEM_PROMPT
+  fi
+  exec "$HERMES_BIN" desktop --skip-build
+}
+
+case "${1:-launch}" in
+  launch)  cmd_launch ;;
+  install) cmd_install ;;
+  status)  cmd_status ;;
+  *) echo "usage: noctraos-hermes [launch|install|status]" >&2; exit 1 ;;
+esac

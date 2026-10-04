@@ -1,4 +1,4 @@
-/* Zorin AI GTK 3/4 overrides. Libadwaita and sandboxed apps may use their
+/* NoctraOS GTK 3/4 overrides. Libadwaita and sandboxed apps may use their
  * own styles; this does not force GTK_THEME or overwrite user GTK CSS. */
 @define-color theme_bg_color $background;
 @define-color theme_fg_color $foreground;
@@ -42,6 +42,17 @@ menu, menuitem, popover, popover contents {
 menu, popover contents { border: 1px solid $border; border-radius: ${radius}px; }
 menuitem:hover, row:hover { background-color: $selection; }
 row:selected { background-color: $selection; color: $foreground; }
+/* Sidebars and lists (libadwaita): a quiet marker, not a solid amber block. */
+.navigation-sidebar row:selected, .navigation-sidebar > row:selected,
+.sidebar row:selected, placessidebar row:selected, list row:selected,
+columnview row:selected, listview row:selected, gridview child:selected {
+  background-color: $selection; background-image: none; color: $accent;
+  box-shadow: inset 2px 0 0 $accent;
+}
+.navigation-sidebar row:selected:hover, list row:selected:hover { background-color: $border; }
+/* Round and pill shapes become sharp too. */
+windowcontrols button, headerbar windowcontrols button, button.circular, button.pill,
+button.titlebutton, windowcontrols > button > image, infobar .close { border-radius: 0; }
 check:checked, radio:checked, switch:checked {
   background-color: $accent; background-image: none; color: $panel; border-color: $accent;
 }

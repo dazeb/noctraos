@@ -1,0 +1,9 @@
+{
+  "uuid": "noctraos-search@noctraos.local",
+  "name": "Noctra Search",
+  "description": "Super+Space search for applications, files, clipboard history, and the web.",
+  "shell-version": ["46"],
+  "settings-schema": "org.gnome.shell.extensions.noctraos-search",
+  "version": 1,
+  "url": "https://github.com/dazeb/noctraos"
+}

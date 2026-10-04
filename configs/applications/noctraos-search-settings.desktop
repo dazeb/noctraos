@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Search settings
+Comment=Configure Super+Space search, clipboard history, and search folders
+Exec=noctraos-search --settings
+Icon=system-search
+Terminal=false
+Categories=System;

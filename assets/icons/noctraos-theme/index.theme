@@ -1,0 +1,12 @@
+[Icon Theme]
+Name=NoctraOS
+Comment=Zorin Grey icons with NoctraOS fixes
+Inherits=ZorinGrey-Dark,Zorin,Adwaita,hicolor
+Directories=scalable/places
+
+[scalable/places]
+Context=Places
+Size=64
+MinSize=8
+MaxSize=512
+Type=Scalable
