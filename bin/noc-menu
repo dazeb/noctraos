@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# zom-menu — zenity control panel for noctraos (mouse-first maintenance).
+# noc-menu — zenity control panel for noctraos (mouse-first maintenance).
 set -u
 
 term_run() {
@@ -20,17 +20,19 @@ while true; do
     "Update everything"     "apt, Flatpak apps, mise runtimes, AI models" \
     "Health check (doctor)" "Verify Ollama, mise, VS Code, Flatpaks, GPU, disk" \
     "Manage AI models"      "Download models from a GUI picker" \
+    "GPU setup"             "Detect your GPU and install NVIDIA CUDA / AMD ROCm" \
     "About"                 "About NoctraOS" \
-    --width=560 --height=340 2>/dev/null)" || exit 0
+    --width=560 --height=380 2>/dev/null)" || exit 0
 
   case "$choice" in
-    "Update everything")     term_run "zom update" ;;
-    "Health check (doctor)") term_run "zom doctor" ;;
-    "Manage AI models")      term_run "zom models gui" ;;
+    "Update everything")     term_run "noc update" ;;
+    "Health check (doctor)") term_run "noc doctor" ;;
+    "Manage AI models")      term_run "noc models gui" ;;
+    "GPU setup")             term_run "noc gpu detect && noc gpu install" ;;
     "About")
       zenity --info \
         --title="NoctraOS" \
-        --text="NoctraOS provisioner\nMouse-first AI developer workstation, built on Zorin OS.\n\nManage from a terminal with: zom" \
+        --text="NoctraOS provisioner\nMouse-first AI developer workstation, built on Zorin OS.\n\nManage from a terminal with: noc" \
         --width=420 2>/dev/null
       ;;
   esac

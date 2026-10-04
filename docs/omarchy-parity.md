@@ -13,7 +13,7 @@ Compared against [Omarchy's current core package manifest](https://github.com/ba
 | Local AI | Ollama, Microsoft VS Code/Continue, six agent launchers, and model manager already provisioned by NoctraOS |
 | Desktop appearance | NoctraOS-Dark GNOME Shell and GTK (derived from installed Zorin themes), polygon wallpapers, white menu glyphs, shared Omarchy-inspired Matte Black colors for GNOME Terminal, VS Code, Herdr, and btop |
 
-The installer checks the Ubuntu archive before installing each package and logs any missing package. Flathub installs are independently guarded and log failures. `zom doctor` reports the core AI stack plus Herdr and Starship.
+The installer checks the Ubuntu archive before installing each package and logs any missing package. Flathub installs are independently guarded and log failures. `noc doctor` reports the core AI stack plus Herdr and Starship.
 
 Omarchy's Hyprland compositor, SDDM greeter, Arch package manager, hardware-specific packages, and Omarchy-only applications (`aether`, `omacalc`, `omasnap`, `omawrite`, `owe`) do not map directly to Zorin. Zorin's GNOME desktop supplies the corresponding desktop workflows. Omarchy's service web shortcuts and its theme switcher are not provisioned here; the NoctraOS theme is currently one coordinated fixed palette.
 
@@ -30,7 +30,7 @@ The following are candidates, not new default installs:
 | Candidate | Use | Integration work |
 | --- | --- | --- |
 | [Fastfetch](https://github.com/fastfetch-cli/fastfetch) | System information and workstation branding | Upstream Debian package; verify on Ubuntu 24.04 |
-| [Gum](https://github.com/charmbracelet/gum) | Interactive terminal menus | Official Charm apt repository; useful when improving zom |
+| [Gum](https://github.com/charmbracelet/gum) | Interactive terminal menus | Official Charm apt repository; useful when improving noc |
 | [dua](https://github.com/Byron/dua-cli) | Interactive disk usage | Upstream Linux binary; overlaps existing ncdu |
 | [CLIamp](https://github.com/bjarneo/cliamp) | Terminal music player | Upstream Linux installer; validate audio bridge on Zorin |
 | [Hype](https://github.com/omacom/hype) | Markdown presentations | Ubuntu packaging and Omarchy-theme adaptation needed |

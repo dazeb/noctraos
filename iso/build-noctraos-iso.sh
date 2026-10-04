@@ -135,7 +135,7 @@ if [ "$STATUS" -eq 0 ]; then
   touch "$MARKER"
   rm -f "$AUTOSTART"
   echo "noctraos: setup complete — welcome aboard."
-  echo "  Health check: zom doctor    GUI panel: zom-menu"
+  echo "  Health check: noc doctor    GUI panel: noc-menu"
 else
   echo "noctraos: setup hit an error (exit $STATUS)."
   echo "  Log: $LOG    Re-run with: bash $DEST/install.sh"

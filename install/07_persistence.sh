@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Module 07: persistence — /etc/skel defaults for new users + zom management CLI.
+# Module 07: persistence — /etc/skel defaults for new users + noc management CLI.
 set -Eeuo pipefail
 source "$REPO_ROOT/install/lib.sh"
 
@@ -42,21 +42,25 @@ for src in "$REPO_ROOT/configs/nautilus-scripts/"*; do
 done
 sudo chmod -R go+rX /etc/skel/.config /etc/skel/.continue /etc/skel/.local
 
-log "Installing zom management CLI..."
-sudo install -m 755 "$REPO_ROOT/bin/zom" /usr/local/bin/zom
-sudo install -m 755 "$REPO_ROOT/bin/zom-menu" /usr/local/bin/zom-menu
+log "Installing noc management CLI..."
+# Clean break from the pre-rename CLI name (zom → noc).
+sudo rm -f /usr/local/bin/zom /usr/local/bin/zom-menu /usr/local/bin/zom-gpu \
+  /usr/local/share/applications/zom-menu.desktop
+sudo install -m 755 "$REPO_ROOT/bin/noc" /usr/local/bin/noc
+sudo install -m 755 "$REPO_ROOT/bin/noc-menu" /usr/local/bin/noc-menu
+sudo install -m 755 "$REPO_ROOT/bin/noc-gpu" /usr/local/bin/noc-gpu
 
 sudo mkdir -p /usr/local/share/applications
-sudo tee /usr/local/share/applications/zom-menu.desktop >/dev/null <<'EOF'
+sudo tee /usr/local/share/applications/noc-menu.desktop >/dev/null <<'EOF'
 [Desktop Entry]
 Type=Application
 Name=NoctraOS Control Panel
 Comment=Update and health-check your NoctraOS workstation
-Exec=zom-menu
+Exec=noc-menu
 Icon=applications-system
 Terminal=false
 Categories=System;
 EOF
 
 log "Persistence complete: new users inherit mise, Continue and Nautilus script defaults."
-log "Manage the workstation with: zom (CLI) or zom-menu (GUI)."
+log "Manage the workstation with: noc (CLI) or noc-menu (GUI)."

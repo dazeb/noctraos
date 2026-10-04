@@ -85,7 +85,7 @@ session, then rebuild and boot-test the ISO from the published repository.
   also produced no changes on its second theme-module pass.
 - GTK 3 and GTK 4 reported no CSS parsing diagnostics. After reboot, GNOME Shell
   loaded NoctraOS-Dark without theme-parser errors; the menu and terminal were
-  inspected. `zom doctor` was green.
+  inspected. `noc doctor` was green.
 - The reference VM is restored after testing. These worktree changes have not
   been published or baked into a new ISO.
 
@@ -107,7 +107,7 @@ theme is Zorin's own `ZorinGrey-Dark`.
 | Files, Settings, Text Editor, GTK dialogs | Done: neutral dark, sharp, quiet amber selection marker |
 | GNOME Terminal, btop, Herdr | Done (palette) |
 | VS Code | Dark and neutral; link, badge and progress colours now in the generated defaults, but existing accounts keep their old settings |
-| Wallpapers | The purple neon set stays. Added `ember-night` (near-black facets, low amber sun) to the generator and the rotation (`zom bg`); better ones still welcome |
+| Wallpapers | The purple neon set stays. Added `ember-night` (near-black facets, low amber sun) to the generator and the rotation (`noc bg`); better ones still welcome |
 | Desktop folder icon | Done: a small derived icon theme, `NoctraOS` (inherits `ZorinGrey-Dark`), replaces the cyan PNG from Zorin's base set with a grey SVG; more overrides can be added under `assets/icons/noctraos-theme/` |
 | **Dock app icons** | Brand icons (VS Code blue, Brave/Chromium) stay as the apps ship them |
 | **Lock screen** | Gap, and not fixable from our extensions or user theme: GNOME 46 draws it with the *stock* shell theme because extensions and the user-theme are off in the lock session. It shows the blurred desktop wallpaper (the `screensaver picture-uri` setting is not used). Styling it means replacing the system shell theme resource (which also themes the GDM greeter) — doable but if the resource is broken the session will not start, so it needs a snapshot and a deliberate step |

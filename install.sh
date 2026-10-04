@@ -27,11 +27,13 @@ source "$REPO_ROOT/install/lib.sh"
 # ---- flags ---------------------------------------------------------------------
 SKIP_AI=0
 SKIP_GUI=0
+SKIP_GPU=0
 for arg in "$@"; do
   case "$arg" in
     --skip-ai)  SKIP_AI=1 ;;
     --skip-gui) SKIP_GUI=1 ;;
-    *) die "Unknown option: $arg (supported: --skip-ai --skip-gui)" ;;
+    --skip-gpu) SKIP_GPU=1 ;;
+    *) die "Unknown option: $arg (supported: --skip-ai --skip-gui --skip-gpu)" ;;
   esac
 done
 
@@ -49,6 +51,16 @@ run_module() {
 run_module 00_preflight.sh
 run_module 01_system.sh
 run_module 02_mise.sh
+
+# GPU drivers + CUDA/ROCm come before the AI core so Ollama sees a working GPU.
+# A failure here (no network to NVIDIA/AMD repos, unsupported kernel…) must not
+# block the rest of onboarding — it can be repeated later with `noc gpu install`.
+if [ "$SKIP_GPU" -eq 1 ]; then
+  log "SKIP 02b_gpu_drivers (--skip-gpu)"
+else
+  run_module 02b_gpu_drivers.sh \
+    || warn "GPU setup did not complete — continuing. Retry later with: noc gpu install"
+fi
 
 if [ "$SKIP_AI" -eq 1 ]; then
   log "SKIP 03_ai_core (--skip-ai)"
@@ -72,5 +84,8 @@ fi
 run_module 07_persistence.sh
 
 log "✔ Install complete. Full log: $LOG_FILE"
+if [ -f /var/run/reboot-required.pkgs ] && grep -x 'noctraos-gpu' /var/run/reboot-required.pkgs >/dev/null; then
+  warn "REBOOT REQUIRED: the GPU driver was installed and loads on next boot. Local models run on the CPU until then."
+fi
 log "Try it: right-click a file in Files → Scripts → 'Ask AI to Explain'."
-log "Health check anytime with: zom doctor"
+log "Health check anytime with: noc doctor"

@@ -33,6 +33,7 @@ Prefer to review first: `git clone https://github.com/dazeb/noctraos && cd noctr
 | Area | Software |
 |------|----------|
 | Local AI | [Ollama](https://ollama.com) on `127.0.0.1:11434` with `qwen2.5-coder:7b` (coding) and `nomic-embed-text` (embeddings for RAG) |
+| GPU acceleration | Auto-detects NVIDIA and AMD GPUs at onboarding: NVIDIA → signed Ubuntu driver + CUDA toolkit, AMD → ROCm (see [GPU setup](#gpu-setup)) |
 | Agents menu | **Hermes** (desktop app, preinstalled, free to start — no signup, local Ollama as offline fallback) plus **Codex, Claude Code, OpenCode, Grok, Gemini CLI, Qwen Code** — each launches in a terminal and installs itself on first use (with your consent) |
 | Local LLM menu | **AI Models** manager and **AI Health Check**; editor chat through Continue |
 | Editor | [Microsoft VS Code](https://code.visualstudio.com) + Continue.dev (pre-wired to local Ollama), GitLens, Prettier, Python, Go |
@@ -45,7 +46,7 @@ Prefer to review first: `git clone https://github.com/dazeb/noctraos && cd noctr
 | **Super+Space search** | One overlay that searches apps, files and folders, CopyQ clipboard history, the web, and (opt-in, offered after first browser use) your Chromium/Firefox browser history; settings in *Search settings* (the gear). Installed by module 09 |
 | Clipboard | [CopyQ](https://hluk.github.io/CopyQ/) permanent clipboard history — tray-resident, survives reboots, searchable, image support, 1000 entries |
 | Desktop | NoctraOS-Dark shell theme, AI-first start menu, white menu icons, neon polygonal 4K wallpapers, dark mode, minimize/maximize/close window buttons, pinned taskbar |
-| Maintenance | `zom` CLI + `zom-menu` GUI panel |
+| Maintenance | `noc` CLI + `noc-menu` GUI panel |
 | Persistence | New user accounts inherit the whole setup via `/etc/skel` |
 | Bootable ISO | Build a **NoctraOS** image with everything baked in (see below) |
 
@@ -77,7 +78,7 @@ JetBrains Mono in the shell and terminals. GNOME remains the desktop.
   the same palette. Edit it and run `python3 scripts/render-theme.py`; use
   `--check` to verify that committed outputs match.
 - **White menu icons and polygonal 4K wallpapers** retain the workstation's
-  identity. Cycle the wallpapers with `zom bg next`.
+  identity. Cycle the wallpapers with `noc bg next`.
 - Existing VS Code settings are left intact (including comments and custom
   colors). Herdr is upgraded only when it matches our previous factory default.
   User GTK CSS is untouched; libadwaita, Qt, and sandboxed apps may retain
@@ -94,13 +95,16 @@ manifest to the Zorin/Ubuntu equivalents and lists desktop-specific limits.
 ## Maintenance
 
 ```bash
-zom update        # apt + Flatpak apps + mise runtimes + AI model refresh
-zom doctor        # health check: OS, Ollama + models, mise runtimes, editors, GPU, disk
-zom models list   # local models
-zom models pull <model>   # e.g. zom models pull llama3.2:3b
-zom models gui    # pick from a curated list (zenity)
-zom bg next       # cycle the wallpaper set
-zom-menu          # all of the above, mouse-driven
+noc update        # apt + Flatpak apps + mise runtimes + AI model refresh
+noc doctor        # health check: OS, Ollama + models, mise runtimes, editors, GPU, disk
+noc models list   # local models
+noc models pull <model>   # e.g. noc models pull llama3.2:3b
+noc models gui    # pick from a curated list (zenity)
+noc bg next       # cycle the wallpaper set
+noc gpu detect    # what GPU you have and what would be installed
+noc gpu install   # (re)run GPU driver + CUDA/ROCm setup — safe to repeat
+noc gpu status --smoke   # verify driver, CUDA/ROCm, and run a real device probe
+noc-menu          # all of the above, mouse-driven
 ```
 
 Agents are managed from the **Agents** menu; each entry checks for its CLI and
@@ -130,7 +134,52 @@ Environment variables, all optional:
 | `NOCTRAOS_OLLAMA_URL` | `http://localhost:11434` | Endpoint used by the *Ask AI to Explain* script |
 
 Installer flags: `--skip-ai` (no Ollama/model downloads), `--skip-gui`
-(headless-ish: skips GUI apps, Nautilus scripts, theme, shell reskin).
+(headless-ish: skips GUI apps, Nautilus scripts, theme, shell reskin),
+`--skip-gpu` (no GPU driver / CUDA / ROCm step).
+
+GPU variables (read by `noc gpu install`): `NOCTRAOS_GPU_PROFILE=runtime|full`
+(default `full`; `runtime` = libraries only, no compilers/SDK),
+`NOCTRAOS_GPU_VENDORS=nvidia|amd|all`, `NOCTRAOS_CUDA_VERSION` (e.g. `12.9`),
+`NOCTRAOS_ROCM_VERSION` (e.g. `7.2.4`; re-runs otherwise keep the release already
+installed, so they work offline and never jump a ROCm major), and
+`NOCTRAOS_GPU_FORCE_ROCM=1` to try ROCm on an AMD model the installer does not recognise.
+
+## GPU setup
+
+Onboarding (module `02b_gpu_drivers`, before Ollama) reads `lspci`, works out
+which vendor and generation each GPU is, and installs only what that hardware
+can use. Run it again any time with `noc gpu install`; `--dry-run` shows every
+action first. Machines with no NVIDIA/AMD GPU (VMs, Intel-only) are skipped.
+
+| Detected | Installed |
+|----------|-----------|
+| NVIDIA Turing or newer (RTX 20xx → 50xx, A/H/B-series) | Ubuntu's **signed** driver via `ubuntu-drivers` (open kernel modules where recommended) + the newest CUDA 13.x toolkit |
+| NVIDIA Maxwell / Pascal / Volta (GTX 9xx/10xx, Titan V) | Driver branch 580 (the last to support them) + **CUDA 12.9**; CUDA 13 dropped these chips |
+| NVIDIA Kepler or older | Nothing — too old for CUDA or Ollama; stays on nouveau/CPU |
+| AMD with ROCm support (RX 7000/9000, RX 6800/6900, Strix Halo, Instinct) | In-kernel `amdgpu` + ROCm from AMD's apt repo (HIP SDK), `render`/`video` groups |
+| AMD RX 6500/6600/6700 (Navi 22/23/24) | Same, plus `HSA_OVERRIDE_GFX_VERSION=10.3.0` for the Ollama service |
+| AMD integrated / older (APUs, RDNA1, Vega 10, Polaris) or any model not positively recognised | Mesa Vulkan only — ROCm doesn't support them; llama.cpp's Vulkan backend works |
+
+Design choices worth knowing:
+
+- **NVIDIA driver and CUDA come from different places on purpose.** The driver is
+  Ubuntu's prebuilt, kernel-matched, Secure-Boot-signed package. The CUDA toolkit
+  comes from NVIDIA's apt repo, with that repo's driver packages pinned off
+  (`/etc/apt/preferences.d/noctraos-cuda-toolkit-only`) so it can never swap the
+  driver underneath you. No DKMS in the normal case, so no MOK enrolment prompt.
+- **CUDA is matched to the driver and GPU.** CUDA 13 needs driver ≥ 580; older
+  drivers get CUDA 12.x. Nothing is installed if a working driver or `nvcc` is
+  already there (including a hand-installed one) — it is left alone.
+- **AMD uses the inbox kernel driver**, no `amdgpu-dkms`. The ROCm repo is pinned
+  to the newest release that exists for your Ubuntu codename, so `apt upgrade`
+  never jumps a ROCm major version.
+- **A reboot is needed after the first NVIDIA driver install** (the kernel module
+  loads on boot); AMD needs a re-login for the new groups. The installer says so
+  and sets Ubuntu's `reboot-required` flag. Ollama picks the GPU up automatically
+  afterwards.
+- GPU failure never blocks the rest of onboarding; it warns and carries on.
+- Tools land on `PATH` via `/etc/profile.d/noctraos-gpu.sh` (`CUDA_HOME`,
+  `/usr/local/cuda/bin`, `/opt/rocm/bin`).
 
 ## Building the NoctraOS ISO
 
@@ -195,7 +244,7 @@ boot.sh ──► install.sh ──► modules 00–08
    05 mouse ergonomics      │  Nautilus right-click scripts
    06 desktop theme         │  ergonomics gsettings, wallpapers, Agents menu,
                             │  AI-first application menu tree
-   07 persistence           │  /etc/skel defaults, zom CLI
+   07 persistence           │  /etc/skel defaults, noc CLI
    08 shell theme           │  Omarchy-inspired shell/GTK, white icons, app palette
 ```
 
@@ -213,7 +262,7 @@ rather than a throwaway bus.
 boot.sh                  remote fetcher
 install.sh               orchestrator (--skip-ai, --skip-gui)
 install/                 modules 00–08 + lib.sh (shared helpers)
-bin/                     zom, zom-menu, noctraos-agent
+bin/                     noc, noc-menu, noctraos-agent
 configs/                 mise, VS Code, Continue.dev, .desktop launchers,
                          XDG menu tree, Nautilus scripts
 extensions/              GNOME Shell extensions: Super+Space search, Noctra start button
@@ -229,8 +278,11 @@ iso/                     build script + preseed template for unattended installs
   log out/in (or reboot).
 - **"Ask AI to Explain" is slow the first time** — the model loads into RAM on
   first use (~30 s warm-up; longer on CPU-only machines).
-- **Ollama runs on CPU** — expected without an NVIDIA GPU; `zom doctor` reports
-  what was detected.
+- **Ollama runs on CPU** — expected with no supported GPU. Run `noc gpu detect`
+  to see what was found. After a first NVIDIA install, reboot; after an AMD
+  install, log out/in. `noc gpu status --smoke` proves the GPU is usable.
+- **NVIDIA driver installed but `nvidia-smi` fails** — you haven't rebooted yet,
+  or Secure Boot blocked an unsigned (DKMS) module; `noc gpu status` says which.
 - **Installer says sudo is required over SSH** — headless runs need
   passwordless sudo or recently cached credentials; interactive runs can just
   type the password.
