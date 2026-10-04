@@ -177,6 +177,7 @@ td code { color: var(--amber-hot); }
 .way:nth-child(2n) { border-right: 0; }
 .way:nth-last-child(-n+2) { border-bottom: 0; }
 .way:hover { background: var(--raised); }
+.way:focus-visible, .term-line button:focus-visible { outline-offset: -3px; }
 .way p { color: var(--muted); }
 .way .go { font: 600 0.9375rem/1 var(--body); color: var(--amber-hot); margin-top: 6px; }
 @media (max-width: 800px) {
