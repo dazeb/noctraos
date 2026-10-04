@@ -39,6 +39,17 @@ def recolor(css, remap):
             return choice.get("color" if prop.strip() == "color" else "default") or choice["default"]
         return f"{prop}:{re.sub(r'#[0-9a-fA-F]{6}' + chr(92) + 'b', swap, value)};"
     css = re.sub(r"([\w-]+)\s*:([^;{}]*#[0-9a-fA-F]{6}\b[^;{}]*);", declaration, css)
+
+    def named_color(match):
+        # @define-color NAME VALUE; text-like names take the text variant.
+        name, value = match[1], match[2]
+        role = "color" if re.search(r"fg|text|title", name) else "default"
+
+        def swap(color):
+            choice = hexes.get(color[0].lower())
+            return (choice.get(role) or choice["default"]) if choice else color[0]
+        return f"@define-color {name} {re.sub(r'#[0-9a-fA-F]{6}' + chr(92) + 'b', swap, value)};"
+    css = re.sub(r"@define-color\s+(\S+)\s+([^;]*#[0-9a-fA-F]{6}\b[^;]*);", named_color, css)
     for old, new in rgbs.items():
         css = re.sub(r"rgba\(\s*" + re.sub(r",\s*", r",\\s*", re.escape(old).replace(r"\ ", " ")) + r"\s*,",
                      f"rgba({new},", css)
@@ -63,7 +74,7 @@ def compose(base, output, overlay, css_name, radius=4, remap=None):
                                      lambda value: f"{min(int(value[1]), radius)}px", match[0]),
                 css_path.read_text(),
             )
-            if remap and css_path.name == css_name:
+            if remap and css_path.name in {css_name, "gtk-dark.css"}:
                 css = recolor(css, remap)
             if css_path.name in {css_name, "gtk-dark.css"}:
                 css += "\n" + overlay.read_text()

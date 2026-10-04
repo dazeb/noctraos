@@ -90,3 +90,29 @@ session, then rebuild and boot-test the ISO from the published repository.
   been published or baked into a new ISO.
 
 ![NoctraOS menu and terminal with the Omarchy-inspired theme](screenshots/noctraos-matte-black.png)
+
+
+## Coverage, 2026-10-04
+
+Checked on VM 114 by screenshot unless noted. The shell and GTK stylesheets are
+recoloured from the installed Zorin themes to this palette at build time
+(`configs/theme/shell-remap.json`, `gtk-remap.json`), corners are 0 px, and the icon
+theme is Zorin's own `ZorinGrey-Dark`.
+
+| Surface | State |
+|---|---|
+| Top bar, quick settings, calendar and notifications | Done |
+| Dock, Start panel, Super+Space overlay | Done |
+| Overview background | Done (dark with a dot grid); the workspace preview still has rounded corners drawn by the shell |
+| Files, Settings, Text Editor, GTK dialogs | Done: neutral dark, sharp, quiet amber selection marker |
+| GNOME Terminal, btop, Herdr | Done (palette) |
+| VS Code | Dark and neutral; link, badge and progress colours now in the generated defaults, but existing accounts keep their old settings |
+| Wallpapers | Unchanged on purpose: the purple neon set stays, better ones welcome |
+| **Desktop folder icon** | Gap: bright cyan, comes from Zorin's base icon theme; needs a derived icon theme |
+| **Dock app icons** | Brand icons (VS Code blue, Brave/Chromium) stay as the apps ship them |
+| **Lock screen** | Gap: Zorin's blurred purple gradient with a clock, not themed |
+| **Login screen (GDM)** | Gap: unthemed, and the greeter is broken on Zorin 18.1 (autologin is used) |
+| **Boot splash, GRUB, ISO boot menus, installer** | Gap: stock Zorin. Needs a reboot or an ISO build to verify, so not touched yet |
+| Flatpak and Electron apps (Mission Center, Obsidian, Chromium) | Follow their own styling; Mission Center looked neutral dark, others unchecked |
+| Radio buttons and avatars | Left circular on purpose (affordance) |
+| Cursor | Stock Adwaita |

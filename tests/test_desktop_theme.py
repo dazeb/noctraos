@@ -87,6 +87,21 @@ class DesktopThemeTests(unittest.TestCase):
             self.assertIn("y: #fb7c7c", css)                  # unmapped colours are untouched
             self.assertIn("z: #0d0d0d", css)
 
+    def test_recolor_handles_named_colors_by_name(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            palette = root / "palette.json"
+            palette.write_text('{"colors": {"accent": "#e68e0d", "foreground": "#bebebe", "background": "#121212"}}')
+            remap = root / "remap.json"
+            remap.write_text('{"hex": {"#d8c4f1": {"color": "foreground", "default": "accent"}, '
+                             '"#28232d": "background"}, "rgb": {}}')
+            css = MODULE.recolor(
+                "@define-color window_fg_color #d8c4f1;\n@define-color accent_bg_color #d8c4f1;\n"
+                "@define-color window_bg_color #28232d;\n", MODULE.load_remap(remap, palette))
+            self.assertIn("window_fg_color #bebebe;", css)    # text-like name keeps a readable colour
+            self.assertIn("accent_bg_color #e68e0d;", css)    # everything else takes the accent
+            self.assertIn("window_bg_color #121212;", css)
+
 
 class PasswordStoreTests(unittest.TestCase):
     def setUp(self):

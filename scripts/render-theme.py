@@ -52,7 +52,11 @@ def render(root):
               "button.foreground": "panel", "list.activeSelectionBackground": "selection",
               "list.activeSelectionForeground": "foreground", "panel.border": "border",
               "terminal.background": "background", "terminal.foreground": "foreground",
-              "terminalCursor.foreground": "accent"}
+              "terminalCursor.foreground": "accent",
+              "textLink.foreground": "accent", "textLink.activeForeground": "foreground",
+              "progressBar.background": "accent", "badge.background": "accent",
+              "badge.foreground": "panel", "statusBarItem.remoteBackground": "raised",
+              "statusBarItem.remoteForeground": "accent"}
     editor_colors = {key: colors[value] for key, value in editor.items()}
     ansi = ["Black", "Red", "Green", "Yellow", "Blue", "Magenta", "Cyan", "White"]
     for index, color in enumerate(palette["terminal"]):

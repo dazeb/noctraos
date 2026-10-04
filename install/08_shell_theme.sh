@@ -29,6 +29,7 @@ for component in gtk-3.0 gtk-4.0; do
     sudo python3 "$REPO_ROOT/scripts/build-desktop-theme.py" \
       --base "$BASE_GTK_THEME/$component" --output "$THEME_DIR/$component" \
       --overlay "$REPO_ROOT/configs/theme/gtk.css" --css-name gtk.css \
+      --remap "$REPO_ROOT/configs/theme/gtk-remap.json" --palette "$PALETTE" \
       --radius "$(jq -r '.radius' "$PALETTE")" \
       || warn "$component reskin failed"
   else
@@ -43,6 +44,12 @@ fi
 install_theme_file "$REPO_ROOT/configs/theme/index.theme" "$THEME_DIR/index.theme"
 if [ -f "$THEME_DIR/gtk-3.0/gtk.css" ]; then
   theme_set org.gnome.desktop.interface gtk-theme "'$THEME_NAME'"
+fi
+# Neutral grey icons from Zorin's own set (the stock Adwaita folders are blue).
+if [ -d /usr/share/icons/ZorinGrey-Dark ]; then
+  theme_set org.gnome.desktop.interface icon-theme "'ZorinGrey-Dark'"
+else
+  warn "ZorinGrey-Dark icon theme not found — icons left as is"
 fi
 
 if [ -f "$BASE_THEME/gnome-shell/gnome-shell.css" ]; then
