@@ -77,7 +77,24 @@ patching of Zorin code.
   second monitor keeps the stock full-width taskbar; no multi-monitor test yet.
   Show Desktop remembers the windows it minimized for the current workspace only.
 
-## Start menu spec (owner, 2026-10-04) — not built
+## Start menu spec (owner, 2026-10-04)
+
+**v1 is built** (`extensions/noctraos-start@noctraos.local`): a 560 px panel above the
+dock with a header bar (title and a **settings gear on the right** that opens
+Settings), the **pinned Agents row** (Claude Code, Codex, OpenCode, Grok, Gemini
+CLI, Qwen Code), **recent files** (8, from the desktop's recent list; scratch and
+hidden paths skipped; each opens in its default app), and a footer with *All apps*
+and a Super+Space hint. Sharp, monospace, palette from `palette.json`. The Start
+button opens it; Esc, a click outside, or the button again close it.
+Verified on VM 114 with a virtual mouse and keyboard: open, close three ways,
+gear to Settings, a recent file opening.
+Not yet built: user name and weather, "New users start here" and its help
+page, an apps list, customisation. Untested: launching an agent from the row and
+*All apps*. The panel replaces the Zorin Menu popup by overriding its
+`_menu.toggle`/`open`, a private API, so a Zorin Menu update could break it (the
+stock menu then simply keeps working).
+
+### Full spec
 
 - A **panel above the dock** (not full screen). Compact, edgy, sharp corners,
   **terminal (monospace) font**.

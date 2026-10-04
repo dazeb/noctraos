@@ -1,0 +1,8 @@
+{
+  "uuid": "noctraos-start@noctraos.local",
+  "name": "Noctra Start",
+  "description": "Compact Start panel above the dock: pinned AI agents and recent files.",
+  "shell-version": ["46"],
+  "version": 1,
+  "url": "https://github.com/dazeb/noctraos"
+}

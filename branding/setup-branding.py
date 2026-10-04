@@ -37,16 +37,20 @@ def apply_layout(taskbar):
 
 def setup():
     config = Path.home() / '.config/noctraos'
-    branding_marker = config / 'branding-provisioned'
-    if not branding_marker.exists():
-        uuid = 'noctraos-branding@noctraos.local'
-        shell = Gio.Settings.new('org.gnome.shell')
+    config.mkdir(parents=True, exist_ok=True)
+    shell = Gio.Settings.new('org.gnome.shell')
+    # One marker per extension, so a later user choice to turn one off is kept.
+    for uuid in ('noctraos-branding@noctraos.local', 'noctraos-start@noctraos.local'):
+        name = uuid.split('@')[0]
+        marker = config / f'enabled-{name}'
+        if marker.exists() or (name == 'noctraos-branding' and (config / 'branding-provisioned').exists()):
+            marker.touch()
+            continue
         enabled = shell.get_strv('enabled-extensions')
         if uuid not in enabled and not shell.set_strv('enabled-extensions', enabled + [uuid]):
             raise RuntimeError('Extension settings are locked')
         Gio.Settings.sync()
-        config.mkdir(parents=True, exist_ok=True)
-        branding_marker.touch()
+        marker.touch()
     if LAYOUT_MARKER.exists():
         return
     schema = Gio.SettingsSchemaSource.get_default().lookup('org.gnome.shell.extensions.zorin-taskbar', True)

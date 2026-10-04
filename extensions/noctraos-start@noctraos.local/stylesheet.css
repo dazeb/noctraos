@@ -1,0 +1,22 @@
+/* Compact, sharp, monospace. Palette: configs/theme/palette.json. */
+.noctra-start { background-color: #121212; color: #bebebe; border: 1px solid #333333; border-radius: 0;
+  padding: 0; font-family: 'JetBrains Mono', monospace; font-size: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); }
+.noctra-start-header { padding: 8px 10px 8px 14px; border-bottom: 1px solid #262626; }
+.noctra-start-title { font-size: 11px; font-weight: bold; color: #e68e0d; letter-spacing: 2px; }
+.noctra-start-icon-button { padding: 6px; border-radius: 0; color: #8a8a8d; }
+.noctra-start-icon-button:hover, .noctra-start-icon-button:focus { background-color: #2a2a2a; color: #e68e0d; }
+.noctra-start-section { font-size: 10px; color: #8a8a8d; letter-spacing: 2px; padding: 12px 14px 4px; }
+.noctra-start-agents { padding: 0 8px; spacing: 4px; }
+.noctra-start-agent { padding: 8px 4px; border-radius: 0; }
+.noctra-start-agent:hover, .noctra-start-agent:focus { background-color: #2a2a2a; }
+.noctra-start-agent-label { font-size: 10px; padding-top: 4px; }
+.noctra-start-recent { padding: 0 8px; spacing: 1px; }
+.noctra-start-file { padding: 5px 6px; border-radius: 0; }
+.noctra-start-file:hover, .noctra-start-file:focus { background-color: #2a2a2a; }
+.noctra-start-file-row { spacing: 10px; }
+.noctra-start-file-detail { font-size: 10px; color: #8a8a8d; }
+.noctra-start-empty { color: #8a8a8d; padding: 6px; }
+.noctra-start-footer { padding: 8px 10px 8px 8px; border-top: 1px solid #262626; margin-top: 8px; }
+.noctra-start-text-button { padding: 4px 8px; border-radius: 0; color: #bebebe; }
+.noctra-start-text-button:hover, .noctra-start-text-button:focus { background-color: #2a2a2a; color: #e68e0d; }
+.noctra-start-hint { font-size: 10px; color: #8a8a8d; }

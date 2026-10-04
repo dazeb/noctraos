@@ -44,8 +44,9 @@ install/
   07_persistence.sh         /etc/skel defaults, zom + zom-menu install
   08_shell_theme.sh         NoctraOS-Dark shell + GTK themes (derived, not
                             shipped), white menu icons, terminal/app palette
-  09_super_search.sh        Super+Space search + Noctra start button: installs the
-                            two GNOME Shell extensions, search app, schema, index timer
+  09_super_search.sh        Super+Space search, Noctra start button and Start panel:
+                            installs the three GNOME Shell extensions, search app,
+                            schema, index timer
 bin/
   zom                       CLI: update | doctor | models [list|pull|rm|gui] | bg [list|next|set]
   zom-menu                  zenity control panel
@@ -204,6 +205,11 @@ tail -f /root/noctraos-build.log
   its elements; `noctraos-branding` adds Show Desktop and flattens the top bar.
   To change the layout for an existing account, delete the marker and re-run the
   script (or edit the taskbar settings).
+- **The Start panel hooks a private Zorin Menu API.** `noctraos-start` replaces the
+  Start button's popup (`menuButtons[i]._menu.toggle/open`). It takes a modal grab
+  on a full-screen root actor and decides "outside click" by pointer coordinates —
+  `event.get_source()` is null for clicks on the root and a stage-level
+  `captured-event` handler never fires under a grab. Both were tried and failed.
 - **CopyQ must run with `QT_QPA_PLATFORM=xcb`.** As a native-Wayland client it
   logs "Failed to activate Wayland clipboard" and records nothing on GNOME
   (no wlr-data-control). The autostart entry sets it; keep it that way.

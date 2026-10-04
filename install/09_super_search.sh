@@ -8,6 +8,7 @@ source "$REPO_ROOT/install/lib.sh"
 
 SEARCH_UUID="noctraos-search@noctraos.local"
 BRANDING_UUID="noctraos-branding@noctraos.local"
+START_UUID="noctraos-start@noctraos.local"
 EXT_DIR="/usr/share/gnome-shell/extensions"
 
 # install_if_changed MODE SRC DST — copy only when content differs (idempotent).
@@ -30,7 +31,7 @@ for pkg in python3-gi gir1.2-gtk-3.0; do
   fi
 done
 
-for uuid in "$SEARCH_UUID" "$BRANDING_UUID"; do
+for uuid in "$SEARCH_UUID" "$BRANDING_UUID" "$START_UUID"; do
   for f in "$REPO_ROOT/extensions/$uuid"/*; do
     install_if_changed 644 "$f" "$EXT_DIR/$uuid/$(basename "$f")"
   done
