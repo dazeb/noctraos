@@ -159,7 +159,7 @@ class DryRunTests(unittest.TestCase):
 
     def test_override_card_gets_an_ollama_dropin(self):
         out = self.run_dry(AMD_6600).stdout
-        self.assertIn("ollama.service.d/zorin-ai-gpu.conf", out)
+        self.assertIn("ollama.service.d/noctraos-gpu.conf", out)
 
     def test_amd_apu_alone_never_touches_the_rocm_repo(self):
         out = self.run_dry(AMD_CEZANNE).stdout

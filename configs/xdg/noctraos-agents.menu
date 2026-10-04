@@ -1,0 +1,12 @@
+<!DOCTYPE Menu PUBLIC "-//freedesktop//DTD Menu 1.0//EN"
+ "http://www.freedesktop.org/standards/menu-spec/1.0/menu.dtd">
+<Menu>
+  <!-- noctraos: "Agents" section in XDG application menus -->
+  <Menu>
+    <Name>Agents</Name>
+    <Directory>noctraos-agents.directory</Directory>
+    <Include>
+      <Category>X-NoctraOS-Agents</Category>
+    </Include>
+  </Menu>
+</Menu>

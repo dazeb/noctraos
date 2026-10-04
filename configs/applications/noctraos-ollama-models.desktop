@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=AI Models
+GenericName=Ollama Model Manager
+Comment=Download, list and remove local Ollama models
+Exec=noc models gui
+Icon=noctraos-models
+Categories=X-NoctraOS-LocalLLM;
+Terminal=false
+StartupNotify=true
+Keywords=ollama;llm;models;ai;

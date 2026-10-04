@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=AI Health Check
+GenericName=System Health Check
+Comment=Verify Ollama, runtimes, editors and disk health
+Exec=gnome-terminal --title="AI Health Check" -- noc doctor
+Icon=noctraos-models
+Categories=X-NoctraOS-LocalLLM;
+Terminal=false
+StartupNotify=true
+Keywords=health;doctor;ollama;diagnostics;

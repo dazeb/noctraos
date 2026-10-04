@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# zorin-ai — main orchestrator.
+# noctraos — main orchestrator.
 # Run as your normal desktop user; sudo is used internally for system changes.
 set -Eeuo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-LOG_FILE="${ZORIN_AI_LOG:-/tmp/zorin-ai-install-$(date +%Y%m%d-%H%M%S).log}"
+LOG_FILE="${NOCTRAOS_LOG:-/tmp/noctraos-install-$(date +%Y%m%d-%H%M%S).log}"
 exec > >(tee -a "$LOG_FILE") 2>&1
 
 # ---- resolve the target desktop user -----------------------------------------
@@ -38,7 +38,7 @@ for arg in "$@"; do
 done
 
 echo "======================================================"
-echo "  zorin-ai :: mouse-first AI developer workstation"
+echo "  NoctraOS :: mouse-first AI developer workstation"
 echo "======================================================"
 log "Log file: $LOG_FILE"
 log "Target user: $TARGET_USER ($TARGET_HOME)"
@@ -69,19 +69,21 @@ else
 fi
 
 if [ "$SKIP_GUI" -eq 1 ]; then
-  log "SKIP 04/04b/05/06/08 (--skip-gui)"
+  log "SKIP 04/04b/05/06/08/09/10 (--skip-gui)"
 else
   run_module 04_gui_apps.sh
   run_module 04_workstation_apps.sh
   run_module 05_mouse_ergonomics.sh
   run_module 06_desktop_theme.sh
   run_module 08_shell_theme.sh
+  run_module 09_super_search.sh
+  run_module 10_boot_theme.sh
 fi
 
 run_module 07_persistence.sh
 
 log "✔ Install complete. Full log: $LOG_FILE"
-if [ -f /var/run/reboot-required.pkgs ] && grep -x 'zorin-ai-gpu' /var/run/reboot-required.pkgs >/dev/null; then
+if [ -f /var/run/reboot-required.pkgs ] && grep -x 'noctraos-gpu' /var/run/reboot-required.pkgs >/dev/null; then
   warn "REBOOT REQUIRED: the GPU driver was installed and loads on next boot. Local models run on the CPU until then."
 fi
 log "Try it: right-click a file in Files → Scripts → 'Ask AI to Explain'."

@@ -3,8 +3,8 @@
 # Sends the file to the local Ollama daemon and shows the summary in a GTK dialog.
 set -u
 
-OLLAMA_URL="${ZORIN_AI_OLLAMA_URL:-http://localhost:11434}"
-MODEL="${ZORIN_AI_MODEL:-qwen2.5-coder:7b}"
+OLLAMA_URL="${NOCTRAOS_OLLAMA_URL:-http://localhost:11434}"
+MODEL="${NOCTRAOS_MODEL:-qwen2.5-coder:7b}"
 
 file="$(head -n 1 <<<"${NAUTILUS_SCRIPT_SELECTED_FILE_PATHS:-}")"
 if [ -z "$file" ]; then

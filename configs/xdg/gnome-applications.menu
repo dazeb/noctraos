@@ -6,7 +6,7 @@
   <Name>Applications</Name>
   <Directory>X-GNOME-Menu-Applications.directory</Directory>
 
-  <!-- zorin-ai: AI-first application menu.
+  <!-- noctraos: AI-first application menu.
        Replaces the stock GNOME category tree (Accessories/Graphics/Office/…)
        with sections for an AI-agent workstation. The original file is kept
        alongside as gnome-applications.menu.orig by the provisioner. -->
@@ -21,18 +21,18 @@
   <!-- Agents submenu -->
   <Menu>
     <Name>Agents</Name>
-    <Directory>zorin-ai-agents.directory</Directory>
+    <Directory>noctraos-agents.directory</Directory>
     <Include>
-      <Category>X-ZorinAI-Agents</Category>
+      <Category>X-NoctraOS-Agents</Category>
     </Include>
   </Menu>
 
   <!-- Local LLM submenu -->
   <Menu>
     <Name>Local LLM</Name>
-    <Directory>zorin-ai-local-llm.directory</Directory>
+    <Directory>noctraos-local-llm.directory</Directory>
     <Include>
-      <Category>X-ZorinAI-LocalLLM</Category>
+      <Category>X-NoctraOS-LocalLLM</Category>
     </Include>
   </Menu>
 
@@ -43,8 +43,8 @@
     <Include>
       <And>
         <Category>Development</Category>
-        <Not><Category>X-ZorinAI-Agents</Category></Not>
-        <Not><Category>X-ZorinAI-LocalLLM</Category></Not>
+        <Not><Category>X-NoctraOS-Agents</Category></Not>
+        <Not><Category>X-NoctraOS-LocalLLM</Category></Not>
       </And>
     </Include>
   </Menu>
@@ -56,8 +56,8 @@
     <Include>
       <And>
         <Category>Network</Category>
-        <Not><Category>X-ZorinAI-Agents</Category></Not>
-        <Not><Category>X-ZorinAI-LocalLLM</Category></Not>
+        <Not><Category>X-NoctraOS-Agents</Category></Not>
+        <Not><Category>X-NoctraOS-LocalLLM</Category></Not>
       </And>
     </Include>
   </Menu>
@@ -84,8 +84,8 @@
           <Category>Utility</Category>
           <Not><Category>System</Category></Not>
           <Not><Category>Accessibility</Category></Not>
-          <Not><Category>X-ZorinAI-Agents</Category></Not>
-          <Not><Category>X-ZorinAI-LocalLLM</Category></Not>
+          <Not><Category>X-NoctraOS-Agents</Category></Not>
+          <Not><Category>X-NoctraOS-LocalLLM</Category></Not>
         </And>
         <Category>FileManager</Category>
       </Or>
@@ -99,8 +99,8 @@
     <Include>
       <And>
         <Category>System</Category>
-        <Not><Category>X-ZorinAI-Agents</Category></Not>
-        <Not><Category>X-ZorinAI-LocalLLM</Category></Not>
+        <Not><Category>X-NoctraOS-Agents</Category></Not>
+        <Not><Category>X-NoctraOS-LocalLLM</Category></Not>
       </And>
     </Include>
   </Menu>

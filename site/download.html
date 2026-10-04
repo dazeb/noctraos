@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Download the Noctra OS installer ISO. System requirements and install steps.">
+<meta name="theme-color" content="#0b0a09">
+<title>Download · Noctra OS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="nav">
+  <div class="wrap">
+    <a class="brand" href="index.html" aria-label="Noctra OS home">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><polygon points="2,26 13,6 18,16" fill="#ff6a13"/><polygon points="13,26 22,10 30,26" fill="#ff6a13" opacity="0.55"/></svg>
+      <span>Noctra <small>OS</small></span>
+    </a>
+    <nav aria-label="Main">
+      <ul>
+        <li><a href="index.html">Home</a></li>
+        <li><a href="features.html">Features</a></li>
+        <li><a href="download.html" aria-current="page">Download</a></li>
+        <li><a href="community.html">Get Involved</a></li>
+        <li><a href="https://github.com/dazeb/noctraos">GitHub</a></li>
+      </ul>
+    </nav>
+  </div>
+</header>
+
+<main>
+<div class="banner">
+  <img src="img/crimson-dunes.webp" alt="" width="1920" height="1080">
+  <div class="wrap">
+    <p class="eyebrow"><span class="dot"></span>Download</p>
+    <h1>Get Noctra OS 0.3.0</h1>
+    <p class="lede">Put the installer on a USB stick, start your PC from it, and Noctra sets itself up the first time you log in.</p>
+  </div>
+</div>
+
+<section>
+  <div class="wrap">
+    <div class="head"><h2>Releases</h2></div>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Release</th><th>Based on</th><th>File</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td>Noctra OS 0.3.0</td><td>Ubuntu 24.04 LTS</td><td>Installer (<code>.iso</code> file)</td><td><span class="status">Not yet published</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="alt" style="margin-top:16px">The ready-made download is not published yet. If you are comfortable with developer tools, you can build the installer yourself from the repository.</p>
+    <div class="term-line" style="margin-top:20px;max-width:640px">
+      <code id="clonecmd">git clone https://github.com/dazeb/noctraos</code>
+      <button type="button" data-copy="clonecmd" aria-label="Copy clone command">Copy</button>
+    </div>
+    <p class="alt" style="margin-top:12px"><a href="https://github.com/dazeb/noctraos#readme">Build instructions are in the README</a></p>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="head"><h2>System requirements</h2></div>
+    <div class="reqs">
+      <div><b>Intel or AMD</b>processor</div>
+      <div><b>25 GB</b>free disk space</div>
+      <div><b>8 GB memory</b>16 GB for larger models</div>
+      <div><b>Internet</b>during install</div>
+    </div>
+    <p class="alt" style="margin-top:16px">A separate graphics card is optional. Models run on the processor, and use an NVIDIA graphics card when one is found.</p>
+  </div>
+</section>
+
+<section>
+  <div class="wrap band">
+    <div>
+      <p class="eyebrow"><span class="dot"></span>Installing</p>
+      <h2>Four steps.</h2>
+    </div>
+    <ol class="steps">
+      <li><div><strong>Put it on a USB stick.</strong><span>The installer is a single <code>.iso</code> file. A free tool such as balenaEtcher or Ventoy copies it to the stick.</span></div></li>
+      <li><div><strong>Start your PC from the stick.</strong><span>Choose the “Try or Install” entry in the boot menu and click through the installer.</span></div></li>
+      <li><div><strong>Log in.</strong><span>A window opens, asks once for your password, and sets everything up. This takes several minutes and needs an internet connection.</span></div></li>
+      <li><div><strong>Check it.</strong><span>Run <code>noc doctor</code> to confirm that everything is working.</span></div></li>
+    </ol>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="cols">
+      <div class="about">
+        <a class="brand" href="index.html"><svg viewBox="0 0 32 32" aria-hidden="true"><polygon points="2,26 13,6 18,16" fill="#ff6a13"/><polygon points="13,26 22,10 30,26" fill="#ff6a13" opacity="0.55"/></svg><span>Noctra <small>OS</small></span></a>
+        <p>A Linux system for AI and coding, with local AI models and AI coding assistants in the start menu.</p>
+      </div>
+      <div>
+        <h3>Noctra OS</h3>
+        <ul><li><a href="index.html">Home</a></li><li><a href="features.html">Features</a></li><li><a href="download.html">Download</a></li></ul>
+      </div>
+      <div>
+        <h3>Community</h3>
+        <ul><li><a href="community.html">Get involved</a></li><li><a href="https://github.com/dazeb/noctraos/issues">Report a bug</a></li><li><a href="https://github.com/dazeb/noctraos">Source code</a></li></ul>
+      </div>
+      <div>
+        <h3>Documentation</h3>
+        <ul><li><a href="https://github.com/dazeb/noctraos#readme">README</a></li><li><a href="https://github.com/dazeb/noctraos/blob/main/docs/theme-design.md">Theme design</a></li><li><a href="https://github.com/dazeb/noctraos/blob/main/docs/omarchy-parity.md">App list</a></li></ul>
+      </div>
+    </div>
+    <div class="legal">
+      <p>Noctra OS is an independent project. It is not an official Ubuntu flavour and is not affiliated with or endorsed by Canonical or Omarchy.</p>
+      <p>Ubuntu is a registered trademark of Canonical Ltd. Agent names and logos belong to their respective projects; Noctra OS ships launchers only. No license has been selected yet.</p>
+    </div>
+  </div>
+</footer>
+<script src="script.js"></script>
+</body>
+</html>

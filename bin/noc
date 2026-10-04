@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# noc — zorin-ai workstation management CLI.
+# noc — noctraos workstation management CLI.
 #   noc update        apt + Flatpak + mise runtimes + AI models
 #   noc doctor        health check of the whole stack
 #   noc models        list | pull <model> | rm <model> | gui
@@ -14,7 +14,7 @@ ok()   { printf '  \033[32mOK\033[0m  %s\n' "$*"; }
 bad()  { printf '  \033[31m!!\033[0m  %s\n' "$*"; }
 info() { printf '\033[1;36mnoc\033[0m %s\n' "$*"; }
 
-WALLPAPER_DIR="/usr/local/share/backgrounds/zorin-ai"
+WALLPAPER_DIR="/usr/local/share/backgrounds/noctraos"
 
 # gsettings needs the user's session bus; detect it when run over ssh.
 with_bus() {
@@ -110,7 +110,7 @@ cmd_update() {
 }
 
 cmd_doctor() {
-  echo "zorin-ai doctor"
+  echo "NoctraOS doctor"
   echo "----------------"
 
   if [ -r /etc/os-release ]; then
@@ -156,6 +156,13 @@ cmd_doctor() {
     bad "VS Code: missing"
   fi
 
+  if command -v noctraos-search >/dev/null 2>&1 \
+     && [ -d /usr/share/gnome-shell/extensions/noctraos-search@noctraos.local ]; then
+    ok "Super+Space search: installed"
+  else
+    bad "Super+Space search: missing (re-run the installer)"
+  fi
+
   if command -v flatpak >/dev/null 2>&1; then
     flatpak list --app 2>/dev/null | grep -q MissionCenter \
       && ok "Mission Center: installed" || bad "Mission Center: missing"
@@ -194,7 +201,7 @@ cmd_models() {
       command -v zenity >/dev/null 2>&1 || { bad "zenity not available"; exit 1; }
       local choice
       choice="$(zenity --list \
-        --title="zorin-ai — download a model" \
+        --title="NoctraOS — download a model" \
         --text="Pick a model to pull from the Ollama library" \
         --column="Model" --column="Note" \
         "${MODEL_PRESETS[0]}" "Default: fast local coding model" \
@@ -221,7 +228,7 @@ case "${1:-help}" in
             || { bad "noc-gpu not installed (re-run the installer)"; exit 1; } ;;
   --version|-v) echo "noc $VERSION" ;;
   *)
-    echo "noc $VERSION — zorin-ai workstation manager"
+    echo "noc $VERSION — NoctraOS workstation manager"
     echo ""
     echo "  noc update      update apt, Flatpak apps, mise runtimes, AI models"
     echo "  noc doctor      health check of the whole stack"

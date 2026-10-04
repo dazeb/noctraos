@@ -1,0 +1,40 @@
+{
+  "comment": "Recolour the installed Zorin Purple GTK 3/4 stylesheets (and their libadwaita named colours) to the NoctraOS palette before our overrides are appended. Same format as shell-remap.json; @define-color lines use the 'color' variant when the colour name contains 'fg' or 'text'.",
+  "hex": {
+    "#d8c4f1": {"color": "foreground", "default": "accent"},
+    "#cbb0ec": {"color": "foreground", "default": "accent"},
+    "#f3edfb": "foreground",
+    "#e6d9f6": "foreground",
+    "#b2a2c6": "foreground",
+    "#1a171d": "panel",
+    "#1a181d": "panel",
+    "#1f1d22": "panel",
+    "#28232d": "background",
+    "#221f25": "background",
+    "#242128": "background",
+    "#242028": "background",
+    "#2d2a31": "background",
+    "#29262c": "background",
+    "#2e2934": "raised",
+    "#2d2832": "raised",
+    "#352f3c": "raised",
+    "#312d36": "raised",
+    "#343039": "raised",
+    "#3e3745": "selection",
+    "#48424f": "selection",
+    "#4b4354": "border",
+    "#5d5368": "border",
+    "#7d7687": "muted",
+    "#8f859c": "muted",
+    "#80748f": "muted",
+    "#796e87": "muted"
+  },
+  "rgb": {
+    "216, 196, 241": "190, 190, 190",
+    "181, 164, 201": "190, 190, 190",
+    "125, 118, 135": "138, 138, 141",
+    "78, 71, 87": "51, 51, 51",
+    "26, 24, 29": "13, 13, 13",
+    "26, 23, 29": "13, 13, 13"
+  }
+}

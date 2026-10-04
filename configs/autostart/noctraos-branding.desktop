@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Noctra start-menu setup
+Exec=/usr/bin/python3 /usr/local/share/noctraos/setup-branding.py
+NoDisplay=true
+X-GNOME-Autostart-enabled=true
+OnlyShowIn=GNOME;

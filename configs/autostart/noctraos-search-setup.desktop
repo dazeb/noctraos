@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Noctra Search setup
+Exec=/usr/local/bin/noctraos-search --setup
+NoDisplay=true
+X-GNOME-Autostart-enabled=true
+OnlyShowIn=GNOME;

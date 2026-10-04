@@ -1,10 +1,10 @@
 [Desktop Entry]
 Type=X-GNOME-Metatheme
-Name=ZorinAI-Dark
-Comment=Omarchy-inspired dark theme for the Zorin AI workstation
+Name=NoctraOS-Dark
+Comment=Omarchy-inspired dark theme for the NoctraOS workstation
 
 [X-GNOME-Metatheme]
-GtkTheme=ZorinAI-Dark
+GtkTheme=NoctraOS-Dark
 IconTheme=ZorinPurple-Dark
 CursorTheme=Adwaita
 ButtonLayout=:minimize,maximize,close

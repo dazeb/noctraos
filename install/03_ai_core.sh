@@ -3,8 +3,8 @@
 set -Eeuo pipefail
 source "$REPO_ROOT/install/lib.sh"
 
-MODEL="${ZORIN_AI_MODEL:-qwen2.5-coder:7b}"
-EMBED_MODEL="${ZORIN_AI_EMBED_MODEL:-nomic-embed-text}"
+MODEL="${NOCTRAOS_MODEL:-qwen2.5-coder:7b}"
+EMBED_MODEL="${NOCTRAOS_EMBED_MODEL:-nomic-embed-text}"
 log "Local AI engine — default model: $MODEL, embedding model: $EMBED_MODEL"
 
 if have ollama; then

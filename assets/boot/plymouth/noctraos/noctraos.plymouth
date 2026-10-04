@@ -1,0 +1,65 @@
+[Plymouth Theme]
+Name=NoctraOS
+Description=Dark splash: the Noctra mark, wordmark and a blinking cursor
+ModuleName=two-step
+
+[two-step]
+Font=Ubuntu Mono 12
+TitleFont=Ubuntu Mono Bold 24
+ImageDir=/usr/share/plymouth/themes/noctraos
+DialogHorizontalAlignment=.5
+DialogVerticalAlignment=.62
+TitleHorizontalAlignment=.5
+TitleVerticalAlignment=.382
+HorizontalAlignment=.5
+VerticalAlignment=.45
+Transition=none
+TransitionDuration=0.0
+BackgroundStartColor=0x121212
+BackgroundEndColor=0x121212
+ProgressBarBackgroundColor=0x333333
+ProgressBarForegroundColor=0xe68e0d
+ProgressBarWidth=260
+ProgressBarHeight=2
+DialogClearsFirmwareBackground=false
+MessageBelowAnimation=true
+
+[boot-up]
+UseEndAnimation=false
+UseFirmwareBackground=false
+
+[shutdown]
+UseEndAnimation=false
+UseFirmwareBackground=false
+
+[reboot]
+UseEndAnimation=false
+UseFirmwareBackground=false
+
+[updates]
+SuppressMessages=true
+ProgressBarShowPercentComplete=true
+UseProgressBar=true
+Title=Installing updates...
+SubTitle=Do not turn off your computer
+
+[system-upgrade]
+SuppressMessages=true
+ProgressBarShowPercentComplete=true
+UseProgressBar=true
+Title=Upgrading system...
+SubTitle=Do not turn off your computer
+
+[firmware-upgrade]
+SuppressMessages=true
+ProgressBarShowPercentComplete=true
+UseProgressBar=true
+Title=Upgrading firmware...
+SubTitle=Do not turn off your computer
+
+[system-reset]
+SuppressMessages=true
+ProgressBarShowPercentComplete=true
+UseProgressBar=true
+Title=Resetting system...
+SubTitle=Do not turn off your computer

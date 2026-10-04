@@ -68,5 +68,73 @@ class DesktopThemeTests(unittest.TestCase):
             self.assertIn("12px", (base / "gtk.css").read_text())
 
 
+    def test_recolor_is_property_aware_and_leaves_unmapped_colors(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            palette = root / "palette.json"
+            palette.write_text('{"colors": {"accent": "#e68e0d", "foreground": "#bebebe", "panel": "#0d0d0d"}}')
+            remap = root / "remap.json"
+            remap.write_text('{"hex": {"#bde6fb": {"color": "foreground", "default": "accent"}, '
+                             '"#161c1f": "panel"}, "rgb": {"189, 230, 251": "255, 255, 255"}}')
+            css = MODULE.recolor(
+                ".a { color: #BDE6FB; background-color: #bde6fb; border: 1px solid #bde6fb; "
+                "x: rgba(189, 230, 251, 0.5); y: #fb7c7c; z: #161c1f; }",
+                MODULE.load_remap(remap, palette))
+            self.assertIn("color: #bebebe;", css)             # text keeps a readable colour
+            self.assertIn("background-color: #e68e0d;", css)  # fills take the accent
+            self.assertIn("1px solid #e68e0d", css)
+            self.assertIn("rgba(255, 255, 255, 0.5)", css)
+            self.assertIn("y: #fb7c7c", css)                  # unmapped colours are untouched
+            self.assertIn("z: #0d0d0d", css)
+
+    def test_recolor_handles_named_colors_by_name(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            palette = root / "palette.json"
+            palette.write_text('{"colors": {"accent": "#e68e0d", "foreground": "#bebebe", "background": "#121212"}}')
+            remap = root / "remap.json"
+            remap.write_text('{"hex": {"#d8c4f1": {"color": "foreground", "default": "accent"}, '
+                             '"#28232d": "background"}, "rgb": {}}')
+            css = MODULE.recolor(
+                "@define-color window_fg_color #d8c4f1;\n@define-color accent_bg_color #d8c4f1;\n"
+                "@define-color window_bg_color #28232d;\n", MODULE.load_remap(remap, palette))
+            self.assertIn("window_fg_color #bebebe;", css)    # text-like name keeps a readable colour
+            self.assertIn("accent_bg_color #e68e0d;", css)    # everything else takes the accent
+            self.assertIn("window_bg_color #121212;", css)
+
+
+class PasswordStoreTests(unittest.TestCase):
+    def setUp(self):
+        spec = importlib.util.spec_from_file_location(
+            "seed_password_store", Path(__file__).resolve().parents[1] / "scripts/seed-password-store.py")
+        self.seed = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.seed)
+
+    def test_creates_both_files_and_is_idempotent(self):
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            self.assertTrue(self.seed.chromium_flags(home) and self.seed.vscode_argv(home))
+            self.assertFalse(self.seed.chromium_flags(home) or self.seed.vscode_argv(home))
+            flags = (home / ".var/app/org.chromium.Chromium/config/chromium-flags.conf").read_text()
+            self.assertEqual(flags, "--password-store=basic\n")
+
+    def test_keeps_existing_flags_and_comments(self):
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            conf = home / ".var/app/org.chromium.Chromium/config/chromium-flags.conf"
+            conf.parent.mkdir(parents=True)
+            conf.write_text("--enable-features=Foo\n")
+            argv = home / ".vscode/argv.json"
+            argv.parent.mkdir(parents=True)
+            argv.write_text("// header comment\n{\n\t// note\n\t\"enable-crash-reporter\": true\n}\n")
+            self.seed.chromium_flags(home)
+            self.seed.vscode_argv(home)
+            self.assertEqual(conf.read_text(), "--enable-features=Foo\n--password-store=basic\n")
+            text = argv.read_text()
+            self.assertIn("// header comment", text)
+            self.assertIn('"password-store": "basic",', text)
+            self.assertIn('"enable-crash-reporter": true', text)
+
+
 if __name__ == "__main__":
     unittest.main()

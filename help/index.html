@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Start here · NoctraOS</title>
+<style>
+  :root { --bg:#121212; --panel:#0d0d0d; --raised:#1e1e1e; --border:#333; --fg:#bebebe; --muted:#8a8a8d; --accent:#e68e0d; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.6 "JetBrains Mono","JetBrainsMono Nerd Font",ui-monospace,monospace; }
+  main { max-width: 760px; margin: 0 auto; padding: 40px 20px 80px; }
+  h1 { font-size: 13px; letter-spacing: .25em; color: var(--accent); margin: 0 0 6px; }
+  h2 { font-size: 12px; letter-spacing: .2em; color: var(--muted); margin: 40px 0 12px; border-top: 1px solid var(--border); padding-top: 18px; }
+  .lead { font-size: 22px; color: #eaeaea; margin: 0 0 8px; }
+  p { margin: 0 0 12px; }
+  kbd { background: var(--raised); border: 1px solid var(--border); padding: 1px 8px; color: var(--accent); }
+  .hero { background: var(--panel); border: 1px solid var(--border); border-left: 3px solid var(--accent); padding: 18px 20px; margin: 24px 0; }
+  .hero kbd { font-size: 20px; padding: 4px 12px; }
+  ul { list-style: none; padding: 0; margin: 0; }
+  li { padding: 6px 0; border-bottom: 1px solid #1d1d1d; }
+  li b { color: #eaeaea; font-weight: 600; }
+  code { color: var(--accent); }
+  a { color: var(--accent); }
+</style>
+</head>
+<body>
+<main>
+  <h1>NOCTRAOS</h1>
+  <p class="lead">Start here.</p>
+  <p>Everything is where you would expect it, and you can do it all with the mouse. There is one shortcut worth learning.</p>
+
+  <div class="hero">
+    <p><kbd>Super</kbd> + <kbd>Space</kbd></p>
+    <p>Press the <b>Windows key</b> and <b>Space</b> and type. One box finds your <b>apps</b>, <b>files and folders</b>, <b>clipboard history</b> and the <b>web</b>. If you let it, it also finds pages from your <b>browser history</b>. Press <kbd>Esc</kbd> to close it.</p>
+  </div>
+
+  <h2>WHERE THINGS ARE</h2>
+  <ul>
+    <li><b>Start button (the N)</b> in the dock at the bottom opens the Start panel: your AI agents, recent files and a settings gear.</li>
+    <li><b>Dock</b> at the bottom holds your apps. Right-click an app for its options.</li>
+    <li><b>Top bar</b>: the button on the left shows your desktop; the clock in the middle opens your notifications and calendar; the right side has background apps, network, sound and power. Open the power menu for lock, settings and shutdown.</li>
+    <li><b>Task Manager</b> is Mission Center. Search for it, or find it in the dock.</li>
+    <li><b>Files</b> is in the dock. Right-click a file, then <b>Scripts</b>, for <i>Ask AI to Explain</i>, <i>Open in VS Code</i> and <i>Open Terminal Here</i>.</li>
+    <li><b>Clipboard history</b> is kept for you. Find anything you copied from Super+Space.</li>
+  </ul>
+
+  <h2>YOUR AI</h2>
+  <ul>
+    <li><b>Agents</b> (Claude Code, Codex, OpenCode, Grok, Gemini CLI, Qwen Code) are in the top row of the Start panel. The first time you open one it offers to install it.</li>
+    <li><b>Local models</b> run on this computer through Ollama, so your files stay here. Manage them from <b>All apps</b>, then <b>Local LLM</b>.</li>
+    <li><b>VS Code</b> comes with Continue already connected to your local model.</li>
+  </ul>
+
+  <h2>MAKE IT YOURS</h2>
+  <ul>
+    <li>The <b>gear</b> in the Start panel opens Settings.</li>
+    <li>The gear in the search box changes what Super+Space looks through, including browser history.</li>
+    <li>Hide the “New users start here” strip or the weather from the Start panel at any time.</li>
+  </ul>
+
+  <h2>IF SOMETHING LOOKS WRONG</h2>
+  <ul>
+    <li>Open <b>Terminal</b> and run <code>noc doctor</code> for a health check, or <code>noc update</code> to update everything.</li>
+    <li>Search for <b>AI Health Check</b> in Super+Space for the same check without a terminal.</li>
+  </ul>
+</main>
+</body>
+</html>

@@ -1,26 +1,30 @@
-# AGENTS.md — zorin-ai
+# AGENTS.md — noctraos
 
 Instructions for coding agents working in this repository. Read fully before
 changing anything; the pitfalls section saves real debugging time.
 
 ## What this repo is
 
-`zorin-ai` is an Omakub-style provisioner that turns a fresh **Zorin OS 18.x**
-(Ubuntu 24.04 base) machine into a mouse-first **AI development workstation**:
-local Ollama stack, a six-agent start menu, mise-managed runtimes, and a
-cyberpunk visual theme (ZorinAI-Dark shell theme, neon polygonal wallpapers,
-white icons). It also builds a bootable **Zorin-AI OS ISO** with all of this
-baked in.
+NoctraOS (`noctraos`) is an AI-ready desktop OS for **people moving from
+Windows**, on an Ubuntu base (Zorin OS 18.x today) — Omarchy's idea without
+the tiling-WM learning curve. It is delivered as a bootable **ISO**; the
+Omakub-style provisioner (`install.sh`) is the engine baked into it. Contents:
+local Ollama stack, a six-agent start menu, mise-managed runtimes, a dark +
+amber theme, and the **Super+Space** system search as the headline feature.
 
-The repo is **public on GitHub** (`github.com/dazeb/zorin-ai`) — this is a hard
+Read `docs/objectives.md` first: it defines the audience, principles
+(muscle memory over Windows imitation, no terminal required, no tiling WM),
+the onboarding goal, and non-goals. Keep it current when direction changes.
+
+The repo is **public on GitHub** (`github.com/dazeb/noctraos`) — this is a hard
 requirement: the one-liner bootstrap and the ISO's first-boot fetch clone it
 anonymously. Never make it private, never commit secrets.
 
 ## Repository map
 
 ```
-boot.sh                     remote fetcher: clones repo to ~/.local/share/zorin-ai,
-                            runs install.sh; env: ZORIN_AI_REPO_URL, ZORIN_AI_BRANCH, ZORIN_AI_HOME
+boot.sh                     remote fetcher: clones repo to ~/.local/share/noctraos,
+                            runs install.sh; env: NOCTRAOS_REPO_URL, NOCTRAOS_BRANCH, NOCTRAOS_HOME
 install.sh                  orchestrator: logging, TARGET_USER resolution, flags
                             (--skip-ai, --skip-gui, --skip-gpu), runs modules 00-02, 02b, 03-08
 install/
@@ -33,39 +37,51 @@ install/
   02b_gpu_drivers.sh        GPU detect + NVIDIA driver/CUDA or AMD ROCm (thin wrapper
                             over bin/noc-gpu; before 03 so Ollama sees the GPU)
   03_ai_core.sh             Ollama + qwen2.5-coder:7b + nomic-embed-text
-  04_gui_apps.sh            VSCodium + extensions, Mission Center, Chatbox .deb
+  04_gui_apps.sh            Microsoft VS Code (apt repo) + extensions, Mission Center,
+                            CopyQ; retires codium/chatbox/foot (user data kept)
   04_workstation_apps.sh    Omarchy-style Ubuntu/Flathub workstation app set
   05_mouse_ergonomics.sh    Nautilus right-click scripts
   06_desktop_theme.sh       gsettings ergonomics, wallpapers, Agents menu,
                             AI-first /etc/xdg/menus/gnome-applications.menu
   07_persistence.sh         /etc/skel defaults, noc + noc-menu install
-  08_shell_theme.sh         ZorinAI-Dark shell + GTK themes (derived, not
+  08_shell_theme.sh         NoctraOS-Dark shell + GTK themes (derived, not
                             shipped), white menu icons, terminal/app palette
+  09_super_search.sh        Super+Space search, Noctra start button and Start panel:
+                            installs the three GNOME Shell extensions, search app,
+                            schema, index timer
+  10_boot_theme.sh          Plymouth splash + GRUB theme for non-ISO installs
+                            (update-alternatives, update-initramfs, update-grub)
 bin/
-  noc                       CLI: update | doctor | models [list|pull|rm|gui] | bg [list|next|set] | gpu
-  noc-gpu                   GPU engine: detect [--json] | install [--dry-run] | status [--smoke];
-                            self-contained (installed to /usr/local/bin), sourceable for tests
+  noc                       CLI: update | doctor | models [list|pull|rm|gui] | bg [list|next|set]
   noc-menu                  zenity control panel
-  zorin-ai-agent            agent launcher wrapper: installs npm package on
+  noctraos-agent            agent launcher wrapper: installs npm package on
                             first use, then execs the agent
 configs/
   mise/config.toml          node=lts, python=3.12, go=latest, terminal tools
-  vscodium/                 settings.json, extensions.list, continue_config.yaml
+  vscode/                   settings.json, extensions.list, continue_config.yaml,
+                            vscode.sources (Microsoft apt repo)
   copyq/copyq.conf          clipboard history preseed (1000 entries, silent, tray)
   autostart/copyq.desktop   CopyQ session autostart (user + /etc/skel)
   applications/             agent + Herdr + Local-LLM launchers, .directory files
   theme/                    Herdr and btop palettes
   xdg/                      gnome-applications.menu (AI-first tree), agents merge
-  nautilus-scripts/         Open_in_VSCodium, Ask_AI_to_Explain, Open_Terminal_Here
+  nautilus-scripts/         Open_in_VS_Code, Ask_AI_to_Explain, Open_Terminal_Here
 assets/
   wallpapers/               5 seeded 4K JPEG scenes + generate-wallpapers.py
   icons/                    white SVG glyphs (agents, Local LLM, category tiles)
   icons/overrides/          white SVGs under STOCK icon names — these replace
                             the system category icons system-wide
-iso/build-zorin-ai-iso.sh   ISO remaster pipeline (runs on the Proxmox node);
-                            ZORIN_AI_UNATTENDED=1 + ZORIN_AI_USER/PASSWORD/…
+assets/boot/                boot-chain artwork: plymouth/noctraos (two-step theme),
+                            grub/noctraos (theme.txt + generated pixmaps/.pf2),
+                            isolinux/ (splash + theme.cfg), generate-boot-assets.py
+                            (outputs are committed; JetBrains Mono, OFL)
+iso/boot-theme.sh           sourced by the build script: themes the extracted ISO
+                            tree, the live initrd and the squashfs
+iso/initrd-theme.py         swaps the Plymouth theme inside casper/initrd.zstd
+iso/build-noctraos-iso.sh   ISO remaster pipeline (runs on the Proxmox node);
+                            NOCTRAOS_UNATTENDED=1 + NOCTRAOS_USER/PASSWORD/…
                             bake an unattended-install seed and boot entries
-iso/preseed/zorin-ai.seed.in  Ubiquity/d-i seed template for the above
+iso/preseed/noctraos.seed.in  Ubiquity/d-i seed template for the above
 ```
 
 ## Non-negotiable rules
@@ -86,7 +102,7 @@ iso/preseed/zorin-ai.seed.in  Ubiquity/d-i seed template for the above
    guard misreads "installed" as "missing". Drain with `grep ... >/dev/null`.
 6. **gsettings must target the user session bus**, never `dbus-launch`:
    `as_user` in lib.sh handles it (DBUS_SESSION_BUS_ADDRESS=/run/user/UID/bus).
-7. **Verify pushes server-side**: `gh api repos/dazeb/zorin-ai/commits/heads/main --jq .sha`.
+7. **Verify pushes server-side**: `gh api repos/dazeb/noctraos/commits/heads/main --jq .sha`.
    A clean `git push` exit code has already lied here once — check which branch
    HEAD is on (`git status`) and confirm the remote SHA after pushing.
 8. **Working tree hygiene**: commit on `main`. If `git status` shows a feature
@@ -108,6 +124,34 @@ iso/preseed/zorin-ai.seed.in  Ubiquity/d-i seed template for the above
   at `192.168.8.187` (v0.2 reference). User `dazeb`, password
   `zorin-test-2026` (throwaway), our SSH key authorized on both, passwordless
   sudo via baked NOPASSWD (110) / `/etc/sudoers.d/zai-test` (114).
+- **Remote testing from a cloud/CI agent (Tailscale)**: the LAN IPs above are
+  not routable from outside. VM 114 is on the tailnet as `zorin-ai-iso-test`
+  (`100.125.207.0`); the node is `files` (`100.83.252.94`). Nothing advertises
+  `192.168.8.0/24`, so use the tailnet IPs. A cloud container has no TUN-based
+  routing, so run Tailscale in userspace mode and SSH through it:
+  ```bash
+  tailscaled --tun=userspace-networking --state=$S/tailscaled.state --socket=$S/ts.sock &
+  tailscale --socket=$S/ts.sock up --auth-key=<ephemeral, tagged key> --hostname=claude-cloud
+  ssh -o ProxyCommand="tailscale --socket=$S/ts.sock nc %h %p" dazeb@100.125.207.0
+  ```
+  Start `tailscaled` with `setsid nohup` (plain background jobs die between
+  turns; saved state rejoins without the key). Needs `openssh-client`. Auth
+  keys are pasted by the user per session — never commit one, and ask the user
+  to revoke it afterwards. The agent's SSH public key must be in VM 114's
+  `~dazeb/.ssh/authorized_keys`; do not add keys to or touch the Proxmox node.
+  Verified 2026-10-04: static checks, full `install.sh` run + idempotent
+  second run, and `noc doctor` all green on VM 114 this way.
+- **API-only access to the node** (no shell): a Proxmox API token (`root@pam!claude`) over
+  `https://192.168.8.195:8006` works from the cloud container once the home router
+  advertises `192.168.8.0/24` to the tailnet and the container runs
+  `tailscale set --accept-routes`; run `tailscaled --tun=userspace-networking
+  --socks5-server=localhost:1055` and curl with `-x socks5h://localhost:1055` (clear
+  `no_proxy`, or curl bypasses the SOCKS proxy). Uploads go through that relayed tunnel at
+  ~1 MB/s, so a 3.6 GB ISO takes about an hour. Boot-testing without a shell: create a
+  throwaway VM via the API (UEFI, ISO on `ide2`), grab frames with
+  `iso/pve-console-shot.py`, then delete the VM. ISOs for this are kept in the
+  `noctraos-isos` directory storage (`/local-zfs/noctraos-isos`; `local` has no room). The
+  node has ~4 GiB free RAM: one 3 GiB test VM at a time, nothing else.
 - **ISO build** runs on the node, not here. Scratch MUST be on
   `/local-zfs` (`WORK_BASE=/local-zfs/iso-build`) — pve-root has ~8 GiB free
   and the build needs ~25 GiB. The zfs pool is HDD-backed: unsquashfs and
@@ -117,7 +161,7 @@ iso/preseed/zorin-ai.seed.in  Ubiquity/d-i seed template for the above
 - **RAM pressure**: the node juggles 14 GiB of allocated VMs. Don't start
   extra VMs while builds run; builds peak ~2 GiB.
 - **local-zfs is nearly full** (~17 GiB free, 2026-09-26): a build's scratch
-  (~15 GiB peak) fits, but delete `zorin-ai-iso-build.*` work dirs afterwards.
+  (~15 GiB peak) fits, but delete `noctraos-iso-build.*` work dirs afterwards.
 - `xorriso`, `git`, `squashfs-tools`, `openssl` are available on the node.
 - **Unattended ISO build** (v0.3+): the build script clones the provisioner
   from GitHub for the squashfs, so push first; the seed template is read from
@@ -130,7 +174,7 @@ iso/preseed/zorin-ai.seed.in  Ubiquity/d-i seed template for the above
 # static checks (docker shellcheck — not installed on this host)
 bash -n boot.sh install.sh install/*.sh bin/* configs/nautilus-scripts/*
 docker run --rm -v "$PWD:/mnt" koalaman/shellcheck:stable --severity=warning \
-  boot.sh install.sh install/*.sh bin/noc bin/noc-menu bin/noc-gpu bin/zorin-ai-agent \
+  boot.sh install.sh install/*.sh bin/noc bin/noc-menu bin/noctraos-agent \
   configs/nautilus-scripts/*
 
 # wallpaper iteration (venv at ~/workspace/scratch/zorin-img-venv: pillow+numpy)
@@ -140,26 +184,26 @@ cd assets/wallpapers
 ~/workspace/scratch/zorin-img-venv/bin/python generate-wallpapers.py      # 4K final
 
 # deploy a change to the test VM (idempotent full pass)
-tar czf /tmp/zai-repo.tgz --exclude=.git --exclude=.zcodeignore .
-scp -q /tmp/zai-repo.tgz dazeb@192.168.8.187:/tmp/
-ssh dazeb@192.168.8.187 'rm -rf ~/.local/share/zorin-ai && mkdir -p ~/.local/share/zorin-ai \
-  && tar xzf /tmp/zai-repo.tgz -C ~/.local/share/zorin-ai \
-  && nohup bash ~/.local/share/zorin-ai/install.sh > /tmp/zai-run.log 2>&1 &'
+tar czf /tmp/noctraos-repo.tgz --exclude=.git --exclude=.zcodeignore .
+scp -q /tmp/noctraos-repo.tgz dazeb@192.168.8.187:/tmp/
+ssh dazeb@192.168.8.187 'rm -rf ~/.local/share/noctraos && mkdir -p ~/.local/share/noctraos \
+  && tar xzf /tmp/noctraos-repo.tgz -C ~/.local/share/noctraos \
+  && nohup bash ~/.local/share/noctraos/install.sh > /tmp/noctraos-run.log 2>&1 &'
 # headless runs need NOPASSWD sudo (already enabled on VM 114) or cached creds
 
 # fresh-clone audit + server-side push verification
-git clone -q git@github.com:dazeb/zorin-ai.git /tmp/zai-clone && find /tmp/zai-clone -type f | wc -l
-gh api repos/dazeb/zorin-ai/commits/heads/main --jq '.sha[0:7] + " " + .commit.message'
+git clone -q git@github.com:dazeb/noctraos.git /tmp/noctraos-clone && find /tmp/noctraos-clone -type f | wc -l
+gh api repos/dazeb/noctraos/commits/heads/main --jq '.sha[0:7] + " " + .commit.message'
 
 # ISO build (on the node — clone fresh so the baked snapshot + seed match main)
 ssh root@192.168.8.195
-git clone -q --depth 1 https://github.com/dazeb/zorin-ai.git /local-zfs/iso-build/zorin-ai-src
-systemd-run --unit=zai-iso --collect bash -c \
-  "ZORIN_AI_UNATTENDED=1 ZORIN_AI_USER=dazeb ZORIN_AI_PASSWORD=zorin-test-2026 \
-   WORK_BASE=/local-zfs/iso-build bash /local-zfs/iso-build/zorin-ai-src/iso/build-zorin-ai-iso.sh \
+git clone -q --depth 1 https://github.com/dazeb/noctraos.git /local-zfs/iso-build/noctraos-src
+systemd-run --unit=noctraos-iso --collect bash -c \
+  "NOCTRAOS_UNATTENDED=1 NOCTRAOS_USER=dazeb NOCTRAOS_PASSWORD=zorin-test-2026 \
+   WORK_BASE=/local-zfs/iso-build bash /local-zfs/iso-build/noctraos-src/iso/build-noctraos-iso.sh \
    /var/lib/vz/template/iso/Zorin-OS-18.1-Core-64-bit.iso \
-   /var/lib/vz/template/iso/zorin-ai-os-18.1-amd64.iso > /root/zai-build.log 2>&1"
-tail -f /root/zai-build.log
+   /var/lib/vz/template/iso/noctraos-18.1-amd64.iso > /root/noctraos-build.log 2>&1"
+tail -f /root/noctraos-build.log
 ```
 
 ## Known pitfalls (each cost real debugging time)
@@ -169,9 +213,78 @@ tail -f /root/zai-build.log
   that line; do not silence xorriso's output.
 - **`sudo -v` needs a TTY even under NOPASSWD sudoers** — headless preflight
   uses `sudo -n true` first. Keep that fallback order.
-- **Chatbox package/desktop ids are `xyz.chatboxapp.app`** (not the old
-  Flathub id `xyz.chatboxapp.Chatbox`, which is dead — the vendor CDN
-  `.deb` is the channel).
+- **VS Code replaced VSCodium (b6981b4); Chatbox and Foot are retired.**
+  Module 04 installs `code` from Microsoft's apt repo (key in
+  `/usr/share/keyrings/microsoft.gpg`, source from `configs/vscode/vscode.sources`;
+  `debconf-set-selections` stops the package adding its own repo), then
+  `apt-get remove`s `codium`, `chatbox`, `xyz.chatboxapp.app` and `foot` — never
+  purge/autoremove, user data stays. Legacy `Open_in_VSCodium` Nautilus scripts
+  are deleted by modules 05/07. Settings and Continue config are only seeded
+  when missing, so existing installs keep their old copies.
+- **Top bar + dock come from settings, not patches.** `branding/setup-branding.py`
+  (once per account, marker `desktop-layout-v1`) turns on the Zorin Taskbar's
+  `stockgs-keep-top-panel`, makes it a centred dock (`panel-lengths` -1) and trims
+  its elements; `noctraos-branding` adds Show Desktop and flattens the top bar.
+  To change the layout for an existing account, delete the marker and re-run the
+  script (or edit the taskbar settings).
+- **The Start panel hooks a private Zorin Menu API.** `noctraos-start` replaces the
+  Start button's popup (`menuButtons[i]._menu.toggle/open`). It takes a modal grab
+  on a full-screen root actor and decides "outside click" by pointer coordinates —
+  `event.get_source()` is null for clicks on the root and a stage-level
+  `captured-event` handler never fires under a grab. Both were tried and failed.
+- **CopyQ must run with `QT_QPA_PLATFORM=xcb`.** As a native-Wayland client it
+  logs "Failed to activate Wayland clipboard" and records nothing on GNOME
+  (no wlr-data-control). The autostart entry sets it; keep it that way.
+- **Plymouth two-step loops `throbber-*.png`, not `animation-*.png`.** `animation-`
+  frames are only the end-of-boot animation, so a theme that ships only those shows
+  a blank screen. Also: `UseProgressBar=true` in `[boot-up]` replaces the throbber
+  with a bar. The live initrd contains only the `two-step` module (no `script.so`),
+  so any custom theme must be two-step. Fonts available there: Ubuntu / Ubuntu Mono.
+- **The live boot verifies `/cdrom/md5sum.txt`** (`casper-bottom/01integrity_check`,
+  skippable with `fsck.mode=skip`) and prints "errors found" for every file we
+  changed. The build script used to write `md5sums.txt` (plural) and hash the
+  *extracted original* squashfs, so the list was always wrong; it now moves the new
+  squashfs into the tree first and writes `md5sum.txt`.
+- **GRUB gfxmenu ignores a `progress_bar`'s `height`** (it drew a 28 px slab whatever
+  was set), so the theme shows a text countdown (`label` with `id = "__timeout__"`)
+  instead. isolinux: an opaque `MENU COLOR screen` background hides
+  `MENU BACKGROUND`'s image — make it `#00000000`.
+- **Testing boot screens without the node**: download the Zorin ISO from a mirror
+  (zorin.com/os/mirrors lists them), stage only the boot pieces with
+  `iso/boot-theme.sh` onto a copy (`xorriso -indev … -outdev … -boot_image any replay
+  -map …`, no squashfs repack), then boot it under `qemu-system-x86_64` (no KVM needed)
+  and take `screendump`s over the monitor socket. UEFI needs OVMF and ~50 s under TCG;
+  set `timeout=300` in the test copy of grub.cfg or the menu is gone before the shot.
+  Plymouth themes can be previewed with `plymouthd --no-daemon` under Xvfb with
+  `--kernel-command-line="splash plymouth.ignore-serial-consoles"` (needs the
+  `plymouth-x11` and `plymouth-theme-spinner` packages).
+- **The installer takes its name from `/cdrom/.disk/info`** (`Zorin-OS 18.1 Core 64bit`, hyphen):
+  ubiquity's `get_release()` uses the first word, hyphen turned into a space, for
+  "Try/Install ${RELEASE}". The old `sed 's/Zorin OS/…/'` never matched; it is now
+  `s/^Zorin[- ]OS/NoctraOS/`. The two pictures on that page are
+  `usr/share/ubiquity/pixmaps/{cd_in_tray,ubuntu_installed}.png`.
+- **Zorin's theme defaults live in `:zorin` session groups** (e.g.
+  `[org.gnome.desktop.interface:zorin] gtk-theme`, `[org.gnome.shell.extensions.user-theme:zorin] name`
+  in `50_zorin-desktop-session.gschema.override`), and a session group beats a plain
+  group. A gschema override that only sets the plain group is silently ignored for the
+  theme keys (the wallpaper keys have no `:zorin` entry, so those did apply). The ISO's
+  `90_noctraos-live.gschema.override` therefore repeats the `:zorin` group names.
+- **Autologin leaves the login keyring locked**, so apps that use the Secret
+  Service show an "Authentication required" prompt on first use. Fixed for what we
+  install by using a non-keyring store (`scripts/seed-password-store.py`, run by
+  modules 04 and 07): Chromium (Flatpak) gets `--password-store=basic` in
+  `chromium-flags.conf`, VS Code gets `"password-store": "basic"` in
+  `~/.vscode/argv.json`. Measured on VM 114 with `dbus-monitor`: Chromium made 5
+  Secret Service calls and showed the prompt before, 0 and no prompt after.
+  VS Code made 0 calls at startup either way (the setting is preventive; it only
+  matters when something stores a secret). **Not covered:** any browser the user
+  installs themselves (Brave, Chrome, Edge) still prompts, and saved browser
+  passwords in the basic store are only obfuscated, not protected by a keyring —
+  an accepted trade-off. Firefox does not use the Secret Service.
+- **Driving the VM desktop for tests**: over SSH, unlock the session
+  (`gdbus call ... org.gnome.ScreenSaver.SetActive false`), take screenshots with
+  `gnome-screenshot -f`, inject keys through `/dev/uinput` (needs sudo). Never
+  `pkill -f <pattern>` in an ssh one-liner — it kills your own shell.
 - **`zorin-menu.desktop` does not exist on Zorin 18**; favorites and menu
   code skip missing desktop entries by design.
 - **`org.gnome.desktop.interface accent-color` key is absent** on Zorin 18.1 —
@@ -206,7 +319,7 @@ tail -f /root/zai-build.log
 
 - **GPU module (`bin/noc-gpu`)**: the driver comes from Ubuntu (`ubuntu-drivers`,
   signed, no DKMS) and ONLY the CUDA toolkit from NVIDIA's repo; the pin file
-  `zorin-ai-cuda-toolkit-only` blocks that repo's driver packages — never remove
+  `noctraos-cuda-toolkit-only` blocks that repo's driver packages — never remove
   it (mixed Ubuntu/NVIDIA `libnvidia-*` breaks the driver). Module 02b must run
   BEFORE 03: Ollama's installer exits early only if `nvidia-smi` exists, else it
   installs NVIDIA's DKMS `cuda-drivers` over ours. CUDA 13 dropped
@@ -232,13 +345,23 @@ tail -f /root/zai-build.log
 ## Current state (2026-09-26)
 
 - `main` past v0.2.0: unattended installer preseeding shipped (v0.3.0 line).
-- ISO: `zorin-ai-os-18.1-amd64.iso` on the node is the v0.3 (unattended)
-  build; the v0.2 image is preserved as `zorin-ai-os-18.1-v0.2.iso`.
+- Renamed from `zorin-ai` to **NoctraOS** (slug `noctraos`) — clean break, no
+  migration shims. Existing VMs keep their old `zorin-ai` files until reset or
+  re-provisioned. Test VM names (`zorin-ai-iso-test`, `zai-zerotouch-test`) are
+  unchanged. Zorin OS remains the upstream base and is named only as such.
+- ISO: `zorin-ai-os-18.1-amd64.iso` on the node (pre-rename name) is the v0.3
+  (unattended) build; the v0.2 image is `zorin-ai-os-18.1-v0.2.iso`. New builds
+  are named `noctraos-18.1-amd64.iso`.
   pve-root is at 90% — free space before the next build.
 - VM 110 `zai-zerotouch-test` (192.168.8.138, dazeb/zorin-test-2026, DHCP!):
   installed **fully zero-touch** from the v0.3 ISO on 2026-09-27 (boot →
   install → reboot → autologin → provision, no interaction; `noc doctor`
   all green). It is the v0.3 reference install. VM 114 (192.168.8.187) is
   the v0.2 reference.
-- Roadmap ideas: Aider/Goose launchers (non-npm install paths), custom
-  branding assets, greeter-bug root cause.
+- Super+Space search and the Noctra start button are in the repo
+  (`extensions/`, `search/`, `branding/`, `install/09_super_search.sh`) and
+  verified on VM 114. The pre-rename `zorin-ai-search`/`zorin-ai-branding`
+  files on VM 110 (if any) are stale.
+- Roadmap ideas: first-run onboarding showcasing Super+Space, theme gap list
+  (see README), Aider/Goose launchers (non-npm install paths), greeter-bug
+  root cause.
