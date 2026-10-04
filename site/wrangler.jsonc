@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "noctra-os",
+  "name": "noctraos",
   "compatibility_date": "2026-10-01",
   "assets": {
     "directory": "."
