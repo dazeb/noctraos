@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="description" content="What is included in Noctra OS: local AI models, six coding agents, a dark desktop theme and a ready developer toolchain.">
+<meta name="description" content="What is included in Noctra OS: AI on your own computer, six AI coding assistants, a calm dark desktop and a ready coding setup.">
 <meta name="theme-color" content="#0e0d12">
 <title>Features · Noctra OS</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -36,7 +36,7 @@
   <div class="wrap">
     <p class="eyebrow"><span class="dot"></span>Features</p>
     <h1>What is in the box</h1>
-    <p class="lede">Everything is installed and configured on first login. Nothing to assemble.</p>
+    <p class="lede">Everything is installed and set up for you. There is nothing to assemble.</p>
   </div>
 </div>
 
@@ -44,21 +44,20 @@
   <div class="wrap rows">
     <div class="row">
       <div class="intro">
-        <h2>Local AI</h2>
-        <p>Models run on your own hardware. Nothing leaves your PC unless you choose a hosted agent.</p>
+        <h2>AI on your own computer</h2>
+        <p>The AI models run on your PC, not on someone else's server.</p>
       </div>
       <ul>
-        <li><div><strong>Hardware detection.</strong> <span>llmfit checks CPU, GPU and memory and lists the models that fit.</span></div></li>
-        <li><div><strong>Ollama.</strong> <span>Runs on 127.0.0.1 only and starts with the system.</span></div></li>
-        <li><div><strong>Embeddings.</strong> <span>A local embedding model is included for search over your own files.</span></div></li>
-        <li><div><strong>Model manager.</strong> <span>Add or remove models from a window, or with <code>zom models</code>.</span></div></li>
-        <li><div><strong>Ask AI to Explain.</strong> <span>Right-click any file and a local model explains it.</span></div></li>
+        <li><div><strong>Picks models that fit.</strong> <span>Noctra checks your processor, graphics card and memory, then shows which models will run well.</span></div></li>
+        <li><div><strong>Private by default.</strong> <span>Nothing is sent online unless you choose to use an online assistant.</span></div></li>
+        <li><div><strong>Simple model list.</strong> <span>Add or remove models from a window.</span></div></li>
+        <li><div><strong>Right-click to explain.</strong> <span>Right-click any file and ask the AI what it says.</span></div></li>
       </ul>
     </div>
     <div class="row">
       <div class="intro">
-        <h2>Coding agents</h2>
-        <p>Six agents sit in the start menu. Each opens in a terminal and installs itself the first time you use it.</p>
+        <h2>AI coding assistants</h2>
+        <p>Six assistants sit in the start menu. Each one opens in a terminal and sets itself up the first time you use it.</p>
         <div class="tiles">
           <div class="tile"><img src="icons/noctra-agent-codex.svg" alt="">Codex</div>
           <div class="tile"><img src="icons/noctra-agent-claude.svg" alt="">Claude Code</div>
@@ -69,57 +68,55 @@
         </div>
       </div>
       <ul>
-        <li><div><strong>Agents menu.</strong> <span>Codex, Claude Code, OpenCode, Grok, Gemini CLI and Qwen Code.</span></div></li>
-        <li><div><strong>Herdr.</strong> <span>Persistent terminal workspaces, so agent sessions survive closing the window.</span></div></li>
-        <li><div><strong>Continue in VS Code.</strong> <span>Pre-configured to talk to your local model.</span></div></li>
-        <li><div><strong>Your accounts.</strong> <span>Hosted agents need their own account and a network connection.</span></div></li>
+        <li><div><strong>One menu.</strong> <span>Codex, Claude Code, OpenCode, Grok, Gemini CLI and Qwen Code.</span></div></li>
+        <li><div><strong>In your editor.</strong> <span>The code editor comes ready to chat with your local model.</span></div></li>
+        <li><div><strong>Sessions stay open.</strong> <span>Your assistant keeps working when you close the window.</span></div></li>
+        <li><div><strong>Your own accounts.</strong> <span>Online assistants need their own account and an internet connection.</span></div></li>
       </ul>
     </div>
     <div class="row">
       <div class="intro">
-        <h2>Desktop</h2>
-        <p>A dark, flat desktop that stays out of the way. Mouse-first, with no tiling to learn.</p>
+        <h2>A calm dark desktop</h2>
+        <p>Easy on the eyes, and it works the way you expect.</p>
       </div>
       <ul>
-        <li><div><strong>Matte black theme.</strong> <span>Charcoal surfaces with amber for focus and active states.</span></div></li>
-        <li><div><strong>AI-first start menu.</strong> <span>Agents and Local LLM come first; every other app is in All Apps and search.</span></div></li>
-        <li><div><strong>Wallpapers.</strong> <span>Five polygonal 4K scenes. Switch with <code>zom bg next</code>.</span></div></li>
-        <li><div><strong>One palette.</strong> <span>The shell, GTK, VS Code, Herdr, btop and the terminal share the same colors.</span></div></li>
+        <li><div><strong>Dark theme.</strong> <span>Charcoal with amber highlights.</span></div></li>
+        <li><div><strong>Familiar layout.</strong> <span>A start menu and taskbar, with AI at the top of the menu.</span></div></li>
+        <li><div><strong>Mouse-friendly.</strong> <span>You never have to type a command to get things done.</span></div></li>
+        <li><div><strong>Wallpapers.</strong> <span>Five original 4K wallpapers to choose from.</span></div></li>
       </ul>
     </div>
     <div class="row">
       <div class="intro">
-        <h2>Developer tools</h2>
-        <p>The toolchain is installed system-wide, so every user account gets it.</p>
+        <h2>Ready for coding</h2>
+        <p>Everything you need to start building is already installed.</p>
       </div>
       <ul>
-        <li><div><strong>Runtimes.</strong> <span>Node LTS, Python 3.12 and Go, managed by mise.</span></div></li>
-        <li><div><strong>Editor.</strong> <span>Microsoft VS Code with GitLens, Prettier, Python and Go extensions.</span></div></li>
-        <li><div><strong>Terminal.</strong> <span>Starship, lazygit, lazydocker, btop, bat, eza, fd, fzf, ripgrep, zoxide, neovim and tmux.</span></div></li>
-        <li><div><strong>Containers and Git.</strong> <span>Docker with Compose, and the GitHub CLI.</span></div></li>
+        <li><div><strong>Code editor.</strong> <span>Visual Studio Code, with helpful extensions.</span></div></li>
+        <li><div><strong>Languages.</strong> <span>Node.js, Python and Go.</span></div></li>
+        <li><div><strong>Tools.</strong> <span>Git, Docker and a modern terminal.</span></div></li>
       </ul>
     </div>
     <div class="row">
       <div class="intro">
         <h2>Everyday apps</h2>
-        <p>A workstation is more than a terminal.</p>
+        <p>A computer is more than a code editor.</p>
       </div>
       <ul>
-        <li><div><strong>Browse and write.</strong> <span>Chromium, Obsidian and LibreOffice.</span></div></li>
-        <li><div><strong>Create.</strong> <span>OBS Studio, Kdenlive, Pinta and MPV.</span></div></li>
-        <li><div><strong>Utilities.</strong> <span>Mission Center, CopyQ clipboard history, LocalSend and Flameshot.</span></div></li>
+        <li><div><strong>Web and writing.</strong> <span>Chromium browser, Obsidian notes and LibreOffice.</span></div></li>
+        <li><div><strong>Create.</strong> <span>Video editing, screen recording and image editing.</span></div></li>
+        <li><div><strong>Handy extras.</strong> <span>Clipboard history, a task manager and easy file sharing.</span></div></li>
       </ul>
     </div>
     <div class="row">
       <div class="intro">
-        <h2>Maintenance</h2>
-        <p>One tool keeps the whole stack healthy.</p>
+        <h2>Easy upkeep</h2>
+        <p>One tool keeps everything healthy.</p>
       </div>
       <ul>
-        <li><div><strong><code>zom update</code></strong> <span>Updates apt, Flatpak apps, runtimes and models.</span></div></li>
-        <li><div><strong><code>zom doctor</code></strong> <span>Checks Ollama, runtimes, editors, GPU and disk.</span></div></li>
-        <li><div><strong>Safe to re-run.</strong> <span>The installer changes nothing it does not need to, so you can run it again after any update.</span></div></li>
-        <li><div><strong>New users.</strong> <span>Every new account inherits the same setup.</span></div></li>
+        <li><div><strong>Update everything.</strong> <span>Run <code>zom update</code>, or click through the control panel.</span></div></li>
+        <li><div><strong>Check your system.</strong> <span>Run <code>zom doctor</code> to see that everything is working.</span></div></li>
+        <li><div><strong>New accounts.</strong> <span>Every new user gets the same setup.</span></div></li>
       </ul>
     </div>
   </div>
@@ -141,7 +138,7 @@
     <div class="cols">
       <div class="about">
         <a class="brand" href="index.html"><svg viewBox="0 0 32 32" aria-hidden="true"><polygon points="2,26 13,6 18,16" fill="#e68e0d"/><polygon points="13,26 22,10 30,26" fill="#e68e0d" opacity="0.55"/></svg><span>Noctra <small>OS</small></span></a>
-        <p>An AI workstation. It finds the models your PC can run and puts the coding agents in the start menu.</p>
+        <p>A Linux system for AI and coding. It finds the models your PC can run and puts the AI coding assistants in the start menu.</p>
       </div>
       <div>
         <h3>Noctra OS</h3>

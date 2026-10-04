@@ -36,7 +36,7 @@
   <div class="wrap">
     <p class="eyebrow"><span class="dot"></span>Download</p>
     <h1>Get Noctra OS 0.3.0</h1>
-    <p class="lede">Write the installer to a USB stick, boot it, and Noctra sets itself up on first login.</p>
+    <p class="lede">Put the installer on a USB stick, start your PC from it, and Noctra sets itself up when you first log in.</p>
   </div>
 </div>
 
@@ -45,13 +45,13 @@
     <div class="head"><h2>Releases</h2></div>
     <div class="scroll">
       <table>
-        <thead><tr><th>Release</th><th>Base</th><th>Image</th><th>Status</th></tr></thead>
+        <thead><tr><th>Release</th><th>Based on</th><th>File</th><th>Status</th></tr></thead>
         <tbody>
-          <tr><td>Noctra OS 0.3.0</td><td>Ubuntu 24.04 LTS</td><td><code>amd64</code> · installer ISO</td><td><span class="status">Build from source</span></td></tr>
+          <tr><td>Noctra OS 0.3.0</td><td>Ubuntu 24.04 LTS</td><td>Installer (<code>.iso</code> file)</td><td><span class="status">Not yet published</span></td></tr>
         </tbody>
       </table>
     </div>
-    <p class="alt" style="margin-top:16px">There is no hosted download yet. For now you build the ISO yourself from the repository; the build instructions list the base image and scratch space you need.</p>
+    <p class="alt" style="margin-top:16px">The ready-made download is not published yet. If you are comfortable with developer tools, you can build the installer yourself from the repository.</p>
     <div class="term-line" style="margin-top:20px;max-width:640px">
       <code id="clonecmd">git clone https://github.com/dazeb/noctraos</code>
       <button type="button" data-copy="clonecmd" aria-label="Copy clone command">Copy</button>
@@ -64,12 +64,12 @@
   <div class="wrap">
     <div class="head"><h2>System requirements</h2></div>
     <div class="reqs">
-      <div><b>64-bit PC</b>amd64</div>
+      <div><b>Intel or AMD</b>processor</div>
       <div><b>25 GB</b>free disk space</div>
-      <div><b>8 GB RAM</b>16 GB for larger models</div>
+      <div><b>8 GB memory</b>16 GB for larger models</div>
       <div><b>Internet</b>during install</div>
     </div>
-    <p class="alt" style="margin-top:16px">A graphics card is optional. Models run on the CPU, and use an NVIDIA GPU when one is detected.</p>
+    <p class="alt" style="margin-top:16px">A separate graphics card is optional. Models run on the processor, and use an NVIDIA graphics card when one is found.</p>
   </div>
 </section>
 
@@ -80,10 +80,10 @@
       <h2>Four steps.</h2>
     </div>
     <ol class="steps">
-      <li><div><strong>Write it to a USB stick.</strong><span>Use any tool that writes ISO images, such as balenaEtcher or Ventoy.</span></div></li>
-      <li><div><strong>Boot from the stick.</strong><span>Pick “Try or Install Noctra OS” and click through the installer. Or choose the unattended entry if the ISO was built with it.</span></div></li>
-      <li><div><strong>Log in.</strong><span>A terminal opens on first login and asks once for your password. It then builds the workstation.</span></div></li>
-      <li><div><strong>Check it.</strong><span>Run <code>zom doctor</code> to confirm that everything is healthy.</span></div></li>
+      <li><div><strong>Put it on a USB stick.</strong><span>The installer is a single <code>.iso</code> file. A free tool such as balenaEtcher or Ventoy copies it to the stick.</span></div></li>
+      <li><div><strong>Start your PC from the stick.</strong><span>Choose “Try or Install Noctra OS” and click through the installer.</span></div></li>
+      <li><div><strong>Log in.</strong><span>A window opens, asks once for your password, and finishes setting everything up.</span></div></li>
+      <li><div><strong>Check it.</strong><span>Run <code>zom doctor</code> to confirm that everything is working.</span></div></li>
     </ol>
   </div>
 </section>
@@ -94,7 +94,7 @@
     <div class="cols">
       <div class="about">
         <a class="brand" href="index.html"><svg viewBox="0 0 32 32" aria-hidden="true"><polygon points="2,26 13,6 18,16" fill="#e68e0d"/><polygon points="13,26 22,10 30,26" fill="#e68e0d" opacity="0.55"/></svg><span>Noctra <small>OS</small></span></a>
-        <p>An AI workstation. It finds the models your PC can run and puts the coding agents in the start menu.</p>
+        <p>A Linux system for AI and coding. It finds the models your PC can run and puts the AI coding assistants in the start menu.</p>
       </div>
       <div>
         <h3>Noctra OS</h3>
