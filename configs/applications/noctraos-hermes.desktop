@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Hermes
+GenericName=AI Agent
+Comment=Hermes desktop agent — free to start, no signup
+Exec=/usr/local/bin/noctraos-hermes
+Icon=noctraos-agent-hermes
+Categories=X-NoctraOS-Agents;Development;
+Terminal=false
+StartupNotify=true
+StartupWMClass=com.nousresearch.hermes
+Keywords=hermes;nous;agent;ai;assistant;
