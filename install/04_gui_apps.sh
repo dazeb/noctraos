@@ -119,9 +119,10 @@ fi
 # is empty), and give Chromium and VS Code their own keyring-free store as well.
 if seeded="$(as_user python3 "$REPO_ROOT/scripts/seed-password-store.py" "$TARGET_HOME")"; then
   log "$seeded"
-  # The running keyring daemon has the old (locked) keyring in memory: have it re-read the file.
-  case "$seeded" in
-    *keyring*) as_user systemctl --user try-restart gnome-keyring-daemon.service >/dev/null 2>&1 || true ;;
+  # The running keyring daemon has the old (locked) keyring in memory: have it re-read the file,
+  # but only when the keyring file actually changed ("changed: none" on a re-run restarts nothing).
+  case " ${seeded#*changed:} " in
+    *" keyring "*) as_user systemctl --user try-restart gnome-keyring-daemon.service >/dev/null 2>&1 || true ;;
   esac
 else
   warn "Could not set the keyring-free password store"

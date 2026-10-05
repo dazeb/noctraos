@@ -91,7 +91,8 @@ def main():
     home = Path(sys.argv[1])
     changed = [name for name, fn in (("keyring", login_keyring), ("chromium", chromium_flags),
                                      ("vscode", vscode_argv)) if fn(home)]
-    print("keyring-free secrets set for: " + (", ".join(changed) if changed else "nothing to change"))
+    # One unambiguous line the install modules read: "changed: keyring chromium" or "changed: none".
+    print("keyring-free secrets changed: " + (" ".join(changed) if changed else "none"))
 
 
 if __name__ == "__main__":
