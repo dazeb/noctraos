@@ -78,10 +78,16 @@ else
   run_module 08_shell_theme.sh
   run_module 09_super_search.sh
   run_module 10_boot_theme.sh
-  run_module 11_hermes.sh
 fi
 
 run_module 07_persistence.sh
+
+# Last on purpose: the Hermes build takes 25+ minutes and uses no sudo, so
+# anything that needs sudo must run before it. Otherwise the sudo credential
+# cache (~15 min) expires and an interactive install stalls on a password prompt.
+if [ "$SKIP_GUI" -eq 0 ]; then
+  run_module 11_hermes.sh
+fi
 
 log "✔ Install complete. Full log: $LOG_FILE"
 if [ -f /var/run/reboot-required.pkgs ] && grep -x 'noctraos-gpu' /var/run/reboot-required.pkgs >/dev/null; then
