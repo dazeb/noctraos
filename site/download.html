@@ -69,9 +69,9 @@
       <code id="verify-linux">sha256sum -c SHA256SUMS --ignore-missing</code>
       <button type="button" data-copy="verify-linux" aria-label="Copy command">Copy</button>
     </div>
-    <p class="alt" style="margin:20px 0 10px"><strong>Windows</strong> (PowerShell). Compare the result with the line for your file in <code>SHA256SUMS</code>.</p>
+    <p class="alt" style="margin:20px 0 10px"><strong>Windows</strong> (PowerShell). This prints a checksum for each Noctra file in the folder. Compare each one with the SHA-256 shown beside that file above, or with its line in <code>SHA256SUMS</code>.</p>
     <div class="term-line" style="max-width:720px">
-      <code id="verify-win">Get-FileHash .\noctraos-0.3.0-amd64.iso -Algorithm SHA256</code>
+      <code id="verify-win">Get-FileHash .\noctraos-0.3.0* -Algorithm SHA256</code>
       <button type="button" data-copy="verify-win" aria-label="Copy command">Copy</button>
     </div>
     <p class="alt" style="margin-top:16px">Linux prints <code>OK</code> next to each file that matches. If a file does not match, download it again.</p>
