@@ -42,6 +42,8 @@ install/
   04_workstation_apps.sh    Omarchy-style Ubuntu/Flathub workstation app set
   04c_app_policy.sh         Flatpak/AppImage-first policy: retires the apt copy of an app once
                             its Flatpak is in, retires unwanted base apps, hides junk launchers
+  04d_appmanager.sh         AppManager (kem-a/AppManager): AppImage installer/updater, sha256-verified
+                            release in /opt/appmanager; non-fatal; rerun: install.sh --only 04d_appmanager.sh
   05_mouse_ergonomics.sh    Nautilus right-click scripts
   06_desktop_theme.sh       gsettings ergonomics, wallpapers, Agents menu,
                             AI-first /etc/xdg/menus/gnome-applications.menu
@@ -404,7 +406,7 @@ tail -f /root/noctraos-build.log
   first and skip if apt would also remove a protected package (zorin-os*, gnome-shell, …);
   launchers are hidden with a `NoDisplay=true` copy in `/usr/local/share/applications`
   (delete the file to undo), never by editing the packaged file. No snaps. AppImages run
-  with `libfuse2t64`; we ship no AppImage manager. Zorin Appearance, Zorin Connect, Web Apps,
+  with `libfuse2t64`; AppManager (module 04d) is the AppImage manager (Gear Lever stays retired). Zorin Appearance, Zorin Connect, Web Apps,
   Windows App Support and Neovim are removed (Appearance only switches Zorin layouts/themes,
   which our branding fixes; wallpapers are Settings > Background / `noc bg`; its
   `zorin-appearance-layouts-*` packages go with it, the zorin-menu/taskbar/desktop-icons

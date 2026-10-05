@@ -21,8 +21,9 @@ installed_matching() {
 }
 
 # ---- AppImage support -------------------------------------------------------------
-# AppImages need FUSE 2 (libfuse2t64 on Ubuntu 24.04) to run. We ship no AppImage
-# manager: a downloaded AppImage runs once it is marked executable.
+# AppImages need FUSE 2 (libfuse2t64 on Ubuntu 24.04) to run. Module 04d installs
+# AppManager for drag-and-drop installs; a downloaded AppImage also runs once it is
+# marked executable.
 if pkg_installed libfuse2t64; then
   log "OK: libfuse2t64 already installed (AppImage support)"
 elif apt-cache show libfuse2t64 >/dev/null 2>&1; then
@@ -116,7 +117,7 @@ done
 # metapackage, so removing them would remove that too (the guard would refuse). It is not
 # in the list; its launcher is hidden below instead.
 
-# Gear Lever (AppImage manager) is no longer shipped; remove it where an earlier run put it.
+# Gear Lever (AppImage manager) is no longer shipped (AppManager, module 04d, replaces it); remove it where an earlier run put it.
 if flatpak_has it.mijorus.gearlever; then
   log "Removing Flatpak it.mijorus.gearlever (not shipped)"
   sudo flatpak uninstall -y --noninteractive it.mijorus.gearlever \

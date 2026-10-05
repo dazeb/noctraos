@@ -44,6 +44,7 @@ Prefer to review first: `git clone https://github.com/dazeb/noctraos && cd noctr
 | Runtimes | [mise](https://mise.jdx.dev) managing Node LTS, Python 3.12, Go — system-wide, for every user |
 | Mouse ergonomics | Nautilus right-click: *Open in VS Code*, *Ask AI to Explain* (sends the file to local Ollama, answers in a dialog), *Open Terminal Here* |
 | **Super+Space search** | One overlay that searches apps, files and folders, CopyQ clipboard history, the web, and (opt-in, offered after first browser use) your Chromium/Firefox browser history; settings in *Search settings* (the gear). Installed by module 09 |
+| AppImages | [AppManager](https://github.com/kem-a/AppManager) — double-click any `.AppImage` for a drag-and-drop install window (menu entry, icon, auto-updates); FUSE 2 is preinstalled so other AppImages run too. Installed by module 04d (`04d_appmanager.sh`) |
 | Clipboard | [CopyQ](https://hluk.github.io/CopyQ/) permanent clipboard history — tray-resident, survives reboots, searchable, image support, 1000 entries |
 | Desktop | NoctraOS-Dark shell theme, AI-first start menu, white menu icons, neon polygonal 4K wallpapers, dark mode, minimize/maximize/close window buttons, pinned taskbar |
 | Maintenance | `noc` CLI + `noc-menu` GUI panel |
@@ -241,6 +242,7 @@ boot.sh ──► install.sh ──► modules 00–08
    02 mise                  │  runtime manager, login + interactive shells
    03 ai core               │  Ollama daemon, coding + embedding models
    04 gui apps              │  VS Code (+5 extensions), Mission Center, CopyQ
+   04d appmanager           │  AppManager (AppImage installer/updater); FUSE 2 comes from 01
    05 mouse ergonomics      │  Nautilus right-click scripts
    06 desktop theme         │  ergonomics gsettings, wallpapers, Agents menu,
                             │  AI-first application menu tree
