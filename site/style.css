@@ -209,3 +209,21 @@ footer .about { display: grid; gap: 14px; max-width: 36ch; }
   html { scroll-behavior: auto; }
   *, *::before, *::after { transition-duration: 0.01ms !important; }
 }
+
+/* Download table: stack each file as a block on phones so the button stays visible. */
+@media (max-width: 640px) {
+  #files table { min-width: 0; }
+  #files thead { display: none; }
+  #files table, #files tbody, #files tr, #files td { display: block; }
+  #files tr { padding: 18px 0; border-bottom: 1px solid var(--line); }
+  #files tr:last-child { border-bottom: 0; }
+  #files td { border: 0; padding: 4px 18px; }
+  #files td:last-child { padding-top: 12px; }
+}
+
+.size { margin-left: 6px; color: var(--muted); font-size: 0.8125rem; white-space: nowrap; }
+
+.hash { display: block; margin-top: 6px; max-width: 34ch; font: 400 0.75rem/1.4 var(--mono); color: var(--muted); overflow-wrap: anywhere; }
+.note { margin-top: 16px; max-width: 72ch; padding: 14px 18px; border: 1px solid var(--line); border-left: 3px solid var(--amber); border-radius: var(--radius); color: var(--muted); font-size: 0.9375rem; }
+.note strong { color: var(--fg); }
+.login { display: block; margin-top: 8px; color: var(--muted); font-size: 0.875rem; }

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="description" content="Download the Noctra OS installer ISO. System requirements and install steps.">
+<meta name="description" content="Download Noctra OS 0.3.0: the installer ISO and virtual machine disks, with checksums, system requirements and install steps.">
 <meta name="theme-color" content="#0b0a09">
 <title>Download · Noctra OS</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -37,26 +37,44 @@
     <p class="eyebrow"><span class="dot"></span>Download</p>
     <h1>Get Noctra OS 0.3.0</h1>
     <p class="lede">Put the installer on a USB stick, start your PC from it, and Noctra sets itself up the first time you log in.</p>
+    <div class="cta"><a class="btn primary" href="https://dl.noctraos.dev/releases/v0.3.0/noctraos-0.3.0-amd64.iso">Download the ISO</a><a class="btn ghost" href="#verify">Check your download</a></div>
   </div>
 </div>
 
-<section>
+<section id="files">
   <div class="wrap">
-    <div class="head"><h2>Releases</h2></div>
+    <div class="head"><h2>Noctra OS 0.3.0</h2><p class="lede">Based on Ubuntu 24.04 LTS, for Intel and AMD PCs. Most people want the ISO.</p></div>
     <div class="scroll">
       <table>
-        <thead><tr><th>Release</th><th>Based on</th><th>File</th><th>Status</th></tr></thead>
+        <thead><tr><th>File</th><th>Use it for</th><th>Download</th></tr></thead>
         <tbody>
-          <tr><td>Noctra OS 0.3.0</td><td>Ubuntu 24.04 LTS</td><td>Installer (<code>.iso</code> file)</td><td><span class="status">Not yet published</span></td></tr>
+          <tr><td><strong>Installer</strong><br><code>noctraos-0.3.0-amd64.iso</code> <span class="size">3.9 GB</span><span class="hash">SHA-256: 97ee37900890fa7d69e3f0efb0e567a0b1deabdb4f9c2a038ff1f65bbac9dfba</span></td><td>Installing on a PC. Copy it to a USB stick and start your PC from it.</td><td><a class="btn primary" href="https://dl.noctraos.dev/releases/v0.3.0/noctraos-0.3.0-amd64.iso">ISO</a></td></tr>
+          <tr><td><strong>Virtual machine disk</strong><br><code>noctraos-0.3.0.qcow2</code> <span class="size">17.2 GB</span><span class="hash">SHA-256: 839d20bef1d8bfb69f054e1fc24747f0f0ae76893347351b88d1423501d887fd</span></td><td>Running Noctra in KVM, QEMU or Proxmox.<span class="login">Signs in automatically as <code>noctraos</code> (password <code>noctraos</code>). Trial use only.</span></td><td><a class="btn ghost" href="https://dl.noctraos.dev/releases/v0.3.0/noctraos-0.3.0.qcow2">QCOW2</a></td></tr>
+          <tr><td><strong>Virtual machine disk</strong><br><code>noctraos-0.3.0.vmdk</code> <span class="size">16.7 GB</span><span class="hash">SHA-256: 665bd857fc13ace61dbbcde988e019203f653f74f404e95a045e0336fc03a7b7</span></td><td>Running Noctra in VMware or VirtualBox.<span class="login">Signs in automatically as <code>noctraos</code> (password <code>noctraos</code>). Trial use only.</span></td><td><a class="btn ghost" href="https://dl.noctraos.dev/releases/v0.3.0/noctraos-0.3.0.vmdk">VMDK</a></td></tr>
+          <tr><td><strong>Checksums</strong><br><code>SHA256SUMS</code></td><td>Checking that your download is complete and unchanged.</td><td><a class="btn ghost" href="https://dl.noctraos.dev/releases/v0.3.0/SHA256SUMS">SHA256SUMS</a></td></tr>
         </tbody>
       </table>
     </div>
-    <p class="alt" style="margin-top:16px">The ready-made download is not published yet. If you are comfortable with developer tools, you can build the installer yourself from the repository.</p>
-    <div class="term-line" style="margin-top:20px;max-width:640px">
-      <code id="clonecmd">git clone https://github.com/dazeb/noctraos</code>
-      <button type="button" data-copy="clonecmd" aria-label="Copy clone command">Copy</button>
+    <p class="note"><strong>The virtual machine disks are trial appliances.</strong> They sign in automatically as the user <code>noctraos</code> with the password <code>noctraos</code>, and that user has passwordless administrator (sudo) access. Change the password first by opening a terminal and running <code>passwd</code>. Use the disk to try Noctra OS, not for real work, and keep it off shared networks.</p>
+    <p class="note"><strong>This is an early release.</strong> Noctra OS 0.3.0 has been run in virtual machines, and has seen little testing on real hardware. Back up anything important before you write the installer to a disk, and tell us how it went on your PC.</p>
+    <p class="alt" style="margin-top:16px">Using a virtual machine? Create a new machine, attach the disk file as its hard drive, and start it. Prefer to build it yourself? The <a href="https://github.com/dazeb/noctraos#readme">README</a> has the instructions.</p>
+  </div>
+</section>
+
+<section id="verify">
+  <div class="wrap">
+    <div class="head"><h2>Check your download</h2><p class="lede">The files are large. A quick check confirms that nothing was lost on the way. Download <code>SHA256SUMS</code> into the same folder, then run:</p></div>
+    <p class="alt" style="margin-bottom:10px"><strong>Linux</strong></p>
+    <div class="term-line" style="max-width:720px">
+      <code id="verify-linux">sha256sum -c SHA256SUMS --ignore-missing</code>
+      <button type="button" data-copy="verify-linux" aria-label="Copy command">Copy</button>
     </div>
-    <p class="alt" style="margin-top:12px"><a href="https://github.com/dazeb/noctraos#readme">Build instructions are in the README</a></p>
+    <p class="alt" style="margin:20px 0 10px"><strong>Windows</strong> (PowerShell). This prints a checksum for each Noctra file in the folder. Compare each one with the SHA-256 shown beside that file above, or with its line in <code>SHA256SUMS</code>.</p>
+    <div class="term-line" style="max-width:720px">
+      <code id="verify-win">Get-FileHash .\noctraos-0.3.0* -Algorithm SHA256</code>
+      <button type="button" data-copy="verify-win" aria-label="Copy command">Copy</button>
+    </div>
+    <p class="alt" style="margin-top:16px">Linux prints <code>OK</code> next to each file that matches. If a file does not match, download it again.</p>
   </div>
 </section>
 
@@ -69,7 +87,7 @@
       <div><b>8 GB memory</b>16 GB for larger models</div>
       <div><b>Internet</b>during install</div>
     </div>
-    <p class="alt" style="margin-top:16px">A separate graphics card is optional. If you have an NVIDIA or AMD card, setup installs its driver (with CUDA for NVIDIA, ROCm for supported AMD cards) and local models use it after one restart. Without one, models run on the processor.</p>
+    <p class="alt" style="margin-top:16px">First setup takes 25 to 40 minutes, mostly downloading the AI model and building the Hermes app, which adds about 5 GB. A separate graphics card is optional. If you have an NVIDIA or AMD card, setup installs its driver (with CUDA for NVIDIA, ROCm for supported AMD cards) and local models use it after one restart. Without one, models run on the processor.</p>
   </div>
 </section>
 
@@ -82,7 +100,7 @@
     <ol class="steps">
       <li><div><strong>Put it on a USB stick.</strong><span>The installer is a single <code>.iso</code> file. A free tool such as balenaEtcher or Ventoy copies it to the stick.</span></div></li>
       <li><div><strong>Start your PC from the stick.</strong><span>Choose the “Try or Install” entry in the boot menu and click through the installer.</span></div></li>
-      <li><div><strong>Log in.</strong><span>A short welcome opens while a window asks once for your password and sets everything up. Setup takes about half an hour and needs an internet connection.</span></div></li>
+      <li><div><strong>Log in.</strong><span>A short welcome opens while a window asks once for your password and sets everything up. Setup takes 25 to 40 minutes and needs an internet connection.</span></div></li>
       <li><div><strong>Check it.</strong><span>Run <code>noc doctor</code> to confirm that everything is working.</span></div></li>
     </ol>
   </div>

@@ -27,10 +27,12 @@ curl -fsSL https://raw.githubusercontent.com/dazeb/noctraos/main/boot.sh | bash
 
 Prefer to review first: `git clone https://github.com/dazeb/noctraos && cd noctraos && ./boot.sh`
 
-> **Release status:** the current version is **0.3.0** (`VERSION`), but the
-> installer ISO and the VM disk are **not published yet** — build the ISO
-> yourself ([below](#building-the-noctraos-iso)). What is left to ship is in the
-> [release runbook](docs/release-runbook.md).
+> **Release status:** the current version is **0.3.0** (`VERSION`). The installer
+> ISO and the VM disks (QCOW2 and VMDK, trial appliances) are downloadable from
+> [noctraos.dev/download](https://noctraos.dev/download), with a `SHA256SUMS` file.
+> The `v0.3.0` git tag and GitHub release have not been created yet; what is left
+> is in the [release runbook](docs/release-runbook.md). You can also build the ISO
+> yourself ([below](#building-the-noctraos-iso)).
 
 ---
 
@@ -430,9 +432,10 @@ idempotent re-runs, first-boot provisioning from the ISO, and an unattended inst
 the custom ISO. **Those runs predate PR #17** (app policy, AppManager, the Welcome and
 Appearance apps, Hermes changes); every ISO built so far was made before it, so the
 current `main` has not been through that full cycle and the ISOs must be rebuilt and
-re-tested. The 0.3.0 release itself is **not published** — no tag, no GitHub release,
-no downloadable ISO or VM disk yet; the [release runbook](docs/release-runbook.md) is
-the ordered list of what is left.
+re-tested. The 0.3.0 ISO and VM disks are downloadable from
+[noctraos.dev/download](https://noctraos.dev/download), but there is no `v0.3.0` tag or
+GitHub release yet; the [release runbook](docs/release-runbook.md) is the ordered list
+of what is left.
 
 Not yet verified: the Welcome running during first-boot provisioning on a
 from-scratch install, a full interactive install of the release ISO, the exported
