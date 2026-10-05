@@ -1,6 +1,7 @@
 import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
+import Pango from 'gi://Pango';
 import Shell from 'gi://Shell';
 import St from 'gi://St';
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
@@ -10,6 +11,19 @@ const MENU_UUID = 'zorin-menu@zorinos.com';
 const AGENTS = ['noctraos-hermes', 'noctraos-claude', 'noctraos-codex', 'noctraos-opencode',
     'noctraos-grok', 'noctraos-gemini', 'noctraos-qwen'];
 const RECENT_LIMIT = 8;
+// Apps grid: tiles per row, and stand-ins for a default app that is not installed. Only the
+// shipped defaults (schema key pinned-apps) get stand-ins; apps the user adds are exact.
+const APP_COLUMNS = 7;
+const PICKER_HEIGHT = 220;
+const APP_FALLBACKS = {
+    'org.gnome.TextEditor.desktop': ['org.gnome.gedit.desktop', 'gedit.desktop', 'org.gnome.Gedit.desktop',
+        'org.xfce.mousepad.desktop'],
+    'org.gnome.Calculator.desktop': ['gnome-calculator.desktop'],
+    'org.gnome.Terminal.desktop': ['gnome-terminal.desktop', 'org.gnome.Ptyxis.desktop'],
+    'org.chromium.Chromium.desktop': ['firefox.desktop', 'org.mozilla.firefox.desktop',
+        'google-chrome.desktop', 'chromium.desktop'],
+    'org.gnome.Software.desktop': ['gnome-software.desktop'],
+};
 const WIDTH = 560;
 const HELP_URI = 'file:///usr/local/share/noctraos/help/index.html';
 // Open-Meteo / WMO weather codes to symbolic icons.
@@ -25,6 +39,7 @@ export default class NoctraStart extends Extension {
         this._patched = new Map();
         this._root = null;
         this._panel = null;
+        this._anchor = null;
         this._hook();
         this._extensionId = Main.extensionManager.connect('extension-state-changed', () => this._schedule());
         this._monitorId = Main.layoutManager.connect('monitors-changed', () => this._schedule());
@@ -100,6 +115,8 @@ export default class NoctraStart extends Extension {
                 panel.add_child(startHere);
             panel.add_child(this._section('AGENTS'));
             panel.add_child(this._agents());
+            panel.add_child(this._appsHeader());
+            panel.add_child(this._apps());
             panel.add_child(this._section('RECENT'));
             panel.add_child(this._recent());
             panel.add_child(this._footer());
@@ -122,7 +139,14 @@ export default class NoctraStart extends Extension {
         });
         root.connect('key-press-event', (_actor, event) => {
             if (event.get_key_symbol() === Clutter.KEY_Escape) {
-                this._close();
+                // Escape backs out of the picker, then of edit mode, then closes the panel.
+                if (this._picking || this._editing) {
+                    this._picking = false;
+                    this._editing = false;
+                    this._renderApps();
+                } else {
+                    this._close();
+                }
                 return Clutter.EVENT_STOP;
             }
             return Clutter.EVENT_PROPAGATE;
@@ -131,12 +155,8 @@ export default class NoctraStart extends Extension {
         this._root = root;
         this._panel = panel;
 
-        // Centered on the monitor, sitting just above the dock.
-        const monitor = Main.layoutManager.primaryMonitor;
-        const [, height] = panel.get_preferred_height(WIDTH);
-        const [, top] = button?.get_transformed_position() ?? [0, monitor.y + monitor.height - 60];
-        panel.set_position(Math.round(monitor.x + (monitor.width - WIDTH) / 2),
-            Math.max(monitor.y + 40, Math.round(top - height - 8)));
+        this._anchor = button;
+        this._place();
         this._grab = Main.pushModal(root, {actionMode: Shell.ActionMode.POPUP});
         if (!this._grab) {
             this._close();
@@ -153,6 +173,19 @@ export default class NoctraStart extends Extension {
         this._root?.destroy();
         this._root = null;
         this._panel = null;
+        this._appsBox = null;
+        this._editButton = null;
+        this._editing = false;
+        this._picking = false;
+    }
+
+    // Centered on the monitor, sitting just above the dock. Re-run when the panel's height changes.
+    _place() {
+        const monitor = Main.layoutManager.primaryMonitor;
+        const [, height] = this._panel.get_preferred_height(WIDTH);
+        const [, top] = this._anchor?.get_transformed_position() ?? [0, monitor.y + monitor.height - 60];
+        this._panel.set_position(Math.round(monitor.x + (monitor.width - WIDTH) / 2),
+            Math.max(monitor.y + 40, Math.round(top - height - 8)));
     }
 
     _header() {
@@ -276,6 +309,178 @@ export default class NoctraStart extends Extension {
         return row;
     }
 
+    // ---- Apps: basic everyday apps the user can add to and remove from -------------------
+
+    // A pinned id resolved to an installed app: the id itself, else a stand-in for a default.
+    _resolveApp(id) {
+        const appSystem = Shell.AppSystem.get_default();
+        for (const candidate of [id, ...(APP_FALLBACKS[id] ?? [])]) {
+            const app = appSystem.lookup_app(candidate);
+            if (app)
+                return app;
+        }
+        return null;
+    }
+
+    _appsHeader() {
+        const row = new St.BoxLayout({x_expand: true});
+        row.add_child(new St.Label({text: 'APPS', style_class: 'noctra-start-section', x_expand: true}));
+        this._editButton = new St.Button({label: 'Edit', style_class: 'noctra-start-text-button',
+            reactive: true, can_focus: true, accessible_name: 'Edit the apps list'});
+        this._editButton.connect('clicked', () => {
+            this._editing = !this._editing;
+            this._picking = false;
+            this._renderApps();
+        });
+        row.add_child(this._editButton);
+        return row;
+    }
+
+    _apps() {
+        this._editing = false;
+        this._picking = false;
+        this._appsBox = new St.BoxLayout({vertical: true, style_class: 'noctra-start-apps'});
+        this._renderApps(false);
+        return this._appsBox;
+    }
+
+    // Rebuild the section in place: the grid, or the picker while adding an app.
+    _renderApps(place = true) {
+        const box = this._appsBox;
+        if (!box)
+            return;
+        box.destroy_all_children();
+        this._editButton?.set_label(this._editing ? 'Done' : 'Edit');
+        this._editButton?.set_opacity(this._picking ? 0 : 255);
+        if (this._picking)
+            this._buildPicker(box);
+        else
+            this._buildGrid(box);
+        if (place && this._panel)
+            this._place();
+    }
+
+    _appTile(label, icon, onClick, onRemove = null) {
+        const tile = new St.Button({style_class: 'noctra-start-app', reactive: true, can_focus: true,
+            width: Math.floor((WIDTH - 16 - (APP_COLUMNS - 1) * 4) / APP_COLUMNS), accessible_name: label,
+            button_mask: St.ButtonMask.ONE | St.ButtonMask.THREE});
+        const column = new St.BoxLayout({vertical: true, x_align: Clutter.ActorAlign.CENTER});
+        if (this._editing && onRemove) {
+            tile.add_style_class_name('noctra-start-app-editing');
+            column.add_child(new St.Label({text: '✕', style_class: 'noctra-start-app-remove',
+                x_align: Clutter.ActorAlign.CENTER}));
+        }
+        column.add_child(icon);
+        const text = new St.Label({text: label, style_class: 'noctra-start-app-label',
+            x_align: Clutter.ActorAlign.CENTER});
+        text.clutter_text.set_ellipsize(Pango.EllipsizeMode.END);
+        column.add_child(text);
+        tile.set_child(column);
+        tile.connect('clicked', (_actor, mouseButton) => {
+            // Right-click removes straight away; so does a click in edit mode.
+            if (onRemove && (this._editing || mouseButton === Clutter.BUTTON_SECONDARY))
+                onRemove();
+            else if (mouseButton !== Clutter.BUTTON_SECONDARY)
+                onClick();
+        });
+        return tile;
+    }
+
+    _buildGrid(box) {
+        const pinned = this._settings.get_strv('pinned-apps');
+        const tiles = [];
+        for (const id of pinned) {
+            const app = this._resolveApp(id);
+            if (!app)
+                continue;
+            tiles.push(this._appTile(app.get_name(), app.create_icon_texture(24),
+                () => this._launchApp(app.get_id(), true), () => this._unpin(id)));
+        }
+        if (!this._editing) {
+            tiles.push(this._appTile('Add', new St.Icon({icon_name: 'list-add-symbolic', icon_size: 24}),
+                () => {
+                    this._picking = true;
+                    this._renderApps();
+                }));
+        } else if (!tiles.length) {
+            box.add_child(new St.Label({text: 'Nothing pinned. Press Done, then Add.',
+                style_class: 'noctra-start-empty'}));
+        }
+        for (let i = 0; i < tiles.length; i += APP_COLUMNS) {
+            const row = new St.BoxLayout({style_class: 'noctra-start-app-row'});
+            for (const tile of tiles.slice(i, i + APP_COLUMNS))
+                row.add_child(tile);
+            box.add_child(row);
+        }
+    }
+
+    // Search box over every installed app that is not already shown in the panel.
+    _buildPicker(box) {
+        const top = new St.BoxLayout({style_class: 'noctra-start-app-row'});
+        const entry = new St.Entry({hint_text: 'Type to find an app to add', style_class: 'noctra-start-entry',
+            can_focus: true, x_expand: true});
+        const cancel = new St.Button({label: 'Cancel', style_class: 'noctra-start-text-button',
+            reactive: true, can_focus: true});
+        cancel.connect('clicked', () => {
+            this._picking = false;
+            this._renderApps();
+        });
+        top.add_child(entry);
+        top.add_child(cancel);
+        const list = new St.BoxLayout({vertical: true, style_class: 'noctra-start-picker'});
+        const scroll = new St.ScrollView({hscrollbar_policy: St.PolicyType.NEVER, overlay_scrollbars: true,
+            height: PICKER_HEIGHT, child: list});
+        box.add_child(top);
+        box.add_child(scroll);
+
+        const taken = new Set([...this._settings.get_strv('pinned-apps'), ...AGENTS.map(id => `${id}.desktop`)]);
+        const candidates = Shell.AppSystem.get_default().get_installed()
+            .filter(info => info.should_show() && !taken.has(info.get_id()))
+            .sort((a, b) => a.get_name().localeCompare(b.get_name()));
+        let matches = [];
+        const fill = () => {
+            const query = entry.get_text().trim().toLowerCase();
+            list.destroy_all_children();
+            matches = candidates.filter(info => !query ||
+                `${info.get_name()} ${info.get_description() ?? ''}`.toLowerCase().includes(query));
+            if (!matches.length) {
+                list.add_child(new St.Label({text: 'No app found.', style_class: 'noctra-start-empty'}));
+                return;
+            }
+            for (const info of matches) {
+                const item = new St.Button({style_class: 'noctra-start-file', reactive: true, can_focus: true,
+                    x_expand: true, x_align: Clutter.ActorAlign.FILL, accessible_name: info.get_name()});
+                const line = new St.BoxLayout({style_class: 'noctra-start-file-row', x_expand: true});
+                line.add_child(new St.Icon({gicon: info.get_icon(), icon_size: 20}));
+                line.add_child(new St.Label({text: info.get_name(), style_class: 'noctra-start-file-name',
+                    x_expand: true, y_align: Clutter.ActorAlign.CENTER}));
+                item.set_child(line);
+                item.connect('clicked', () => this._pin(info.get_id()));
+                list.add_child(item);
+            }
+        };
+        entry.clutter_text.connect('text-changed', fill);
+        entry.clutter_text.connect('activate', () => {
+            if (matches.length)
+                this._pin(matches[0].get_id());
+        });
+        fill();
+        entry.grab_key_focus();
+    }
+
+    _pin(id) {
+        const pinned = this._settings.get_strv('pinned-apps');
+        if (!pinned.includes(id))
+            this._settings.set_strv('pinned-apps', [...pinned, id]);
+        this._picking = false;
+        this._renderApps();
+    }
+
+    _unpin(id) {
+        this._settings.set_strv('pinned-apps', this._settings.get_strv('pinned-apps').filter(x => x !== id));
+        this._renderApps();
+    }
+
     _recentFiles() {
         const bookmarks = new GLib.BookmarkFile();
         try {
@@ -355,10 +560,16 @@ export default class NoctraStart extends Extension {
         }
     }
 
-    _launchApp(id) {
+    // newWindow: a launcher tile in the Apps grid opens another window of a running app
+    // (a second terminal or note) instead of only raising the first one.
+    _launchApp(id, newWindow = false) {
         const app = Shell.AppSystem.get_default().lookup_app(id);
         this._close();
-        if (app)
+        if (!app)
+            return;
+        if (newWindow && app.state === Shell.AppState.RUNNING && app.can_open_new_window())
+            app.open_new_window(-1);
+        else
             app.activate();
     }
 

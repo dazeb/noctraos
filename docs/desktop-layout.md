@@ -42,6 +42,11 @@ These override the mockup where they differ.
   macOS (a launcher grid with a Recents area, not a Windows-style tree) than to
   Windows. Redesigned around AI applications: Agents and Local LLM come first.
   Browsing and launching only; Super+Space remains the search surface.
+- **Apps row (Start panel):** everyday basics (Files, Text Editor as the notepad, Calculator,
+  Terminal, browser, Software) sit under Agents. The `+` tile opens a searchable list of every
+  installed app; Edit (or right-click) removes one. The list is the per-user gsettings key
+  `pinned-apps`; a default that is not installed falls back to a stand-in (gedit, Firefox, ...)
+  or is skipped. Not yet run on a VM: check it on the local KVM test VM after the next deploy.
 - **Wallpaper:** the current set stays; better ones are welcome at any time
   (the generator is `assets/wallpapers/generate-wallpapers.py`).
 
@@ -55,7 +60,7 @@ These override the mockup where they differ.
 | Tray, network, volume, power, running-app indicators | top right | top right |
 | Show Desktop | top left (`noctraos-branding`) | top left |
 | Start button | Noctra logo (the website mark; extension), in the dock | rounded "Start" button inside the dock |
-| Start menu | the Noctra Start panel (`noctraos-start`): header, Agents row, recent files, All apps | large rounded popup redesigned around AI apps |
+| Start menu | the Noctra Start panel (`noctraos-start`): header, Agents row, Apps row (user-editable), recent files, All apps | large rounded popup redesigned around AI apps |
 | Corner radius | 0 px (shell, dock, Start panel); 2 px in the search overlay and our GTK windows | **decided: sharp** (mockup shows rounded) |
 | Wallpaper | six polygonal 4K scenes, including near-black `ember-night` | **decided: keep current**, add better ones over time |
 

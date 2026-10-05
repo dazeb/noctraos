@@ -3,6 +3,7 @@
   <schema id="org.gnome.shell.extensions.noctraos-start" path="/org/gnome/shell/extensions/noctraos-start/">
     <key name="show-name" type="b"><default>true</default><summary>Show the user's name in the Start panel</summary></key>
     <key name="show-start-here" type="b"><default>true</default><summary>Show the New users start here strip</summary></key>
+    <key name="pinned-apps" type="as"><default>['org.gnome.Nautilus.desktop', 'org.gnome.TextEditor.desktop', 'org.gnome.Calculator.desktop', 'org.gnome.Terminal.desktop', 'org.chromium.Chromium.desktop', 'org.gnome.Software.desktop']</default><summary>Desktop-file ids shown in the Start panel's Apps grid (the + tile and Edit change this)</summary></key>
     <key name="weather" type="b"><default>false</default><summary>Show the weather (set up with a city first)</summary></key>
     <key name="weather-city" type="s"><default>''</default><summary>Weather city name</summary></key>
     <key name="weather-lat" type="d"><default>0.0</default><summary>Weather latitude</summary></key>
