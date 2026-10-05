@@ -90,6 +90,12 @@ iso/build-noctraos-iso.sh   ISO remaster pipeline (runs on the Proxmox node);
                             NOCTRAOS_UNATTENDED=1 + NOCTRAOS_USER/PASSWORD/…
                             bake an unattended-install seed and boot entries
 iso/preseed/noctraos.seed.in  Ubiquity/d-i seed template for the above
+iso/build-local.sh          build the release (and appliance) ISO on a fast workstation in a privileged
+                            Docker container, work dir an ext4 image on a big drive; ~2 min per ISO;
+                            fails if a release ISO has a seed or unattended entry
+iso/local-vm.sh             local KVM test VM: start/stop, console screenshot, absolute clicks, keys,
+                            ssh/scp. No root, no host changes
+docs/release-runbook.md     ORDERED HANDOFF for shipping 0.3.0: rebuild, test, VM disk, upload, tag
 iso/vm-sysprep.sh           run inside a fully provisioned VM before exporting its disk as a
                             downloadable image: strips machine id, SSH host keys, Hermes
                             identity/history, logs; refuses to run on bare metal
@@ -163,7 +169,10 @@ iso/vm-sysprep.sh           run inside a fully provisioned VM before exporting i
   `iso/pve-console-shot.py`, then delete the VM. ISOs for this are kept in the
   `noctraos-isos` directory storage (`/local-zfs/noctraos-isos`; `local` has no room). The
   node has ~4 GiB free RAM: one 3 GiB test VM at a time, nothing else.
-- **ISO build** runs on the node, not here. Scratch MUST be on
+- **Preferred ISO build is local** (`iso/build-local.sh`, see docs/release-runbook.md): about 2
+  minutes versus 35 to 45 on the node. Building on the node loads the HDD pool that the test VMs
+  live on and crashed VM 114 once; do not run builds and VMs on the node at the same time.
+- **ISO build** can still run on the node (older flow, kept for reference). Scratch MUST be on
   `/local-zfs` (`WORK_BASE=/local-zfs/iso-build`) — pve-root has ~8 GiB free
   and the build needs ~25 GiB. The zfs pool is HDD-backed: unsquashfs and
   mksquashfs take 10-20 min each; total build ~35-45 min. Run as a
@@ -427,29 +436,28 @@ tail -f /root/noctraos-build.log
    screen (live session gets DHCP = squashfs valid), then restore VM 114.
 6. Push, then verify the remote SHA server-side.
 
-## Current state (2026-09-26)
+## Current state (2026-10-05)
 
-- `main` past v0.2.0: unattended installer preseeding shipped (v0.3.0 line).
-- Renamed from `zorin-ai` to **NoctraOS** (slug `noctraos`) — clean break, no
-  migration shims. Existing VMs keep their old `zorin-ai` files until reset or
-  re-provisioned. Test VM names (`zorin-ai-iso-test`, `zai-zerotouch-test`) are
-  unchanged. Zorin OS remains the upstream base and is named only as such.
-- ISO: `zorin-ai-os-18.1-amd64.iso` on the node (pre-rename name) is the v0.3
-  (unattended) build; the v0.2 image is `zorin-ai-os-18.1-v0.2.iso`. New builds
-  are named `noctraos-<VERSION>-amd64.iso` (e.g. `noctraos-0.3.0-amd64.iso`);
-  `VERSION` at the repo root is the single source: the build script reads it from the
-  provisioner snapshot for `.disk/info`, the volume id and `/etc/noctraos-release`, and CI
-  checks `bin/noc` / `bin/noc-gpu` match it. 18.1 is the Zorin base, not our version.
-  pve-root is at 90% — free space before the next build.
-- VM 110 `zai-zerotouch-test` (192.168.8.138, dazeb/zorin-test-2026, DHCP!):
-  installed **fully zero-touch** from the v0.3 ISO on 2026-09-27 (boot →
-  install → reboot → autologin → provision, no interaction; `noc doctor`
-  all green). It is the v0.3 reference install. VM 114 (192.168.8.187) is
-  the v0.2 reference.
-- Super+Space search and the Noctra start button are in the repo
-  (`extensions/`, `search/`, `branding/`, `install/09_super_search.sh`) and
-  verified on VM 114. The pre-rename `zorin-ai-search`/`zorin-ai-branding`
-  files on VM 110 (if any) are stale.
-- Roadmap ideas: first-run onboarding showcasing Super+Space, theme gap list
-  (see README), Aider/Goose launchers (non-npm install paths), greeter-bug
-  root cause.
+Version **0.3.0** (`VERSION`). The ordered list of what is left to ship it is
+**docs/release-runbook.md**; start there.
+
+- On `main`: provisioner modules 00 to 11 (Hermes Desktop last), the app policy
+  (`04c_app_policy.sh`: Flatpak/AppImage first, unwanted apps removed, launchers hidden), the
+  NoctraOS welcome (replaces Zorin's tour), the appearance panel, the release/unattended ISO
+  split, `iso/build-local.sh`, `iso/local-vm.sh`, `iso/vm-sysprep.sh`. (If PR #17 is not merged yet,
+  merge it first: first boot clones `main`, so an ISO built without it provisions the old app set.)
+- Not done: tag `v0.3.0`, GitHub release, publishing the release ISO and the VM disk to
+  files.dazeb.dev/releases/v0.3.0/, and the site/README download links.
+- Every ISO that already exists (local `out/`, the node) predates #17: rebuild.
+- Never published: the unattended/appliance ISO. An old unattended test ISO IS public at the
+  bucket root of files.dazeb.dev (autologin, throwaway password, wipes the disk by default); it
+  should be deleted once the user agrees.
+- Untested: the welcome running during first-boot provisioning on a from-scratch install, an
+  interactive install of the release ISO, and the exported VM disk booting. See the runbook.
+- Old reference VMs: VM 114 (192.168.8.187, v0.2) and VM 110 `zai-zerotouch-test` may be stale or
+  gone; the local KVM VM (`iso/local-vm.sh`) is the fast test bed now.
+- Renamed from `zorin-ai` to **NoctraOS** (slug `noctraos`), the CLI `zom` to `noc`: clean breaks,
+  no migration shims. Zorin OS remains the upstream base and is named only as such.
+- Roadmap ideas: prefilled search examples in the welcome (D-Bus `Open(query)`), a provisioner
+  log panel, Aider/Goose launchers, greeter-bug root cause, an AppImage build of Hermes Desktop
+  hosted on files.dazeb.dev to replace the 25 to 40 minute first-boot Electron build.
