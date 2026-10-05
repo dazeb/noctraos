@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # vm-sysprep.sh — prepare a fully provisioned NoctraOS VM for export as a
 # downloadable disk image. Run as root INSIDE the VM, then power it off and
-# export the disk (see docs/vm-image.md).
+# export the disk (see docs/release-runbook.md, step 3).
 #
 # Removes what must not ship in a shared image: machine identity, SSH host keys,
 # the per-user Hermes identity/history, shell history, logs and caches. Keeps the

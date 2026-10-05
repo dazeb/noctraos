@@ -70,10 +70,13 @@ Next passes should review their remaining states, add app-specific Qt/Flatpak
 integration where supported, and review
 wallpapers against the calmer desktop. Shell/menu changes need a new session.
 
-Before a release, verify the installer twice on VM 114, reboot and inspect the
-session, then rebuild and boot-test the ISO from the published repository.
+Before a release, verify the installer twice on a test VM (`iso/local-vm.sh`, or VM 114),
+reboot and inspect the session, then rebuild and boot-test the ISO from the published
+repository (see the [release runbook](release-runbook.md)).
 
-## Validation — 2026-09-30
+## Validation — 2026-09-30 (historical)
+
+The first-pass check, kept for the record; the later coverage table below is the current state.
 
 - Bash syntax, Docker ShellCheck at warning severity, JSON/TOML parsing, palette
   output consistency, and four theme-composition regression tests passed.
@@ -86,8 +89,8 @@ session, then rebuild and boot-test the ISO from the published repository.
 - GTK 3 and GTK 4 reported no CSS parsing diagnostics. After reboot, GNOME Shell
   loaded NoctraOS-Dark without theme-parser errors; the menu and terminal were
   inspected. `noc doctor` was green.
-- The reference VM is restored after testing. These worktree changes have not
-  been published or baked into a new ISO.
+- The reference VM was restored after testing. (This pass has since been published and
+  is part of the current ISO build.)
 
 ![NoctraOS menu and terminal with the Omarchy-inspired theme](screenshots/noctraos-matte-black.png)
 
@@ -115,7 +118,9 @@ theme is Zorin's own `ZorinGrey-Dark`.
 | Boot splash (Plymouth) | Done in the repo: dark `two-step` theme with the N mark, `noctraos` wordmark and a blinking cursor (`assets/boot/plymouth/noctraos`). Baked into the ISO's live initrd, the squashfs and, via module 10, any other install. Rendered and checked here with the x11 renderer and on a booted ISO under QEMU; not yet seen on real hardware or the installed system after a reboot |
 | GRUB menu (UEFI ISO and installed system) | Done in the repo: flat dark menu, JetBrains Mono, square frame, amber selection bar, text countdown (`assets/boot/grub/noctraos`). Checked on a booted ISO under QEMU/OVMF at 800x600 only; other resolutions and a real installed GRUB are unchecked |
 | ISO BIOS boot menu (isolinux) | Done in the repo: same palette, header lockup, amber selection. Checked under QEMU/SeaBIOS |
-| Installer and live session | Done in the repo and seen under QEMU: the live session defaults to `ZorinGrey-Dark` and the ember-night wallpaper (a gschema override that repeats Zorin's `:zorin` groups), the first page reads "Try / Install NoctraOS" (the build now rewrites `.disk/info` correctly) with new pictures, and the slideshow is one dark Super+Space slide. **Still Zorin's:** the live session's top bar (light grey, it comes from the Zorin Taskbar, not the theme) and the translated installer strings. The later installer pages were not looked at |
-| Flatpak and Electron apps (Mission Center, Obsidian, Chromium) | Follow their own styling; Mission Center looked neutral dark, others unchecked |
+| Installer and live session | Done in the repo and seen under QEMU: the live session defaults to `ZorinGrey-Dark` and the ember-night wallpaper (a gschema override that repeats Zorin's `:zorin` groups), the first page reads "Try / Install NoctraOS" (the build now rewrites `.disk/info` correctly) with new pictures, and the slideshow is one dark Super+Space slide (the Windows logo and Mac command symbol as inline SVG keycaps, "or", then Space, so it reads right on either keyboard and needs no font support). **Still Zorin's:** the live session's top bar (light grey, it comes from the Zorin Taskbar, not the theme) and the translated installer strings. The later installer pages were not looked at |
+| Flatpak and Electron apps (Mission Center, Obsidian, Chromium, Hermes Desktop) | Follow their own styling; Mission Center looked neutral dark, others unchecked |
+| NoctraOS Welcome and Appearance windows | Done: GTK 3 windows with their own palette CSS (charcoal, amber keycap and focus). They use a 2 px radius rather than 0, which should be brought in line with the shell |
 | Radio buttons and avatars | Left circular on purpose (affordance) |
 | Cursor | Stock Adwaita |
+| Super+Space overlay | Reference surface for the theme. Uses a 2 px radius and a soft shadow, where the Start panel and shell use 0 px |

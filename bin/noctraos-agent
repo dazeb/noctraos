@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # noctraos-agent — launch an AI coding agent from the menu, installing it
-# on first use. Usage: noctraos-agent <codex|claude|opencode|grok> [args...]
+# on first use. Usage: noctraos-agent <codex|claude|opencode|grok|gemini|qwen> [args...]
 set -u
 
 AGENT="${1:-}"; shift || true
@@ -22,7 +22,7 @@ declare -A PKG=(
 )
 
 if [ -z "$AGENT" ] || [ -z "${PKG[$AGENT]:-}" ]; then
-  echo "usage: noctraos-agent <codex|claude|opencode|grok> [args...]" >&2
+  echo "usage: noctraos-agent <codex|claude|opencode|grok|gemini|qwen> [args...]" >&2
   exit 1
 fi
 

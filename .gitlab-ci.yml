@@ -1,0 +1,64 @@
+# GitLab CI for noctraos, run by the homelab GitLab (http://192.168.8.111:8929) on its
+# Docker runner. GitHub Actions is not available on this account, so this is the CI.
+# It replaces .github/workflows/ci.yml; keep the two checks in step if both are ever used.
+#
+#   check   shell syntax + shellcheck, the VERSION / bin/noc / bin/noc-gpu match, the unit
+#           tests, and the theme outputs matching configs/theme/palette.json.
+#
+# There is deliberately no deploy stage: Cloudflare builds and deploys the site by itself
+# whenever GitHub `main` is updated (wrangler.jsonc at the repo root). GitLab is only a mirror
+# plus the place the checks run; push to it with `git push gitlab <branch>`.
+
+stages:
+  - check
+
+variables:
+  TZ: UTC
+  DEBIAN_FRONTEND: noninteractive
+
+# Run branch pipelines, and merge request pipelines, but not both for the same push.
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: never
+    - if: $CI_COMMIT_BRANCH
+
+shell:
+  stage: check
+  image: ubuntu:24.04
+  before_script:
+    - apt-get update -qq
+    - apt-get install -y -qq shellcheck >/dev/null
+  script:
+    - |
+      fail=0
+      for f in boot.sh install.sh install/*.sh bin/noc bin/noc-menu bin/noc-gpu bin/noctraos-hermes \
+               bin/noctraos-agent bin/noctraos-search configs/nautilus-scripts/* iso/*.sh; do
+        [ -f "$f" ] || continue
+        bash -n "$f" || fail=1
+        shellcheck --severity=warning "$f" || fail=1
+      done
+      exit $fail
+
+version:
+  stage: check
+  image: ubuntu:24.04
+  script:
+    - |
+      v=$(tr -d '[:space:]' < VERSION)
+      fail=0
+      for f in bin/noc bin/noc-gpu; do
+        grep -q "^VERSION=\"$v\"" "$f" || { echo "$f does not match VERSION ($v)"; fail=1; }
+      done
+      exit $fail
+
+tests:
+  stage: check
+  image: ubuntu:24.04
+  before_script:
+    - apt-get update -qq
+    - apt-get install -y -qq python3 jq >/dev/null   # jq: noc-gpu detect --json, used by the GPU tests
+  script:
+    - python3 -B -m unittest discover -s tests -v
+    - python3 -B scripts/render-theme.py --check
