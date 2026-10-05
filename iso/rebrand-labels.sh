@@ -44,6 +44,7 @@ def set_keys(values):
 edit("usr/lib/os-release", set_keys({
     "PRETTY_NAME": f'"NoctraOS {version}"',
     "NAME": '"NoctraOS"',
+    "VERSION": f'"{version}"',          # tools print NAME + VERSION: "NoctraOS 18.1" would be wrong
     "HOME_URL": '"https://noctraos.dev/"',
     "SUPPORT_URL": '"https://github.com/dazeb/noctraos/issues"',
     "BUG_REPORT_URL": '"https://github.com/dazeb/noctraos/issues"',
@@ -105,6 +106,9 @@ for xml in sorted((root / "usr/share/gnome-background-properties").glob("*.xml")
     '  </wallpaper>\n'
     '</wallpapers>\n')
 PY
+  # Zorin's first-login tour ("Welcome to Zorin OS") would open on top of our own welcome; module 04c
+  # removes the package later, this keeps it from ever starting on an installed system.
+  rm -f "$root/etc/skel/.config/autostart/zorin-gnome-tour-autostart.desktop"
   # About page logo: os-release LOGO=noctraos-logo is looked up in the icon theme.
   f="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/assets/icons/noctraos-logo.svg"
   install -D -m 644 "$f" "$root/usr/share/icons/hicolor/scalable/apps/noctraos-logo.svg"
