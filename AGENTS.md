@@ -498,8 +498,8 @@ Version **0.3.0** (`VERSION`). The ordered list of what is left to ship it is
   (`REPO_URL=file:///host/branch-src iso/build-local.sh`), first boot cloned `main`. The ISO torrent in the
   repo root is for this ISO (regenerated, with a web seed on dl.noctraos.dev): rebuild it whenever the ISO
   changes. The contact address is admin@noctraos.dev.
-- Not done: tag `v0.3.0` and the GitHub release (links and checksums only; GitHub caps assets at
-  2 GiB).
+- Released: tag `v0.3.0` (the PR #28 merge commit, d6ef42b) and the GitHub release with links and checksums
+  only (GitHub caps assets at 2 GiB). Do not move the tag; later fixes go in 0.3.1.
 - Never published: the unattended/appliance ISO. The old unattended test ISO that was public at
   the bucket root was deleted.
 - Tested: `proxmox-install.sh` against the public files on a PVE 9.2 node, both modes (the image boots to the
