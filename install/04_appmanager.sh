@@ -16,12 +16,17 @@ case "$(uname -m)" in
   *) warn "AppManager has no build for $(uname -m); skipping"; exit 0 ;;
 esac
 
+ENTRY=/usr/local/share/applications/com.github.AppManager.desktop
+ICON=/usr/share/icons/hicolor/scalable/apps/com.github.AppManager.svg
+
 installed_version() { cat "$DEST/VERSION" 2>/dev/null || true; }
+# VERSION is written last, so "current" means every artifact is in place.
+fully_installed() { [ -x "$BIN" ] && [ -f "$ENTRY" ] && [ -f "$ICON" ]; }
 
 # name, url, sha256 of the newest release asset for this architecture.
 release_json="$(curl -fsSL --max-time 20 "$API" 2>/dev/null || true)"
 if [ -z "$release_json" ]; then
-  if [ -x "$BIN" ]; then
+  if fully_installed; then
     log "OK: AppManager $(installed_version) present (could not check for a newer release)"
     exit 0
   fi
@@ -39,7 +44,7 @@ for a in r.get("assets", []):
 [ -n "${URL:-}" ] || die "no $ARCH AppImage in the latest AppManager release"
 [ -n "${SHA:-}" ] || die "release publishes no sha256 digest for $URL; refusing an unverified download"
 
-if [ -x "$BIN" ] && [ "$(installed_version)" = "$TAG" ]; then
+if fully_installed && [ "$(installed_version)" = "$TAG" ]; then
   log "OK: AppManager $TAG already installed"
 else
   log "Installing AppManager $TAG"
@@ -56,17 +61,20 @@ else
 
   sudo install -d "$DEST"
   sudo install -m 755 "$tmp/AppManager.AppImage" "$DEST/AppManager.AppImage"
-  echo "$TAG" | sudo tee "$DEST/VERSION" >/dev/null
-  sudo ln -sf "$DEST/AppManager.AppImage" "$BIN"
 
   # The shipped entry hardcodes /usr/bin/app-manager (its distro-package path).
-  sudo install -d /usr/local/share/applications
+  [ -f "$tmp/squashfs-root/com.github.AppManager.desktop" ] && [ -f "$tmp/squashfs-root/com.github.AppManager.svg" ] \
+    || die "AppManager AppImage is missing its desktop entry or icon (layout changed?)"
+  sudo install -d "$(dirname "$ENTRY")"
   sed -e "s|^Exec=.*|Exec=$BIN %u|" -e "s|^TryExec=.*|TryExec=$BIN|" \
-    "$tmp/squashfs-root/com.github.AppManager.desktop" \
-    | sudo tee /usr/local/share/applications/com.github.AppManager.desktop >/dev/null
-  sudo install -D -m 644 "$tmp/squashfs-root/com.github.AppManager.svg" \
-    /usr/share/icons/hicolor/scalable/apps/com.github.AppManager.svg
+    "$tmp/squashfs-root/com.github.AppManager.desktop" | sudo tee "$ENTRY" >/dev/null
+  sudo install -D -m 644 "$tmp/squashfs-root/com.github.AppManager.svg" "$ICON"
   sudo gtk-update-icon-cache -q -f /usr/share/icons/hicolor >/dev/null 2>&1 || true
+
+  # Commit last: the binary link and the version marker only appear once the
+  # metadata above is in place, so a failed run is retried in full.
+  sudo ln -sf "$DEST/AppManager.AppImage" "$BIN"
+  echo "$TAG" | sudo tee "$DEST/VERSION" >/dev/null
 fi
 
 # Make AppManager the default opener for .AppImage files and appimg:// links
