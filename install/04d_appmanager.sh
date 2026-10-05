@@ -9,6 +9,7 @@ source "$REPO_ROOT/install/lib.sh"
 DEST=/opt/appmanager
 BIN=/usr/local/bin/app-manager
 API=https://api.github.com/repos/kem-a/AppManager/releases/latest
+PAGE=https://github.com/kem-a/AppManager/releases
 
 case "$(uname -m)" in
   x86_64)  ARCH=x86_64 ;;
@@ -23,16 +24,14 @@ installed_version() { cat "$DEST/VERSION" 2>/dev/null || true; }
 # VERSION is written last, so "current" means every artifact is in place.
 fully_installed() { [ -x "$BIN" ] && [ -f "$ENTRY" ] && [ -f "$ICON" ]; }
 
-# name, url, sha256 of the newest release asset for this architecture.
-release_json="$(curl -fsSL --max-time 20 "$API" 2>/dev/null || true)"
-if [ -z "$release_json" ]; then
-  if fully_installed; then
-    log "OK: AppManager $(installed_version) present (could not check for a newer release)"
-    exit 0
-  fi
-  die "could not reach the GitHub API to find the AppManager release"
-fi
-read -r TAG URL SHA < <(ARCH="$ARCH" python3 -c '
+# tag, url, sha256 of the newest release asset for this architecture. The API is tried first;
+# it allows only 60 anonymous requests an hour per IP address, which a shared network (an office,
+# a household, a CI runner) can use up, so the release page itself is the fallback. Both come from
+# github.com over TLS and carry the same sha256 digest.
+release_via_api() {
+  local json
+  json="$(curl -fsSL --max-time 20 "$API" 2>/dev/null)" || return 1
+  ARCH="$ARCH" python3 -c '
 import json, os, sys
 r = json.load(sys.stdin)
 for a in r.get("assets", []):
@@ -40,8 +39,30 @@ for a in r.get("assets", []):
     if n.endswith(os.environ["ARCH"] + ".AppImage"):
         print(r["tag_name"], a["browser_download_url"], (a.get("digest") or "").removeprefix("sha256:"))
         break
-' <<<"$release_json")
-[ -n "${URL:-}" ] || die "no $ARCH AppImage in the latest AppManager release"
+' <<<"$json"
+}
+release_via_page() {
+  local tag
+  tag="$(curl -fsSI --max-time 20 "$PAGE/latest" 2>/dev/null | tr -d '\r' | sed -n 's|^[Ll]ocation: .*/tag/||p')"
+  [ -n "$tag" ] || return 1
+  curl -fsSL --max-time 30 "$PAGE/expanded_assets/$tag" 2>/dev/null | TAG="$tag" ARCH="$ARCH" python3 -c '
+import os, re, sys
+html = sys.stdin.read()
+m = re.search(r"href=\"(/kem-a/AppManager/releases/download/[^\"]*" + os.environ["ARCH"] + r"\.AppImage)\"", html)
+if m:
+    d = re.search(r"sha256:([0-9a-f]{64})", html[m.end():])
+    print(os.environ["TAG"], "https://github.com" + m.group(1), d.group(1) if d else "")
+'
+}
+read -r TAG URL SHA < <(release_via_api || true)
+[ -n "${URL:-}" ] || read -r TAG URL SHA < <(release_via_page || true)
+if [ -z "${URL:-}" ]; then
+  if fully_installed; then
+    log "OK: AppManager $(installed_version) present (could not check for a newer release)"
+    exit 0
+  fi
+  die "could not reach GitHub to find the AppManager release (rate limit or no network)"
+fi
 [ -n "${SHA:-}" ] || die "release publishes no sha256 digest for $URL; refusing an unverified download"
 
 if fully_installed && [ "$(installed_version)" = "$TAG" ]; then

@@ -43,7 +43,8 @@ def vscode_argv(home):
     """VS Code's argv.json is JSON with comments; add the key without parsing it."""
     path = home / ".vscode/argv.json"
     entry = '"password-store": "basic"'
-    if not path.exists():
+    # A missing file and an empty one (left by an interrupted run) are both a fresh start.
+    if not path.exists() or not path.read_text().strip():
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("{\n\t" + entry + "\n}\n")
         return True
