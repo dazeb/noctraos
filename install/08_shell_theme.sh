@@ -87,6 +87,13 @@ done
 for i in "$REPO_ROOT"/assets/icons/noctraos-*.svg; do
   [ -f "$i" ] && install_theme_file "$i" "$ICON_DIR/$(basename "$i")"
 done
+# Sized PNGs for an icon the package also ships as PNG (CopyQ's green one): a scalable SVG
+# alone can lose to the exact-size PNG in /usr/share. Rendered from overrides/<name>.svg.
+for i in "$REPO_ROOT"/assets/icons/overrides/hicolor/*/apps/*.png; do
+  [ -f "$i" ] || continue
+  size="$(basename "$(dirname "$(dirname "$i")")")"
+  install_theme_file "$i" "/usr/local/share/icons/hicolor/$size/apps/$(basename "$i")"
+done
 sudo gtk-update-icon-cache -q -t -f /usr/local/share/icons/hicolor 2>/dev/null || true
 
 

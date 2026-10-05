@@ -102,7 +102,8 @@ assets/
   wallpapers/               6 seeded 4K JPEG scenes + generate-wallpapers.py
   icons/                    white SVG glyphs (agents, Local LLM, category tiles)
   icons/overrides/          white SVGs under STOCK icon names — these replace
-                            the system category icons system-wide
+                            the system category icons system-wide; copyq.svg (+ overrides/hicolor/NxN PNGs)
+                            replaces CopyQ's green icon with a white one
   icons/noctraos-theme/     small derived icon theme (inherits ZorinGrey-Dark)
 assets/boot/                boot-chain artwork: plymouth/noctraos (two-step theme),
                             grub/noctraos (theme.txt + generated pixmaps/.pf2),
