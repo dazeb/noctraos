@@ -109,5 +109,11 @@ PY
   f="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/assets/icons/noctraos-logo.svg"
   install -D -m 644 "$f" "$root/usr/share/icons/hicolor/scalable/apps/noctraos-logo.svg"
   install -D -m 644 "$f" "$root/usr/share/pixmaps/noctraos-logo.svg"
+  # The Start button of Zorin's menu extension draws zorin-icon-symbolic.svg from its own folder.
+  # Module 09's branding extension swaps it for the logo once provisioning has run; this covers the
+  # live session and the first minutes of an installed system.
+  local menu="$root/usr/share/gnome-shell/extensions/zorin-menu@zorinos.com"
+  [ -f "$menu/zorin-icon-symbolic.svg" ] || { echo "rebrand: zorin-menu icon not found" >&2; return 1; }
+  install -m 644 "$f" "$menu/zorin-icon-symbolic.svg"
   chroot "$root" gtk-update-icon-cache -f -t /usr/share/icons/hicolor >/dev/null 2>&1 || true
 }
