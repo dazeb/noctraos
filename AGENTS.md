@@ -80,6 +80,11 @@ help/index.html             "New users start here" page the Start panel opens
 scripts/                    render-theme.py, build-desktop-theme.py, seed-password-store.py
 tests/                      unittest: theme composition (test_desktop_theme), GPU detection (test_gpu_detect)
 site/                       project website (static, deployed via wrangler.jsonc); keep claims in step with README
+                            every page head carries canonical, Open Graph, Twitter and JSON-LD metadata; social cards live in
+                            site/img/social/ (1200x630), favicons/manifest/robots.txt/sitemap.xml/.well-known/security.txt in site/
+scripts/render-social.py    renders the OG cards, the X promo images (assets/promo/x/) and the favicons with headless Chrome,
+                            from assets/social/fonts (local woff2); rerun it when a page title or a screenshot changes
+docs/launch/                launch copy: x-posts.md (the thread, standalone posts, alt text, length-checked)
 .gitlab-ci.yml              the working CI (homelab GitLab, project dazeb/noctraos, Docker runner): shell checks,
                             VERSION match, unit tests, theme check. No deploy: Cloudflare deploys site/ itself
                             when GitHub main updates. Push to GitLab with `git push gitlab <branch>`
