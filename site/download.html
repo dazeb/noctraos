@@ -61,6 +61,17 @@
   </div>
 </section>
 
+<section id="proxmox">
+  <div class="wrap">
+    <div class="head"><h2>On Proxmox</h2><p class="lede">One command on the Proxmox host (as root, Proxmox VE 8 or 9) creates a ready virtual machine. It asks for memory, processor cores and storage, checks the download, and cleans up after itself if anything fails.</p></div>
+    <div class="term-line" style="max-width:860px">
+      <code id="proxmox-cmd">bash &lt;(curl -sSfL https://raw.githubusercontent.com/dazeb/noctraos/main/proxmox-install.sh)</code>
+      <button type="button" data-copy="proxmox-cmd" aria-label="Copy command">Copy</button>
+    </div>
+    <p class="alt" style="margin-top:16px">Choose the ready-made disk to try Noctra OS straight away (it signs in as <code>noctraos</code>, password <code>noctraos</code>), or the installer ISO to make your own account.</p>
+  </div>
+</section>
+
 <section id="verify">
   <div class="wrap">
     <div class="head"><h2>Check your download</h2><p class="lede">The files are large. A quick check confirms that nothing was lost on the way. Download <code>SHA256SUMS</code> into the same folder, then run:</p></div>

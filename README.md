@@ -36,6 +36,20 @@ Prefer to review first: `git clone https://github.com/dazeb/noctraos && cd noctr
 > is in the [release runbook](docs/release-runbook.md). You can also build the ISO
 > yourself ([below](#building-the-noctraos-iso)).
 
+### Proxmox VE
+
+One command on the Proxmox host (as root) creates a ready UEFI VM, either from the
+ready-made VM disk (signs in as `noctraos` / `noctraos`, trial use) or from the installer
+ISO with an empty disk. It asks for RAM, cores and storage, checks the download against
+`SHA256SUMS`, and removes a half-made VM if anything fails. Proxmox VE 8 or 9.
+
+```sh
+bash <(curl -sSfL https://raw.githubusercontent.com/dazeb/noctraos/main/proxmox-install.sh)
+```
+
+Every question can be answered through environment variables instead (`NOCTRAOS_MODE`,
+`NOCTRAOS_RAM`, `NOCTRAOS_CORES`, `NOCTRAOS_STORAGE`, ...; see the top of the script).
+
 ---
 
 ## What you get
