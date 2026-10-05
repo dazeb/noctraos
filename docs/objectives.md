@@ -87,7 +87,7 @@ local-only choice.
   to provision an existing Zorin OS machine. They are no longer the
   headline product.
 - Version 0.3.0 is **published**: the ISO, the VM disks and their checksums are on the download
-  page. What is left is the `v0.3.0` git tag and GitHub release; see
+  page. The `v0.3.0` git tag and GitHub release exist; see
   [release-runbook.md](release-runbook.md).
 
 ## Visual direction

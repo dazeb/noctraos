@@ -23,8 +23,8 @@ at `https://dl.noctraos.dev/releases/v0.3.0/` (also reachable as files.dazeb.dev
 The old unattended test ISO was removed from the bucket. ISOs older than #17, wherever they sit, are
 stale: do not use them.
 
-**Left:** step 5 (tag `v0.3.0`, GitHub release with links and checksums only). The download page and
-README already link the files. A full interactive install of the release ISO, the welcome while
+**Done:** step 5: `v0.3.0` is tagged on the PR #28 merge commit (d6ef42b) and the GitHub release (links and
+checksums only) is published. A full interactive install of the release ISO, the welcome while
 provisioning is still running, and real hardware are still untested.
 
 ## 1. Rebuild the ISOs (about 5 minutes)
