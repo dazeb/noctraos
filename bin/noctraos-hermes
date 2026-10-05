@@ -85,6 +85,20 @@ explicit_provider() {
   [ -n "$v" ] && [ "$v" != "auto" ]
 }
 
+# `hermes desktop` writes its own launcher (com.nousresearch.hermes.desktop) on every run, which
+# would be a second "Hermes" next to ours (our wrapper sets the free tier and the onboarding
+# prompt, theirs does not). Hide it, then stop it being rewritten: Hermes honours
+# desktop.manage_launcher_entry=false for an entry that already exists.
+hide_hermes_own_launcher() {
+  local e="$HOME/.local/share/applications/com.nousresearch.hermes.desktop"
+  [ -f "$e" ] || return 0
+  if ! grep '^NoDisplay=true' "$e" >/dev/null; then
+    awk '/^NoDisplay=/ {next} {print} /^\[Desktop Entry\]/ {print "NoDisplay=true"}' "$e" > "$e.new" \
+      && mv "$e.new" "$e"
+  fi
+  config_has desktop.manage_launcher_entry || hermes_set desktop.manage_launcher_entry false
+}
+
 hermes_set() { "$HERMES_BIN" config set "$@" >/dev/null 2>&1; }
 
 install_runtime() {
@@ -161,6 +175,7 @@ cmd_install() {
   build_app || { say "ERROR: desktop build failed"; return 1; }
   seed_ollama_fallback
   seed_vm_electron_flags
+  hide_hermes_own_launcher
 }
 
 cmd_status() {
@@ -185,6 +200,7 @@ cmd_launch() {
   fi
   offline_first_launch_fallback
   seed_vm_electron_flags
+  hide_hermes_own_launcher
   export HERMES_GUEST_ONBOARDING=1
   if onboarding_active; then
     HERMES_EPHEMERAL_SYSTEM_PROMPT="$(cat "$ONBOARD_FILE")"

@@ -40,6 +40,8 @@ install/
   04_gui_apps.sh            Microsoft VS Code (apt repo) + extensions, Mission Center,
                             CopyQ; retires codium/chatbox/foot (user data kept)
   04_workstation_apps.sh    Omarchy-style Ubuntu/Flathub workstation app set
+  04c_app_policy.sh         Flatpak/AppImage-first policy: retires the apt copy of an app once
+                            its Flatpak is in, retires unwanted base apps, hides junk launchers
   05_mouse_ergonomics.sh    Nautilus right-click scripts
   06_desktop_theme.sh       gsettings ergonomics, wallpapers, Agents menu,
                             AI-first /etc/xdg/menus/gnome-applications.menu
@@ -378,6 +380,15 @@ tail -f /root/noctraos-build.log
 - **Never run `hermes config set` with a temp `HERMES_HOME` on a box that has Hermes
   installed:** it regenerates the shared launcher in the checkout
   (`~/.hermes/hermes-agent/.hermes/bin/hermes`) pointing at the temp tools dir.
+
+- **App policy: Flatpak and AppImage first** (`install/04_workstation_apps.sh` lists the
+  Flatpaks, `04c_app_policy.sh` does the rest). apt is for CLI tools, system tools and
+  host-integration apps (VS Code, CopyQ, Docker). Retirements simulate `apt-get -s remove`
+  first and skip if apt would also remove a protected package (zorin-os*, gnome-shell, …);
+  launchers are hidden with a `NoDisplay=true` copy in `/usr/local/share/applications`
+  (delete the file to undo), never by editing the packaged file. No snaps. AppImages need
+  `libfuse2t64` and are managed with Gear Lever (Flatpak). `hermes desktop` writes its own
+  launcher every run; the wrapper hides it and sets `desktop.manage_launcher_entry=false`.
 
 ## Verification checklist for any change
 

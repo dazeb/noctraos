@@ -3,17 +3,20 @@
 set -Eeuo pipefail
 source "$REPO_ROOT/install/lib.sh"
 
+# Policy: Flatpak (and AppImage) first. apt is for CLI tools, system tools and things
+# that need deep host integration. GUI apps live in FLATPAK_APPS below; module 04c
+# retires the apt copy of each once its Flatpak is installed.
 # Keep this list to packages from the Ubuntu/Zorin archive. Check each package
 # before installing so a renamed package cannot break the rest of the setup.
 APT_APPS=(
   avahi-daemon bat btop brightnessctl clang cups cups-filters
-  cups-pk-helper ddcutil docker.io docker-compose-v2 eza evince
-  exfatprogs fd-find ffmpeg ffmpegthumbnailer flameshot fzf gh
-  gnome-disk-utility gnome-sushi gnome-tweaks gthumb gvfs-backends
-  imagemagick inotify-tools inxi kdenlive libsecret-tools libreoffice
-  man-db mpv ncdu neovim obs-studio plocate qrencode ripgrep ruby
+  cups-pk-helper ddcutil docker.io docker-compose-v2 eza
+  exfatprogs fd-find ffmpeg ffmpegthumbnailer fzf gh
+  gnome-disk-utility gnome-sushi gnome-tweaks gvfs-backends
+  imagemagick inotify-tools inxi libsecret-tools
+  man-db ncdu neovim plocate qrencode ripgrep ruby
   socat system-config-printer tesseract-ocr tldr tmux whois
-  wl-clipboard xournalpp yt-dlp zoxide
+  wl-clipboard yt-dlp zoxide
 )
 missing=()
 for package in "${APT_APPS[@]}"; do
@@ -37,6 +40,16 @@ FLATPAK_APPS=(
   org.localsend.localsend_app
   com.github.PintaProject.Pinta
   com.moonlight_stream.Moonlight
+  org.libreoffice.LibreOffice
+  org.videolan.VLC
+  io.mpv.Mpv
+  com.obsproject.Studio
+  org.kde.kdenlive
+  org.gnome.gThumb
+  org.gnome.Evince
+  org.flameshot.Flameshot
+  com.github.xournalpp.xournalpp
+  it.mijorus.gearlever
 )
 for app in "${FLATPAK_APPS[@]}"; do
   if sudo flatpak info "$app" >/dev/null 2>&1; then
