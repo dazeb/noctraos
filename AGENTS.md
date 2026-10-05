@@ -392,7 +392,10 @@ tail -f /root/noctraos-build.log
   unchanged. Zorin OS remains the upstream base and is named only as such.
 - ISO: `zorin-ai-os-18.1-amd64.iso` on the node (pre-rename name) is the v0.3
   (unattended) build; the v0.2 image is `zorin-ai-os-18.1-v0.2.iso`. New builds
-  are named `noctraos-18.1-amd64.iso`.
+  are named `noctraos-<VERSION>-amd64.iso` (e.g. `noctraos-0.3.0-amd64.iso`);
+  `VERSION` at the repo root is the single source: the build script reads it from the
+  provisioner snapshot for `.disk/info`, the volume id and `/etc/noctraos-release`, and CI
+  checks `bin/noc` / `bin/noc-gpu` match it. 18.1 is the Zorin base, not our version.
   pve-root is at 90% — free space before the next build.
 - VM 110 `zai-zerotouch-test` (192.168.8.138, dazeb/zorin-test-2026, DHCP!):
   installed **fully zero-touch** from the v0.3 ISO on 2026-09-27 (boot →

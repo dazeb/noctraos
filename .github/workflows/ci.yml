@@ -17,9 +17,18 @@ jobs:
       - name: Syntax + shellcheck (warning severity)
         run: |
           fail=0
-          for f in boot.sh install.sh install/*.sh bin/noc bin/noc-menu bin/noc-gpu configs/nautilus-scripts/*; do
+          for f in boot.sh install.sh install/*.sh bin/noc bin/noc-menu bin/noc-gpu bin/noctraos-hermes bin/noctraos-agent configs/nautilus-scripts/*; do
             [ -f "$f" ] || continue
             bash -n "$f" || fail=1
             shellcheck --severity=warning "$f" || fail=1
+          done
+          exit $fail
+
+      - name: Version consistency
+        run: |
+          v=$(tr -d '[:space:]' < VERSION)
+          fail=0
+          for f in bin/noc bin/noc-gpu; do
+            grep -q "^VERSION=\"$v\"" "$f" || { echo "$f does not match VERSION ($v)"; fail=1; }
           done
           exit $fail

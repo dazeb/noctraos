@@ -98,6 +98,15 @@ rm -rf "$SQ_ROOT/opt/noctraos"
 git clone --depth 1 "$REPO" "$SQ_ROOT/opt/noctraos" >/dev/null 2>&1
 rm -rf "$SQ_ROOT/opt/noctraos/.git"
 
+# The release version comes from the provisioner snapshot (VERSION), never from the
+# Zorin base ISO (whose "18.1" is the upstream version, not ours).
+RELEASE_VERSION="$(tr -d '[:space:]' < "$SQ_ROOT/opt/noctraos/VERSION" 2>/dev/null || true)"
+[ -n "$RELEASE_VERSION" ] || { echo "ERROR: VERSION file missing from the provisioner snapshot" >&2; exit 1; }
+step "release version: $RELEASE_VERSION"
+mkdir -p "$SQ_ROOT/etc"
+printf 'NOCTRAOS_VERSION=%s\nNOCTRAOS_BASE="Zorin OS 18.1 (Ubuntu 24.04)"\n' \
+  "$RELEASE_VERSION" > "$SQ_ROOT/etc/noctraos-release"
+
 mkdir -p "$SQ_ROOT/usr/local/sbin" "$SQ_ROOT/etc/skel/.config/autostart"
 
 cat > "$SQ_ROOT/usr/local/sbin/noctraos-firstboot" <<'EOF'
@@ -241,9 +250,10 @@ if [ "$UNATTENDED" = 1 ]; then
 fi
 
 if [ -f "$ISO_TREE/.disk/info" ]; then
-  # The installer builds "Try/Install <name>" from the first word of this line, and
-  # the file reads "Zorin-OS 18.1 Core 64bit" (hyphen), so match the hyphen.
-  sed -i 's/^Zorin[- ]OS/NoctraOS/' "$ISO_TREE/.disk/info" || true
+  # The installer builds "Try/Install <name>" from the first word of this line
+  # (the stock file reads "Zorin-OS 18.1 Core 64bit"). Replace the whole line so
+  # the version shown is ours, not the base distro's.
+  echo "NoctraOS $RELEASE_VERSION 64bit" > "$ISO_TREE/.disk/info"
 fi
 chown -R root:root "$SQ_ROOT/opt/noctraos" "$SQ_ROOT/usr/local/sbin/noctraos-firstboot" \
   "$SQ_ROOT/etc/skel/.config/autostart"
@@ -269,6 +279,7 @@ rm -f "$OUT_ISO"
 xorriso -indev "$SRC_ISO" \
   -outdev "$OUT_ISO" \
   -boot_image any replay \
+  -volid "NOCTRAOS_${RELEASE_VERSION//./_}" \
   -map "$ISO_TREE/casper/filesystem.squashfs" /casper/filesystem.squashfs \
   -map "$ISO_TREE/casper/filesystem.size" /casper/filesystem.size \
   -map "$ISO_TREE/md5sum.txt" /md5sum.txt \
