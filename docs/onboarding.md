@@ -1,17 +1,25 @@
-# First-run onboarding (draft)
+# First-run onboarding
 
-Status: **first version built** (`bin/noctraos-welcome`: screens 1, 2, 4 and 5 as four
-screens, the keypress detected through the search schema's `first-used` key, the first-boot
-runner starts it while provisioning runs). Not built yet: screen 3's prefilled queries (needs
-the D-Bus `Open(query)` call) and the provisioner log panel (a status line stands in for it).
-It replaces Zorin's "Welcome to Zorin OS" tour (GNOME Tour), which module 04c removes. While the
-search extension is not running in the session (the case during first-boot provisioning: a new
-extension loads at the next login on Wayland) the shortcut screen says so and does not gate the
-tour, and the welcome comes back once at the next login instead of retiring itself. The AI screen
-separates the local model from Hermes and states that Hermes' free tier runs on Nous Research's
-servers, with a local-only button (`noctraos-hermes local`). Goals come from
-[objectives.md](objectives.md): put **Super+Space** front and center for people
-moving from Windows, without a terminal, without a lecture.
+Status: **first version built** (`bin/noctraos-welcome`, four screens: Welcome, press
+Windows+Space, where familiar things are, your AI). The keypress is detected through the
+search schema's `first-used` key, and the ISO's first-boot runner starts the app with
+`--provisioning` while the provisioner runs. It replaces Zorin's "Welcome to Zorin OS" tour
+(GNOME Tour), which module 04c removes, and is reopened from the start menu ("Welcome to
+NoctraOS"), which Super+Space also finds by name.
+
+Not built yet: the "What can it find?" screen with prefilled queries (needs the D-Bus
+`Open(query)` call), the provisioner log panel (a status line stands in for it), and the
+post-onboarding search-box hint. Not yet seen running during first-boot provisioning on a
+from-scratch install; see the [release runbook](release-runbook.md).
+
+While the search extension is not running in the session (the case during first-boot
+provisioning: a new extension loads at the next login on Wayland) the shortcut screen says so
+and does not gate the tour, and the welcome comes back once at the next login instead of
+retiring itself. The AI screen separates the local model from Hermes and states that Hermes'
+free tier runs on Nous Research's servers, with a local-only button
+(`noctraos-hermes local`); both Hermes buttons stay disabled until the Hermes build
+(module 11) has finished. Goals come from [objectives.md](objectives.md): put **Super+Space**
+front and center for people moving from Windows, without a terminal, without a lecture.
 
 ## Why this matters now
 
@@ -38,16 +46,17 @@ learning.
 
 ## Flow
 
-| # | Screen | Purpose | Advances when |
-|---|--------|---------|---------------|
-| 1 | **Welcome** — one line on what NoctraOS is, a *Start* button, a *Skip* link | Set expectations | Click |
-| 2 | **Press Windows + Space** — large keycap graphic, short copy: "Search everything from one place." | Teach the hero feature by doing it | The user opens the overlay once (see *Detecting the keypress*) |
-| 3 | **What can it find?** — four tappable examples that open the overlay with a query filled in: an app ("files"), a file by name, something from clipboard history, a web search. Browser history is not an example here: it is offered later (below) | Show the range; each is one click | Click *Next* (no forced interaction) |
-| 4 | **Where things are** — a compact, mouse-only map of familiar things: Start button (N, bottom-left), Task Manager → Mission Center, File Explorer → Files, screenshots, system tray. **No shortcut list** | Reassure; nothing to relearn | Click *Next* |
-| 5 | **Your AI is local** — status of the local model (installed / downloading, with progress), the Agents menu, how to open it | Introduce the AI half without blocking on the download | Click *Done*; if provisioning is still running, show "Finishing setup in the background" |
+| # | Screen | Purpose | Advances when | Built |
+|---|--------|---------|---------------|-------|
+| 1 | **Welcome** — one line on what NoctraOS is (it runs a model on this computer and says plainly when something does not), a *Start* button, a *Skip* link | Set expectations | Click | yes |
+| 2 | **Press Windows + Space** — large keycap graphic, short copy: "Search everything from one place." | Teach the hero feature by doing it | The user opens the overlay once (see *Detecting the keypress*) | yes, with an "It's not working" escape |
+| 3 | **What can it find?** — four tappable examples that open the overlay with a query filled in: an app ("files"), a file by name, something from clipboard history, a web search. Browser history is not an example here: it is offered later (below) | Show the range; each is one click | Click *Next* (no forced interaction) | **no** (needs `Open(query)`) |
+| 4 | **Where things are** — a compact, mouse-only map of familiar things: Start button (N, bottom-left), Task Manager → Mission Center, File Explorer → Files, screenshots, system tray. **No shortcut list** | Reassure; nothing to relearn | Click *Next* | yes (screen 3 of 4 in the app) |
+| 5 | **Your AI** — the local model's status (installed / downloading), the Agents menu, and Hermes with its cloud disclosure and a local-only choice | Introduce the AI half, honestly, without blocking on the download | Click *Done*; if provisioning is still running, show "Setting up your AI workstation in the background" | yes (screen 4 of 4 in the app) |
 
-After *Done*: no nagging. One non-modal hint — the start menu's search box
-reads "Search, or press Windows + Space".
+After *Done*: no nagging. Planned, not built: one non-modal hint — the start menu's
+search box reading "Search, or press Windows + Space". (The Start panel's footer already
+carries a Super+Space hint.)
 
 ### Screen 2 detail: detecting the keypress
 
@@ -88,7 +97,8 @@ Onboarding screen 2/3 should not mention it, and must not depend on it.
 - On the ISO, replace the raw provisioning terminal with a progress panel in
   this window (tail of the provisioner log, collapsed by default, with
   "Show details" for anyone who wants it). Failures must surface clearly
-  with a retry button; the current terminal behaviour is the fallback.
+  with a retry button; the current terminal behaviour is the fallback. **Not built:**
+  today the app runs beside the provisioner terminal and shows a status line.
 - The theme is inherited: dark, amber focus, small radii, monospace for
   keycaps. Design it to match the Super+Space overlay.
 
@@ -101,8 +111,9 @@ Onboarding screen 2/3 should not mention it, and must not depend on it.
 2. **Shortcut parity** — resolved: we do not promise any. See the audit below.
 3. **Languages.** Copy is English only for now.
 4. **Provisioning offline.** The "full ISO" goal means the model and runtimes
-   should eventually be baked in, which would shorten or remove the waiting
-   period this design uses. The welcome flow still stands without it.
+   should eventually be baked in (the Hermes Desktop build alone is 25 to 40
+   minutes), which would shorten or remove the waiting period this design uses.
+   The welcome flow still stands without it.
 
 ## Shortcut audit (VM 114, 2026-10-04)
 

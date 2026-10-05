@@ -68,35 +68,51 @@ models). The flow is in [onboarding.md](onboarding.md) and a first version is bu
 `noctraos-welcome` replaces Zorin's tour, shows once per account, and the ISO first boot
 starts it while the provisioner runs, so the provisioner terminal is no longer the whole
 first-boot experience. Not built yet: the prefilled search examples and a provisioner log panel
-(a status line stands in). Being honest about where AI runs is part of the brief: the screen says
+(a status line stands in), and it has not been seen running during provisioning on a
+from-scratch install. Being honest about where AI runs is part of the brief: the screen says
 the local model stays on the computer and that Hermes' free tier is a cloud service, with a
 local-only choice.
 
 ## Delivery
 
-- **Primary: the NoctraOS ISO** (`iso/build-noctraos-iso.sh`), including a
-  fully unattended install path for testing.
+- **Primary: the NoctraOS ISO** (`iso/build-noctraos-iso.sh`, driven by
+  `iso/build-local.sh`). The published ISO is the interactive **release** build,
+  which carries no unattended seed or password. A separate **appliance** build
+  (unattended, throwaway credentials) exists only to produce the downloadable VM
+  disk and is never published.
+- Planned for 0.3.0: a **VM disk image** (qcow2/vmdk, sysprepped with
+  `iso/vm-sysprep.sh`) for people who would rather try it in a hypervisor. It is a
+  trial appliance: autologin and passwordless sudo, which the download page must say.
 - `install.sh` / `boot.sh` remain as the engine the ISO bakes in and as a way
   to provision an existing Zorin OS machine. They are no longer the
   headline product.
+- Version 0.3.0 is built but **not published**; the steps left are in
+  [release-runbook.md](release-runbook.md).
 
 ## Visual direction
 
 Dark with slight orange highlights, streamlined and consistent everywhere,
 derived from the Super+Space overlay (near-black surfaces, **sharp corners —
-one small radius system-wide, no rounded dock or menus**, monospace accents,
-amber for focus and selection). See
-`docs/theme-design.md` and `configs/theme/palette.json`. Remaining gaps
-(libadwaita apps, overview, wallpapers, boot/login/lock screens, ISO menus,
-installer, stock icons) are tracked in the README roadmap.
+0 px in the shell, dock, menus and Start panel; the Super+Space overlay and our
+own GTK windows still use 2 px, a known inconsistency**, monospace accents,
+amber for focus and selection). See [theme-design.md](theme-design.md) and
+`configs/theme/palette.json`. The shell, GTK apps, boot chain and installer are
+themed; the remaining gaps (the lock and login screens, libadwaita/GTK 4 apps,
+some stock icons) are tracked in the coverage table in `theme-design.md`.
 
 ## Decisions
 
 - **Stay on GNOME** (Zorin base) until the current experience is complete.
   Moving to KDE Plasma was considered and deferred; revisit with a time-boxed
   spike only after the GNOME work is done.
-- **After the GNOME work**, fix the autologin keyring prompt (a locked login
-  keyring makes apps like Chromium ask for a password on first use).
+- **Autologin keyring prompt: fixed for what we install.** A locked login
+  keyring made Chromium ask for a password on first use; Chromium and VS Code now
+  use a non-keyring password store. Browsers the user installs themselves can
+  still prompt (see `AGENTS.md`).
+- **Flatpak and AppImage first.** apt is for CLI tools, system tools and
+  host-integration apps; the app set and the removals are in `install/04c_app_policy.sh`.
+- **Be honest about where AI runs.** The local Ollama model stays on the computer;
+  Hermes' free tier is a cloud service and is described as one everywhere.
 - **Target desktop layout** is in [desktop-layout.md](desktop-layout.md).
 
 ## Non-goals

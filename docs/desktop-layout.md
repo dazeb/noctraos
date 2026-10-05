@@ -1,8 +1,10 @@
-# Desktop layout (target)
+# Desktop layout
 
 Owner's mockup: [`mockups/desktop-layout.webp`](mockups/desktop-layout.webp).
 It is a wireframe ("very basic, but you get the idea"), so this document records
-how we read it, what differs from the image today, and what is still open.
+how we read it, what was built, and what is still open. The top bar, floating
+dock and Start panel are all built; the comparison table below says where the
+result still differs from the mockup.
 
 ![Desktop layout mockup](mockups/desktop-layout.webp)
 
@@ -22,7 +24,9 @@ These override the mockup where they differ.
 
 - **Sharp corners everywhere**, very opinionated: dock, Start button, Start
   menu, top bar, overlay, dialogs. The mockup's rounding is a wireframe
-  artifact. One radius (2 px today) across the whole system.
+  artifact. 0 px across the shell, dock, menus and Start panel (`palette.json`
+  radius 0); the Super+Space overlay and our own GTK windows (Welcome, Appearance)
+  still use 2 px, which should be brought in line.
 - **Top bar, left:** Show Desktop.
 - **Top bar, centre:** the **clock**. Notifications open from it (GNOME's
   date/notification menu), which also covers the mockup's "notification" label.
@@ -43,17 +47,17 @@ These override the mockup where they differ.
 
 ## Today versus the mockup
 
-| Element | Today (VM 114) | Mockup |
+| Element | Today | Mockup |
 |---|---|---|
-| Bar at the top | none (Zorin Taskbar replaces the stock top panel) | thin full-width bar with notifications, network, clock |
-| Bottom bar | full-width, 48 px, square corners; icons left-aligned; tray and clock at the right | floating, centred, rounded; Start plus app icons only |
-| Clock | bottom right | top centre |
-| Tray, network, volume, power, running-app indicators | bottom right | top right |
-| Show Desktop | bottom right edge | top left |
-| Start button | Noctra "N" (extension) | rounded "Start" button inside the dock |
-| Start menu | stock Zorin Menu, compact styling | large rounded popup redesigned around AI apps |
-| Corner radius | 2 px everywhere (matches the Super+Space overlay) | **decided: sharp, 2 px** (mockup shows rounded) |
-| Wallpaper | purple/magenta neon scenes | **decided: keep current**, add better ones over time |
+| Bar at the top | thin (28 px) flat panel: the stock GNOME panel kept via the Zorin Taskbar's `stockgs-keep-top-panel` | thin full-width bar with notifications, network, clock |
+| Bottom bar | floating, centred dock hugging its icons (40 px); Start button plus app icons | floating, centred, rounded; Start plus app icons only |
+| Clock | top centre, opens notifications and the calendar | top centre |
+| Tray, network, volume, power, running-app indicators | top right | top right |
+| Show Desktop | top left (`noctraos-branding`) | top left |
+| Start button | Noctra "N" (extension), in the dock | rounded "Start" button inside the dock |
+| Start menu | the Noctra Start panel (`noctraos-start`): header, Agents row, recent files, All apps | large rounded popup redesigned around AI apps |
+| Corner radius | 0 px (shell, dock, Start panel); 2 px in the search overlay and our GTK windows | **decided: sharp** (mockup shows rounded) |
+| Wallpaper | six polygonal 4K scenes, including near-black `ember-night` | **decided: keep current**, add better ones over time |
 
 ## Spike result: top bar + floating dock (works, 2026-10-04)
 
@@ -86,8 +90,8 @@ patching of Zorin code.
 
 **v1 is built** (`extensions/noctraos-start@noctraos.local`): a 560 px panel above the
 dock with a header bar (title and a **settings gear on the right** that opens
-Settings), the **pinned Agents row** (Claude Code, Codex, OpenCode, Grok, Gemini
-CLI, Qwen Code), **recent files** (8, from the desktop's recent list; scratch and
+Settings), the **pinned Agents row** (Hermes, Claude Code, Codex, OpenCode, Grok,
+Gemini CLI, Qwen Code), **recent files** (8, from the desktop's recent list; scratch and
 hidden paths skipped; each opens in its default app), and a footer with *All apps*
 and a Super+Space hint. Sharp, monospace, palette from `palette.json`. The Start
 button opens it; Esc, a click outside, or the button again close it.
@@ -106,7 +110,8 @@ Not yet built: an apps list and a settings page for customisation (today it is
 the in-panel controls and GSettings). Untested: launching an agent from the row and
 *All apps*. The panel replaces the Zorin Menu popup by overriding its
 `_menu.toggle`/`open`, a private API, so a Zorin Menu update could break it (the
-stock menu then simply keeps working).
+stock menu then simply keeps working). The pinned row is Hermes first, then Claude
+Code, Codex, OpenCode, Grok, Gemini CLI and Qwen Code (seven agents).
 
 ### Full spec
 
@@ -116,8 +121,8 @@ stock menu then simply keeps working).
   welcoming.
 - A **"New users start here"** section that opens a help page showing how to use
   the OS.
-- A **pinned Agents row** (Codex, Claude Code, OpenCode, Grok, Gemini CLI, Qwen
-  Code), then the apps, then **recent files** (macOS-like, not a Windows tree).
+- A **pinned Agents row** (Hermes, Codex, Claude Code, OpenCode, Grok, Gemini CLI,
+  Qwen Code), then the apps, then **recent files** (macOS-like, not a Windows tree).
 - **Customisable:** users can add or remove widgets such as weather and time.
 - Browsing and launching only; Super+Space stays the search.
 
@@ -128,10 +133,17 @@ or app page reachable from the onboarding flow as well.
 
 ## Open questions
 
-1. **Start menu size and grid:** how wide/tall is the panel, and are apps a grid
-   or a list under the Agents row?
-2. **Recent files:** how many, and which types (documents only, or everything)?
-3. **Dock behaviour:** running apps show as icons in the dock with a dot today;
+Settled by the v1 build: the panel is 560 px wide, and it shows 8 recent files of any
+type (scratch and hidden paths skipped). Still open:
+
+1. **Apps in the panel:** a grid or a list under the Agents row, or leave apps to
+   *All apps*?
+2. **Dock behaviour:** running apps show as icons in the dock with a dot today;
    keep that, or move all running state to the top bar?
-4. **Customisation UI:** a settings page, a right-click on the panel, or both?
-5. **Help page:** the same as onboarding screen 4, or a longer reference?
+3. **Customisation UI:** a settings page, a right-click on the panel, or both?
+   Today it is the in-panel controls and GSettings.
+4. **Help page:** `help/index.html` is a short reference opened from the Start panel
+   and is not the same thing as the Welcome's "where things are" screen. Keep two
+   or merge them?
+5. **Second monitor:** the dock settings are keyed to the primary monitor; the
+   layout has not been tested with more than one.

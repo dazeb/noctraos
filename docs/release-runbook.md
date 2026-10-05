@@ -10,9 +10,11 @@ Done and on `main`: the Hermes Desktop module (`install/11_hermes.sh`, runs last
 prompt, the release/unattended split in the ISO build (a release ISO has no seed and no
 unattended boot entry), the `VERSION` file (0.3.0) and ISO labelling, `iso/vm-sysprep.sh`.
 
-In PR #17 (`audit/apps`; merged by the time you read this, check `git log origin/main`): the
-app policy (`install/04c_app_policy.sh`), the NoctraOS welcome (`bin/noctraos-welcome`) replacing
-Zorin's tour, `bin/noctraos-appearance`, `noctraos-hermes local|ready`, the preflight relaxation.
+Also on `main` since PR #17 (`audit/apps`, merged): the app policy (`install/04c_app_policy.sh`),
+AppManager (`04d`), the NoctraOS welcome (`bin/noctraos-welcome`) replacing Zorin's tour,
+`bin/noctraos-appearance`, `noctraos-hermes local|ready`, the preflight relaxation, and the local
+build and test tooling (`iso/build-local.sh`, `iso/local-vm.sh`). The docs were realigned with all
+of this afterwards (README, AGENTS.md, `docs/`).
 
 **Stale, do not use:** every ISO currently in `/run/media/dazeb/2tb/noctraos-build/out/` and on the
 Proxmox node was built from `main` BEFORE #17 and has none of the above. Rebuild.

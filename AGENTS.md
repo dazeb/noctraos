@@ -26,7 +26,7 @@ anonymously. Never make it private, never commit secrets.
 boot.sh                     remote fetcher: clones repo to ~/.local/share/noctraos,
                             runs install.sh; env: NOCTRAOS_REPO_URL, NOCTRAOS_BRANCH, NOCTRAOS_HOME
 install.sh                  orchestrator: logging, TARGET_USER resolution, flags
-                            (--skip-ai, --skip-gui, --skip-gpu), runs modules 00-02, 02b, 03-08
+                            (--skip-ai, --skip-gui, --skip-gpu, --only <module>), runs modules 00-11
 install/
   lib.sh                    shared helpers: log/warn/die, as_user(), apt_install(),
                             desktop_file_exists(). Modules MUST source it.
@@ -39,7 +39,7 @@ install/
   03_ai_core.sh             Ollama + qwen2.5-coder:7b + nomic-embed-text
   04_gui_apps.sh            Microsoft VS Code (apt repo) + extensions, Mission Center,
                             CopyQ; retires codium/chatbox/foot (user data kept)
-  04_workstation_apps.sh    Omarchy-style Ubuntu/Flathub workstation app set
+  04_workstation_apps.sh    Omarchy-style workstation app set: apt CLI/system tools + the Flathub GUI apps
   04c_app_policy.sh         Flatpak/AppImage-first policy: retires the apt copy of an app once
                             its Flatpak is in, retires unwanted base apps, hides junk launchers
   04d_appmanager.sh         AppManager (kem-a/AppManager): AppImage installer/updater, sha256-verified
@@ -52,13 +52,15 @@ install/
                             shipped), white menu icons, terminal/app palette
   09_super_search.sh        Super+Space search, Noctra start button and Start panel:
                             installs the three GNOME Shell extensions, search app,
-                            schema, index timer
+                            schemas, help page, index timer, welcome/branding autostart
   10_boot_theme.sh          Plymouth splash + GRUB theme for non-ISO installs
                             (update-alternatives, update-initramfs, update-grub)
   11_hermes.sh              Hermes Desktop preinstalled (runtime + Electron app build),
-                            free Nous tier primary, local Ollama fallback
+                            free Nous tier primary, local Ollama fallback; runs LAST (25+ min, no sudo)
+                            (module order in install.sh: 00 01 02 02b 03 04 04_workstation 04c 04d 05 06 08 09 10 07 11)
 bin/
-  noc                       CLI: update | doctor | models [list|pull|rm|gui] | bg [list|next|set]
+  noc                       CLI: update | doctor | models [list|pull|rm|gui] | bg [list|next|set] | gpu
+  noc-gpu                   GPU detect | install | status (NVIDIA driver+CUDA, AMD ROCm); VERSION must match noc
   noc-menu                  zenity control panel
   noctraos-hermes           Hermes Desktop launcher/installer: launch | local | install | ready | status.
                             Sets HERMES_GUEST_ONBOARDING=1 (free tier), seeds the Ollama fallback
@@ -66,21 +68,36 @@ bin/
   noctraos-appearance       wallpaper + fonts panel (we fix theme/layout, so no theme switcher)
   noctraos-agent            agent launcher wrapper: installs npm package on
                             first use, then execs the agent
+  noctraos-search           wrapper that execs the system-Python search app (search/)
+  noctraos-weather          Open-Meteo lookup for the Start panel (keyless; city is a user choice)
+branding/setup-branding.py  once-per-account dock + top-bar layout (marker desktop-layout-v1)
+extensions/                 GNOME Shell extensions: noctraos-search (Super+Space overlay),
+                            noctraos-start (Start panel), noctraos-branding (flat top bar, Show Desktop)
+search/                     search app: file index (SQLite), CopyQ bridge, browser history, settings window
+help/index.html             "New users start here" page the Start panel opens
+scripts/                    render-theme.py, build-desktop-theme.py, seed-password-store.py
+tests/                      unittest: theme composition (test_desktop_theme), GPU detection (test_gpu_detect)
+site/                       project website (static, deployed via wrangler.jsonc); keep claims in step with README
+.github/workflows/ci.yml    bash -n + shellcheck on shell scripts, VERSION == bin/noc == bin/noc-gpu
+.agents/skills, skills-lock.json  vendored pstack agent skills (.claude/skills symlinks into them); not product code
 configs/
   mise/config.toml          node=lts, python=3.12, go=latest, terminal tools
   vscode/                   settings.json, extensions.list, continue_config.yaml,
                             vscode.sources (Microsoft apt repo)
   copyq/copyq.conf          clipboard history preseed (1000 entries, silent, tray)
-  autostart/copyq.desktop   CopyQ session autostart (user + /etc/skel)
-  applications/             agent + Herdr + Local-LLM launchers, .directory files
-  theme/                    Herdr and btop palettes
+  autostart/                copyq, noctraos-welcome, noctraos-branding, noctraos-search-setup
+  applications/             agent (incl. Hermes) + Herdr + Local-LLM + Welcome/Appearance launchers, .directory files
+  hermes/onboarding.md      first-run prompt Hermes gets until ~/.hermes/.noctraos-onboarded exists
+  gsettings/, systemd/      search and Start-panel schemas; the file-index user timer
+  theme/                    palette.json (source of truth) + templates/remaps -> shell/GTK CSS, Herdr and btop palettes
   xdg/                      gnome-applications.menu (AI-first tree), agents merge
   nautilus-scripts/         Open_in_VS_Code, Ask_AI_to_Explain, Open_Terminal_Here
 assets/
-  wallpapers/               5 seeded 4K JPEG scenes + generate-wallpapers.py
+  wallpapers/               6 seeded 4K JPEG scenes + generate-wallpapers.py
   icons/                    white SVG glyphs (agents, Local LLM, category tiles)
   icons/overrides/          white SVGs under STOCK icon names — these replace
                             the system category icons system-wide
+  icons/noctraos-theme/     small derived icon theme (inherits ZorinGrey-Dark)
 assets/boot/                boot-chain artwork: plymouth/noctraos (two-step theme),
                             grub/noctraos (theme.txt + generated pixmaps/.pf2),
                             isolinux/ (splash + theme.cfg), generate-boot-assets.py
@@ -97,6 +114,9 @@ iso/build-local.sh          build the release (and appliance) ISO on a fast work
                             fails if a release ISO has a seed or unattended entry
 iso/local-vm.sh             local KVM test VM: start/stop, console screenshot, absolute clicks, keys,
                             ssh/scp. No root, no host changes
+iso/pve-console-shot.py     console frames from a Proxmox VM via the API (boot-testing without a shell)
+docs/                       objectives (source of truth), onboarding, desktop-layout, theme-design,
+                            omarchy-parity, release-runbook
 docs/release-runbook.md     ORDERED HANDOFF for shipping 0.3.0: rebuild, test, VM disk, upload, tag
 iso/vm-sysprep.sh           run inside a fully provisioned VM before exporting its disk as a
                             downloadable image: strips machine id, SSH host keys, Hermes
@@ -197,10 +217,13 @@ iso/vm-sysprep.sh           run inside a fully provisioned VM before exporting i
 
 ```bash
 # static checks (docker shellcheck — not installed on this host)
-bash -n boot.sh install.sh install/*.sh bin/* configs/nautilus-scripts/*
+bash -n boot.sh install.sh install/*.sh bin/noc bin/noc-gpu bin/noc-menu bin/noctraos-agent \
+  bin/noctraos-hermes bin/noctraos-search configs/nautilus-scripts/*     # other bin/ files are Python
 docker run --rm -v "$PWD:/mnt" koalaman/shellcheck:stable --severity=warning \
-  boot.sh install.sh install/*.sh bin/noc bin/noc-menu bin/noctraos-agent \
-  configs/nautilus-scripts/*
+  boot.sh install.sh install/*.sh bin/noc bin/noc-gpu bin/noc-menu bin/noctraos-agent \
+  bin/noctraos-hermes configs/nautilus-scripts/*     # same list as CI
+python3 -m unittest discover -s tests                # 31 tests: theme composition, GPU detection
+python3 scripts/render-theme.py --check              # committed theme outputs match palette.json
 
 # wallpaper iteration (venv at ~/workspace/scratch/zorin-img-venv: pillow+numpy)
 cd assets/wallpapers
@@ -446,8 +469,8 @@ Version **0.3.0** (`VERSION`). The ordered list of what is left to ship it is
 - On `main`: provisioner modules 00 to 11 (Hermes Desktop last), the app policy
   (`04c_app_policy.sh`: Flatpak/AppImage first, unwanted apps removed, launchers hidden), the
   NoctraOS welcome (replaces Zorin's tour), the appearance panel, the release/unattended ISO
-  split, `iso/build-local.sh`, `iso/local-vm.sh`, `iso/vm-sysprep.sh`. (If PR #17 is not merged yet,
-  merge it first: first boot clones `main`, so an ISO built without it provisions the old app set.)
+  split, `iso/build-local.sh`, `iso/local-vm.sh`, `iso/vm-sysprep.sh`. PR #17 (`audit/apps`) is
+  merged; first boot clones `main`, so an ISO must be built from a `main` that contains it.
 - Not done: tag `v0.3.0`, GitHub release, publishing the release ISO and the VM disk to
   files.dazeb.dev/releases/v0.3.0/, and the site/README download links.
 - Every ISO that already exists (local `out/`, the node) predates #17: rebuild.
