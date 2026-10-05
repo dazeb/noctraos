@@ -62,7 +62,7 @@ if [ ! -L /etc/systemd/user/timers.target.wants/noctraos-search-index.timer ]; t
     || warn "Could not enable the search index timer"
 fi
 
-for f in noctraos-search-setup.desktop noctraos-branding.desktop; do
+for f in noctraos-search-setup.desktop noctraos-branding.desktop noctraos-welcome.desktop; do
   install_if_changed 644 "$REPO_ROOT/configs/autostart/$f" "/etc/xdg/autostart/$f"
 done
 

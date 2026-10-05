@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=NoctraOS Welcome
+Exec=/usr/local/bin/noctraos-welcome
+NoDisplay=true
+X-GNOME-Autostart-enabled=true
+X-GNOME-Autostart-Delay=4
+OnlyShowIn=GNOME;

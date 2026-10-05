@@ -34,12 +34,12 @@ Prefer to review first: `git clone https://github.com/dazeb/noctraos && cd noctr
 |------|----------|
 | Local AI | [Ollama](https://ollama.com) on `127.0.0.1:11434` with `qwen2.5-coder:7b` (coding) and `nomic-embed-text` (embeddings for RAG) |
 | GPU acceleration | Auto-detects NVIDIA and AMD GPUs at onboarding: NVIDIA → signed Ubuntu driver + CUDA toolkit, AMD → ROCm (see [GPU setup](#gpu-setup)) |
-| Agents menu | **Hermes** (desktop app, preinstalled, free to start — no signup, local Ollama as offline fallback) plus **Codex, Claude Code, OpenCode, Grok, Gemini CLI, Qwen Code** — each launches in a terminal and installs itself on first use (with your consent) |
+| Agents menu | **Hermes** (desktop app, preinstalled, free to start with no signup — its free tier runs on Nous Research's cloud, so prompts leave the computer; one click for local-only, and the local Ollama model is the offline fallback) plus **Codex, Claude Code, OpenCode, Grok, Gemini CLI, Qwen Code** — each launches in a terminal and installs itself on first use (with your consent) |
 | Local LLM menu | **AI Models** manager and **AI Health Check**; editor chat through Continue |
 | Editor | [Microsoft VS Code](https://code.visualstudio.com) + Continue.dev (pre-wired to local Ollama), GitLens, Prettier, Python, Go |
 | Agent sessions | [Herdr](https://herdr.dev) persistent workspaces, installed through mise and launched from Development |
 | Workstation apps | Chromium, Obsidian, LocalSend, Pinta, Moonlight, LibreOffice, MPV, Kdenlive, OBS Studio, Flameshot, Xournal++, Evince, GNOME Disks, and Sushi preview |
-| Developer tools | btop, bat, eza, fd-find, fzf, ripgrep, zoxide, neovim, tmux, Starship, lazygit, lazydocker, GitHub CLI, Docker/Compose, clang, Ruby, ffmpeg, ImageMagick, yt-dlp, tldr |
+| Developer tools | btop, bat, eza, fd-find, fzf, ripgrep, zoxide, tmux, Starship, lazygit, lazydocker, GitHub CLI, Docker/Compose, clang, Ruby, ffmpeg, ImageMagick, yt-dlp, tldr |
 | Task manager | Mission Center (Flathub) — the familiar Task-Manager role: CPU/RAM/GPU and running apps |
 | Runtimes | [mise](https://mise.jdx.dev) managing Node LTS, Python 3.12, Go — system-wide, for every user |
 | Mouse ergonomics | Nautilus right-click: *Open in VS Code*, *Ask AI to Explain* (sends the file to local Ollama, answers in a dialog), *Open Terminal Here* |

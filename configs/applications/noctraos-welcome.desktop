@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Welcome to NoctraOS
+GenericName=Welcome and tour
+Comment=A two-minute introduction: search, where things are, your local AI
+Exec=/usr/local/bin/noctraos-welcome --force
+Icon=noctraos-start
+Categories=Utility;
+Terminal=false
+StartupNotify=true
+Keywords=welcome;tour;intro;start;help;getting started;

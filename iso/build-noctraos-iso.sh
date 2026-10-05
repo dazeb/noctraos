@@ -139,6 +139,10 @@ else
 fi
 
 cd "$DEST"
+# The welcome app runs while provisioning runs, so the wait becomes learning.
+if [ -f "$DEST/bin/noctraos-welcome" ] && command -v python3 >/dev/null 2>&1; then
+  ( setsid python3 "$DEST/bin/noctraos-welcome" --provisioning >/dev/null 2>&1 & )
+fi
 bash install.sh 2>&1 | tee "$LOG"
 STATUS="${PIPESTATUS[0]}"
 if [ "$STATUS" -eq 0 ]; then

@@ -64,8 +64,13 @@ First login must put Super+Space front and center: show the shortcut, let the
 user try it right there, and show what it can find (apps, files, clipboard,
 web). Then a short tour of the other things a switcher needs to know (start
 button, Mission Center as the task manager, the agents menu, local AI
-models). The draft flow is in [onboarding.md](onboarding.md); nothing is built yet.
-Today the ISO first boot only runs the provisioner in a terminal.
+models). The flow is in [onboarding.md](onboarding.md) and a first version is built:
+`noctraos-welcome` replaces Zorin's tour, shows once per account, and the ISO first boot
+starts it while the provisioner runs, so the provisioner terminal is no longer the whole
+first-boot experience. Not built yet: the prefilled search examples and a provisioner log panel
+(a status line stands in). Being honest about where AI runs is part of the brief: the screen says
+the local model stays on the computer and that Hermes' free tier is a cloud service, with a
+local-only choice.
 
 ## Delivery
 
