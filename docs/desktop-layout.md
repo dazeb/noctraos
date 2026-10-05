@@ -54,7 +54,7 @@ These override the mockup where they differ.
 | Clock | top centre, opens notifications and the calendar | top centre |
 | Tray, network, volume, power, running-app indicators | top right | top right |
 | Show Desktop | top left (`noctraos-branding`) | top left |
-| Start button | Noctra "N" (extension), in the dock | rounded "Start" button inside the dock |
+| Start button | Noctra logo (the website mark; extension), in the dock | rounded "Start" button inside the dock |
 | Start menu | the Noctra Start panel (`noctraos-start`): header, Agents row, recent files, All apps | large rounded popup redesigned around AI apps |
 | Corner radius | 0 px (shell, dock, Start panel); 2 px in the search overlay and our GTK windows | **decided: sharp** (mockup shows rounded) |
 | Wallpaper | six polygonal 4K scenes, including near-black `ember-night` | **decided: keep current**, add better ones over time |

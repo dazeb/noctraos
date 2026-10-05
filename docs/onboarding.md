@@ -42,7 +42,7 @@ learning.
 5. **One keybind.** NoctraOS is AI-first. Super+Space is the only shortcut
    we teach; everything else is reachable with the mouse (and through Super+Space).
 6. **Windows vocabulary.** Say "Windows key" (it is the Super key), "Task
-   Manager" (Mission Center), "Start button" (the N).
+   Manager" (Mission Center), "Start button" (the Noctra logo).
 
 ## Flow
 
@@ -51,7 +51,7 @@ learning.
 | 1 | **Welcome** — one line on what NoctraOS is (it runs a model on this computer and says plainly when something does not), a *Start* button, a *Skip* link | Set expectations | Click | yes |
 | 2 | **Press Windows + Space** — large keycap graphic, short copy: "Search everything from one place." | Teach the hero feature by doing it | The user opens the overlay once (see *Detecting the keypress*) | yes, with an "It's not working" escape |
 | 3 | **What can it find?** — four tappable examples that open the overlay with a query filled in: an app ("files"), a file by name, something from clipboard history, a web search. Browser history is not an example here: it is offered later (below) | Show the range; each is one click | Click *Next* (no forced interaction) | **no** (needs `Open(query)`) |
-| 4 | **Where things are** — a compact, mouse-only map of familiar things: Start button (N, bottom-left), Task Manager → Mission Center, File Explorer → Files, screenshots, system tray. **No shortcut list** | Reassure; nothing to relearn | Click *Next* | yes (screen 3 of 4 in the app) |
+| 4 | **Where things are** — a compact, mouse-only map of familiar things: Start button (the Noctra logo, bottom-left), Task Manager → Mission Center, File Explorer → Files, screenshots, system tray. **No shortcut list** | Reassure; nothing to relearn | Click *Next* | yes (screen 3 of 4 in the app) |
 | 5 | **Your AI** — the local model's status (installed / downloading), the Agents menu, and Hermes with its cloud disclosure and a local-only choice | Introduce the AI half, honestly, without blocking on the download | Click *Done*; if provisioning is still running, show "Setting up your AI workstation in the background" | yes (screen 4 of 4 in the app) |
 
 After *Done*: no nagging. Planned, not built: one non-modal hint — the start menu's

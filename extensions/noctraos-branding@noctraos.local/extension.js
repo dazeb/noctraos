@@ -6,7 +6,9 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 
 const MENU_UUID = 'zorin-menu@zorinos.com';
-const ICON = '/usr/local/share/icons/hicolor/scalable/apps/noctraos-start.svg';
+// The Start button shows the Noctra OS logo (same mark as the website). The N
+// (noctraos-start.svg) stays on the Welcome app and in the boot art.
+const ICON = '/usr/local/share/icons/hicolor/scalable/apps/noctraos-logo.svg';
 
 export default class NoctraStart extends Extension {
     enable() {
