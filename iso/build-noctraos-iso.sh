@@ -19,11 +19,12 @@
 # Usage:  sudo ./build-noctraos-iso.sh <zorin-live.iso> [out.iso]
 # Needs:  xorriso, squashfs-tools, git, openssl, ~25 GiB scratch (set WORK_BASE).
 #
-# Unattended installer (Ubiquity preseeding): a seed generated from
-# iso/preseed/noctraos.seed.in is baked at /preseed/noctraos.seed and an
-# "Install NoctraOS (unattended)" boot entry is added to both the BIOS
-# (isolinux) and UEFI (grub) menus. Set NOCTRAOS_UNATTENDED=1 to make it the
-# default (5 s timeout) so a fresh VM installs fully hands-off.
+# Unattended installer (Ubiquity preseeding), only with NOCTRAOS_UNATTENDED=1: a seed
+# generated from iso/preseed/noctraos.seed.in is baked at /preseed/noctraos.seed and
+# an "Install NoctraOS (unattended)" entry becomes the default (5 s timeout) in both
+# the BIOS (isolinux) and UEFI (grub) menus, so a fresh VM installs fully hands-off.
+# Without it (a release build) the ISO carries no seed, no password hash and no such
+# entry: it is the interactive installer only.
 #
 # Build-time knobs (env):
 #   NOCTRAOS_UNATTENDED  1 = boot straight into the unattended install (default 0)
@@ -190,25 +191,33 @@ EOF
 fi
 
 # --- unattended preseed: bake the seed, add the boot entries ---------------
-step "4/7 generating unattended preseed seed"
-mkdir -p "$ISO_TREE/preseed"
-# sha512-crypt alphabet is [./0-9A-Za-z$] — no sed metachars for the | delimiter.
-PASSWORD_CRYPT="$(openssl passwd -6 "$AI_PASSWORD")"
-sed -e "s|@LOCALE@|$AI_LOCALE|g" \
-    -e "s|@KEYMAP@|$AI_KEYMAP|g" \
-    -e "s|@TIMEZONE@|$AI_TIMEZONE|g" \
-    -e "s|@HOSTNAME@|$AI_HOSTNAME|g" \
-    -e "s|@USERNAME@|$AI_USER|g" \
-    -e "s|@FULLNAME@|$AI_FULLNAME|g" \
-    -e "s|@PASSWORD_CRYPT@|$PASSWORD_CRYPT|g" \
-    "$SEED_TEMPLATE" > "$ISO_TREE/preseed/noctraos.seed"
-chmod 644 "$ISO_TREE/preseed/noctraos.seed"
+# Only in NOCTRAOS_UNATTENDED=1 builds. A release ISO carries neither the seed
+# (it holds a password hash) nor a boot entry that installs and wipes the disk
+# without asking.
+SEED_MAP=()
+if [ "$UNATTENDED" = 1 ]; then
+  step "4/7 generating unattended preseed seed"
+  mkdir -p "$ISO_TREE/preseed"
+  # sha512-crypt alphabet is [./0-9A-Za-z$] — no sed metachars for the | delimiter.
+  PASSWORD_CRYPT="$(openssl passwd -6 "$AI_PASSWORD")"
+  sed -e "s|@LOCALE@|$AI_LOCALE|g" \
+      -e "s|@KEYMAP@|$AI_KEYMAP|g" \
+      -e "s|@TIMEZONE@|$AI_TIMEZONE|g" \
+      -e "s|@HOSTNAME@|$AI_HOSTNAME|g" \
+      -e "s|@USERNAME@|$AI_USER|g" \
+      -e "s|@FULLNAME@|$AI_FULLNAME|g" \
+      -e "s|@PASSWORD_CRYPT@|$PASSWORD_CRYPT|g" \
+      "$SEED_TEMPLATE" > "$ISO_TREE/preseed/noctraos.seed"
+  chmod 644 "$ISO_TREE/preseed/noctraos.seed"
+  SEED_MAP=(-map "$ISO_TREE/preseed/noctraos.seed" /preseed/noctraos.seed)
+fi
 
 step "4/7 theming the boot chain (grub, isolinux, live splash, installed system)"
 boot_theme_iso_tree "$ISO_TREE"
 boot_theme_initrd "$ISO_TREE"
 boot_theme_squashfs "$SQ_ROOT"
 
+if [ "$UNATTENDED" = 1 ]; then
 step "4/7 adding unattended boot entries (BIOS isolinux + UEFI grub)"
 # noprompt: casper-stop ejects the medium and reboots without the
 # "Please remove the installation medium, then press ENTER" wait.
@@ -219,34 +228,24 @@ GRUB_ENTRY="menuentry \"Install NoctraOS (unattended)\" --class zorin {
 	linux	/casper/vmlinuz maybe-ubiquity $SEED_ARGS quiet splash ---
 	initrd	/casper/initrd.zstd
 }"
-if [ "$UNATTENDED" = 1 ]; then
-  # default entry: prepend before the first menuentry, shorten the timeout
-  sed -i 's/^set timeout=[0-9]\+/set timeout=5/' "$ISO_TREE/boot/grub/grub.cfg"
-  awk -v e="$GRUB_ENTRY" '!d && /^menuentry / { print e; print ""; d=1 } { print }' \
-    "$ISO_TREE/boot/grub/grub.cfg" > "$ISO_TREE/boot/grub/grub.cfg.new" \
-    && mv "$ISO_TREE/boot/grub/grub.cfg.new" "$ISO_TREE/boot/grub/grub.cfg"
-else
-  # selectable but not default: insert before the trailing grub_platform block
-  awk -v e="$GRUB_ENTRY" '/^grub_platform/ && !d { print e; print ""; d=1 } { print }' \
-    "$ISO_TREE/boot/grub/grub.cfg" > "$ISO_TREE/boot/grub/grub.cfg.new" \
-    && mv "$ISO_TREE/boot/grub/grub.cfg.new" "$ISO_TREE/boot/grub/grub.cfg"
-fi
+# default entry: prepend before the first menuentry, shorten the timeout
+sed -i 's/^set timeout=[0-9]\+/set timeout=5/' "$ISO_TREE/boot/grub/grub.cfg"
+awk -v e="$GRUB_ENTRY" '!d && /^menuentry / { print e; print ""; d=1 } { print }' \
+  "$ISO_TREE/boot/grub/grub.cfg" > "$ISO_TREE/boot/grub/grub.cfg.new" \
+  && mv "$ISO_TREE/boot/grub/grub.cfg.new" "$ISO_TREE/boot/grub/grub.cfg"
 
-ISOLINUX_EXTRA=""
-[ "$UNATTENDED" = 1 ] && ISOLINUX_EXTRA='  MENU DEFAULT'
 cat >> "$ISO_TREE/isolinux/menuentries.cfg" <<EOF
 MENU SEPARATOR
 
 LABEL unattended
   MENU LABEL ^Install NoctraOS (unattended)
-$ISOLINUX_EXTRA
+  MENU DEFAULT
   KERNEL /casper/vmlinuz
   APPEND maybe-ubiquity initrd=/casper/initrd.zstd $SEED_ARGS quiet splash ---
 EOF
-if [ "$UNATTENDED" = 1 ]; then
-  # DEFAULT lives in menuentries.cfg; TIMEOUT (1/10 s units, 50 => 5 s) in isolinux.cfg
-  sed -i 's/^DEFAULT live/DEFAULT unattended/' "$ISO_TREE/isolinux/menuentries.cfg"
-  sed -i 's/^TIMEOUT [0-9]\+/TIMEOUT 50/' "$ISO_TREE/isolinux/isolinux.cfg"
+# DEFAULT lives in menuentries.cfg; TIMEOUT (1/10 s units, 50 => 5 s) in isolinux.cfg
+sed -i 's/^DEFAULT live/DEFAULT unattended/' "$ISO_TREE/isolinux/menuentries.cfg"
+sed -i 's/^TIMEOUT [0-9]\+/TIMEOUT 50/' "$ISO_TREE/isolinux/isolinux.cfg"
 fi
 
 if [ -f "$ISO_TREE/.disk/info" ]; then
@@ -287,7 +286,7 @@ xorriso -indev "$SRC_ISO" \
   -map "$ISO_TREE/boot/grub/themes/noctraos" /boot/grub/themes/noctraos \
   -map "$ISO_TREE/casper/initrd.zstd" /casper/initrd.zstd \
   -map "$ISO_TREE/isolinux/splash.png" /isolinux/splash.png \
-  -map "$ISO_TREE/preseed/noctraos.seed" /preseed/noctraos.seed \
+  "${SEED_MAP[@]}" \
   -map "$ISO_TREE/isolinux/menuentries.cfg" /isolinux/menuentries.cfg \
   -map "$ISO_TREE/isolinux/isolinux.cfg" /isolinux/isolinux.cfg \
   -map "$ISO_TREE/.disk/info" /.disk/info \
