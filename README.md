@@ -432,20 +432,17 @@ testing happens in a VM (`iso/local-vm.sh`); see [AGENTS.md](AGENTS.md).
 
 ## Status & roadmap
 
-Version **0.3.0**. The provisioner has been run on the 18.1 release of the base system in a VM: full install,
-idempotent re-runs, first-boot provisioning from the ISO, and an unattended install from
-the custom ISO. **Those runs predate PR #17** (app policy, AppManager, the Welcome and
-Appearance apps, Hermes changes); every ISO built so far was made before it, so the
-current `main` has not been through that full cycle and the ISOs must be rebuilt and
-re-tested. The 0.3.0 ISO and VM disks are downloadable from
-[noctraos.dev/download](https://noctraos.dev/download), but there is no `v0.3.0` tag or
-GitHub release yet; the [release runbook](docs/release-runbook.md) is the ordered list
-of what is left.
+Version **0.3.0**, published. The ISO and both VM disks were rebuilt from `main` after
+PR #17 and tested in a VM: the release ISO boots to the installer; the unattended build installs
+and provisions from scratch with no help (app policy, AppManager, Welcome, Hermes); and each
+exported VM disk (QCOW2, VMDK) boots, signs in, brings up SSH with a fresh host key and passes
+`noc doctor`. They are downloadable from [noctraos.dev/download](https://noctraos.dev/download)
+with a `SHA256SUMS` file. There is no `v0.3.0` tag or GitHub release yet; the
+[release runbook](docs/release-runbook.md) lists what is left.
 
-Not yet verified: the Welcome running during first-boot provisioning on a
-from-scratch install, a full interactive install of the release ISO, the exported
-VM disk booting, and the boot menus and splash on real hardware (they have only
-been seen under QEMU).
+Not yet verified: the Welcome while first-boot provisioning is still running, a full
+interactive install of the release ISO, and the boot menus, splash and everything else on
+real hardware (so far seen only under QEMU).
 
 On the roadmap, roughly in priority order:
 

@@ -16,11 +16,16 @@ AppManager (`04d`), the NoctraOS welcome (`bin/noctraos-welcome`) replacing Zori
 build and test tooling (`iso/build-local.sh`, `iso/local-vm.sh`). The docs were realigned with all
 of this afterwards (README, AGENTS.md, `docs/`).
 
-**Stale, do not use:** every ISO currently in `/run/media/dazeb/2tb/noctraos-build/out/` and on the
-Proxmox node was built from `main` BEFORE #17 and has none of the above. Rebuild.
+**Status (2026-10-05):** steps 1 to 4 below are done. The ISOs were rebuilt from `main` after #17,
+the release ISO boots to the installer, the appliance ISO installs and provisions unattended, and both
+VM disks (QCOW2, VMDK) were exported from that clean run, boot-tested and published with `SHA256SUMS`
+at `https://dl.noctraos.dev/releases/v0.3.0/` (also reachable as files.dazeb.dev/releases/v0.3.0/).
+The old unattended test ISO was removed from the bucket. ISOs older than #17, wherever they sit, are
+stale: do not use them.
 
-**Not published yet, nothing tagged:** no `v0.3.0` tag, no GitHub release, the website still says
-"Not yet published".
+**Left:** step 5 (tag `v0.3.0`, GitHub release with links and checksums only). The download page and
+README already link the files. A full interactive install of the release ISO, the welcome while
+provisioning is still running, and real hardware are still untested.
 
 ## 1. Rebuild the ISOs (about 5 minutes)
 

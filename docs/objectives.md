@@ -80,13 +80,14 @@ local-only choice.
   which carries no unattended seed or password. A separate **appliance** build
   (unattended, throwaway credentials) exists only to produce the downloadable VM
   disk and is never published.
-- Planned for 0.3.0: a **VM disk image** (qcow2/vmdk, sysprepped with
+- For 0.3.0: a **VM disk image** (qcow2/vmdk, sysprepped with
   `iso/vm-sysprep.sh`) for people who would rather try it in a hypervisor. It is a
   trial appliance: autologin and passwordless sudo, which the download page must say.
 - `install.sh` / `boot.sh` remain as the engine the ISO bakes in and as a way
   to provision an existing Zorin OS machine. They are no longer the
   headline product.
-- Version 0.3.0 is built but **not published**; the steps left are in
+- Version 0.3.0 is **published**: the ISO, the VM disks and their checksums are on the download
+  page. What is left is the `v0.3.0` git tag and GitHub release; see
   [release-runbook.md](release-runbook.md).
 
 ## Visual direction
