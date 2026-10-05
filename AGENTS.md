@@ -490,15 +490,20 @@ Version **0.3.0** (`VERSION`). The ordered list of what is left to ship it is
   NoctraOS welcome (replaces Zorin's tour), the appearance panel, the release/unattended ISO
   split, `iso/build-local.sh`, `iso/local-vm.sh`, `iso/vm-sysprep.sh`. PR #17 (`audit/apps`) is
   merged; first boot clones `main`, so an ISO must be built from a `main` that contains it.
-- Published (2026-10-05): the release ISO, the QCOW2 and VMDK VM disks and `SHA256SUMS` at
-  `https://dl.noctraos.dev/releases/v0.3.0/` (the same R2 bucket as files.dazeb.dev; each file's
-  SHA-256 was checked by downloading it back through the public hostname). The ISO was built from
-  `main` at 89c845b, after #17, #18 and #19. The site and README link to them.
+- Published (2026-10-05, replaced the same evening): the release ISO, the QCOW2 and VMDK VM disks and
+  `SHA256SUMS` at `https://dl.noctraos.dev/releases/v0.3.0/` (the same R2 bucket as files.dazeb.dev;
+  each file's SHA-256 was checked by streaming it back through the public hostname). The rebuild adds
+  the census removal (`iso/strip-census.sh`), the renamed user-facing Zorin labels
+  (`iso/rebrand-labels.sh`) and everything merged through #27; it was built from the PR #28 branch
+  (`REPO_URL=file:///host/branch-src iso/build-local.sh`), first boot cloned `main`. The ISO torrent in the
+  repo root is for this ISO (regenerated, with a web seed on dl.noctraos.dev): rebuild it whenever the ISO
+  changes. The contact address is admin@noctraos.dev.
 - Not done: tag `v0.3.0` and the GitHub release (links and checksums only; GitHub caps assets at
   2 GiB).
 - Never published: the unattended/appliance ISO. The old unattended test ISO that was public at
   the bucket root was deleted.
-- Tested: the release ISO boots to the installer; the appliance ISO installs and provisions
+- Tested: `proxmox-install.sh` against the public files on a PVE 9.2 node, both modes (the image boots to the
+  welcome; the ISO boots to the installer); the release ISO boots to the installer; the appliance ISO installs and provisions
   unattended end to end; both exported VM disks (QCOW2, VMDK) boot, autologin into the welcome,
   bring up SSH on their own with a new host key, and pass `noc doctor`.
 - Untested: the welcome while first-boot provisioning is still running, a full interactive
