@@ -176,11 +176,13 @@ fi
 
 echo
 echo "Creating VM $VMID ($NAME)..."
-VM_CREATED=$VMID
+# The cleanup marker is armed only once qm create has succeeded: if another operation took this id
+# first, create fails and the trap must not destroy that other guest.
 qm create "$VMID" --name "$NAME" --ostype l26 --machine q35 --bios ovmf \
     --cpu x86-64-v2-AES --cores "$CORES" --memory "$RAM" --balloon 0 \
-    --scsihw virtio-scsi-single --net0 "virtio,bridge=$BRIDGE" --vga std \
-    --efidisk0 "$STORAGE:1,efitype=4m,pre-enrolled-keys=0" > /dev/null
+    --scsihw virtio-scsi-single --net0 "virtio,bridge=$BRIDGE" --vga std > /dev/null
+VM_CREATED=$VMID
+qm set "$VMID" --efidisk0 "$STORAGE:1,efitype=4m,pre-enrolled-keys=0" > /dev/null
 
 if [[ $NOCTRAOS_MODE == image ]]; then
     echo 'Importing the disk (a few minutes)...'
