@@ -89,7 +89,9 @@ enforces it:
   Tour, Weather, Evolution, Zorin Appearance, Zorin Connect, Web Apps, Windows
   App Support, Neovim; Chatbox, VSCodium and Foot are removed by module 04;
 - removals are plain `apt-get remove` (no purge, no autoremove, user data stays),
-  and each is simulated first and skipped if apt would also remove the desktop;
+  and each is simulated first: a package is skipped if apt would also remove the
+  desktop, and if apt cannot plan the removal of one package in a set (LibreOffice,
+  say), the whole set stays installed rather than being half-removed;
 - launchers that only confuse are hidden with a `NoDisplay=true` copy in
   `/usr/local/share/applications` (delete the file to undo). Vim cannot be
   removed (Zorin's `zorin-os-minimal` depends on it), so only its launcher is hidden;

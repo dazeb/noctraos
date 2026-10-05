@@ -445,7 +445,10 @@ tail -f /root/noctraos-build.log
   and `noctraos-appearance` hit this; `noctraos-search` already execs `/usr/bin/python3`.
 - **`retire_apt` judges each package alone and only by collateral removals.** Batching them let one
   false positive (`zorin-os-tour-video` matches the protected `zorin-os` prefix) block all of
-  them, and counting the requested package itself as a hit is wrong.
+  them, and counting the requested package itself as a hit is wrong. The opposite holds for a
+  package apt cannot plan at all (`apt-get -s remove` fails, e.g. `libreoffice-style-colibre`
+  would break `libreoffice-core`): packages in a set depend on each other, so the WHOLE set is
+  kept (a warning, not an abort), otherwise a half-removed set would be left for the next run.
 - **Local KVM test VM (ubuntubox):** `qemu-system-x86_64 -enable-kvm` with OVMF, user-mode
   networking (`hostfwd` 2222->22), `-usb -device usb-tablet`, a monitor socket for `sendkey` and
   `screendump`, and a **QMP socket for clicks**: HMP `mouse_move` is relative and a tablet ignores
