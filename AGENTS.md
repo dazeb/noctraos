@@ -58,7 +58,7 @@ install/
 bin/
   noc                       CLI: update | doctor | models [list|pull|rm|gui] | bg [list|next|set]
   noc-menu                  zenity control panel
-  noctraos-hermes           Hermes Desktop launcher/installer: launch | install | status.
+  noctraos-hermes           Hermes Desktop launcher/installer: launch | local | install | ready | status.
                             Sets HERMES_GUEST_ONBOARDING=1 (free tier), seeds the Ollama fallback
   noctraos-welcome          first-run welcome (GTK; replaces Zorin's tour), --force/--provisioning
   noctraos-appearance       wallpaper + fonts panel (we fix theme/layout, so no theme switcher)
@@ -348,6 +348,12 @@ tail -f /root/noctraos-build.log
   hardware; on this dev box `noc gpu install --dry-run` is safe (it detects the
   active driver + manual CUDA 13.3 and touches nothing).
 
+- **Hermes' free tier is a cloud service: prompts leave the machine.** Everything the welcome app
+  and README say about "local AI" is about the Ollama model; Hermes resolves to the Nous cloud
+  unless it is local-only. Never describe Hermes as local without that qualification. The welcome
+  app discloses it and offers `noctraos-hermes local` (Ollama primary, free tier off, persistent;
+  undo with `hermes config set model.provider auto`). `noctraos-hermes ready` (runtime and app
+  built) gates the Hermes buttons so they cannot start a second installer during provisioning.
 - **Hermes free tier is gated and pre-GA.** The Nous free tier only exists when
   `HERMES_GUEST_ONBOARDING=1` (or `--guest-onboarding`); `noctraos-hermes` exports it. Never
   set `model.provider` for the user: an explicit provider beats the free tier in

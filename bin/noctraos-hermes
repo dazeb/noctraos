@@ -2,6 +2,9 @@
 # noctraos-hermes — Hermes Desktop launcher and installer.
 #   noctraos-hermes            launch the app (installs it first if missing)
 #   noctraos-hermes install    idempotent: runtime + desktop app + model defaults
+#   noctraos-hermes local      local-only: Ollama is the primary and the Nous free tier stays off,
+#                              so nothing typed to Hermes leaves this computer (persistent)
+#   noctraos-hermes ready      exit 0 when the runtime and the desktop app are both built
 #   noctraos-hermes status     print what is installed / configured
 #
 # First-run onboarding: until ~/.hermes/.noctraos-onboarded exists, the launch
@@ -189,6 +192,21 @@ cmd_status() {
   ollama_ready && echo "ollama:  $OLLAMA_MODEL ready" || echo "ollama:  $OLLAMA_MODEL not ready"
 }
 
+# The free tier is Nous Research's cloud: prompts typed to Hermes leave this computer. This is
+# the one-click way to keep them here. It is persistent (config.yaml); to go back to the free
+# tier run `hermes config set model.provider auto`.
+cmd_local() {
+  if ! ollama_ready; then
+    say "ERROR: the local model $OLLAMA_MODEL is not ready yet — try again in a few minutes"
+    return 1
+  fi
+  hermes_set model.provider custom
+  hermes_set model.default "$OLLAMA_MODEL"
+  hermes_set model.base_url "$OLLAMA_API/v1"
+  say "OK: Hermes will use the local model only (Nous free tier off)"
+  LOCAL_ONLY=1 cmd_launch
+}
+
 cmd_launch() {
   if ! runtime_ready || ! app_ready; then
     # Desktop entries have no terminal; first-run install needs one to show progress.
@@ -201,7 +219,10 @@ cmd_launch() {
   offline_first_launch_fallback
   seed_vm_electron_flags
   hide_hermes_own_launcher
-  export HERMES_GUEST_ONBOARDING=1
+  # Local-only never enables the free tier: it would still contact Nous for its identity.
+  if [ "${LOCAL_ONLY:-}" != 1 ]; then
+    export HERMES_GUEST_ONBOARDING=1
+  fi
   if onboarding_active; then
     HERMES_EPHEMERAL_SYSTEM_PROMPT="$(cat "$ONBOARD_FILE")"
     export HERMES_EPHEMERAL_SYSTEM_PROMPT
@@ -211,7 +232,9 @@ cmd_launch() {
 
 case "${1:-launch}" in
   launch)  cmd_launch ;;
+  local)   cmd_local ;;
   install) cmd_install ;;
+  ready)   runtime_ready && app_ready ;;
   status)  cmd_status ;;
-  *) echo "usage: noctraos-hermes [launch|install|status]" >&2; exit 1 ;;
+  *) echo "usage: noctraos-hermes [launch|local|install|ready|status]" >&2; exit 1 ;;
 esac
