@@ -50,12 +50,13 @@ retire_apt() { # retire_apt <why> <package>...
   # zorin-os-something and still be fine to remove. Simulate first: "Remv <pkg> ..." lines are
   # exactly what apt would remove.
   for p in "${present[@]}"; do
-    # apt cannot always plan a removal (e.g. libreoffice-style-colibre: removing it would break
-    # libreoffice-core). Under pipefail that failure would abort the whole install, so a
-    # package whose removal cannot be simulated is kept, like one that would drag the desktop.
+    # apt cannot always plan a removal (e.g. libreoffice-style-colibre: on its own it would break
+    # libreoffice-core). Under pipefail that failure would abort the whole install. Packages in a
+    # set depend on each other, so removing only part of it would leave a half-removed set that
+    # the next run finishes: when any one cannot be planned, the whole set stays installed.
     if ! plan_out="$(sudo apt-get -s remove "$p" 2>/dev/null)"; then
-      warn "Keeping $p ($why): apt cannot plan its removal"
-      continue
+      warn "Keeping all of: $why — apt cannot plan the removal of $p"
+      return 0
     fi
     plan="$(awk '/^Remv /{print $2}' <<<"$plan_out")"
     collateral="$(printf '%s\n' $plan | grep -vxF -f <(printf '%s\n' "${requested[@]}") || true)"
