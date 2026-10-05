@@ -4,20 +4,13 @@
 #
 #   check   shell syntax + shellcheck, the VERSION / bin/noc / bin/noc-gpu match, the unit
 #           tests, and the theme outputs matching configs/theme/palette.json.
-#   deploy  publishes site/ to Cloudflare Workers (wrangler.jsonc at the repo root), from
-#           the default branch only, and only when site/ or wrangler.jsonc changed.
 #
-# Before the deploy job will run, the project needs these CI/CD variables (Settings > CI/CD):
-#   CLOUDFLARE_API_TOKEN   masked + protected; a token that may edit Workers
-#   CLOUDFLARE_ACCOUNT_ID  the Cloudflare account that owns the `noctraos` Worker
-#   DEPLOY_ALLOWED         "yes" — a deliberate second switch, so a green pipeline never
-#                          touches production until someone decided it should
-# Cloudflare may also be building this Worker from GitHub (Workers Builds); if so, turn one
-# of the two off, or every push to main deploys twice.
+# There is deliberately no deploy stage: Cloudflare builds and deploys the site by itself
+# whenever GitHub `main` is updated (wrangler.jsonc at the repo root). GitLab is only a mirror
+# plus the place the checks run; push to it with `git push gitlab <branch>`.
 
 stages:
   - check
-  - deploy
 
 variables:
   TZ: UTC
@@ -69,19 +62,3 @@ tests:
   script:
     - python3 -B -m unittest discover -s tests -v
     - python3 -B scripts/render-theme.py --check
-
-deploy-site:
-  stage: deploy
-  image: node:22-bookworm
-  rules:
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $DEPLOY_ALLOWED == "yes"
-      changes:
-        - site/**/*
-        - wrangler.jsonc
-        - .gitlab-ci.yml
-  script:
-    - test -n "$CLOUDFLARE_API_TOKEN" && test -n "$CLOUDFLARE_ACCOUNT_ID" || { echo "CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID must be set"; exit 1; }
-    - npx --yes wrangler@4 deploy
-  environment:
-    name: production
-  resource_group: production

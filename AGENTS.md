@@ -79,7 +79,8 @@ scripts/                    render-theme.py, build-desktop-theme.py, seed-passwo
 tests/                      unittest: theme composition (test_desktop_theme), GPU detection (test_gpu_detect)
 site/                       project website (static, deployed via wrangler.jsonc); keep claims in step with README
 .gitlab-ci.yml              the working CI (homelab GitLab, project dazeb/noctraos, Docker runner): shell checks,
-                            VERSION match, unit tests, theme check, and the gated Cloudflare deploy of site/
+                            VERSION match, unit tests, theme check. No deploy: Cloudflare deploys site/ itself
+                            when GitHub main updates. Push to GitLab with `git push gitlab <branch>`
 .github/workflows/ci.yml    shell + VERSION checks only; GitHub Actions does not run on this account
 .agents/skills, skills-lock.json  vendored pstack agent skills (.claude/skills symlinks into them); not product code
 configs/

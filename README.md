@@ -385,7 +385,8 @@ python3 scripts/render-theme.py --check                                        #
 CI runs the same checks: `.gitlab-ci.yml` (the homelab GitLab and its Docker runner;
 GitHub Actions is not available on this account) does `bash -n` and shellcheck at
 warning severity, the `VERSION` / `bin/noc` / `bin/noc-gpu` match, the unit tests and
-the theme check, and can deploy `site/` to Cloudflare from `main`.
+and the theme check. (`site/` is deployed by Cloudflare itself whenever GitHub `main`
+is updated, so CI has no deploy step.)
 `.github/workflows/ci.yml` carries the shell and version checks only. Never run
 `install.sh` on a development workstation: it changes the machine. Runtime
 testing happens in a VM (`iso/local-vm.sh`); see [AGENTS.md](AGENTS.md).

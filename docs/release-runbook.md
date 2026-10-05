@@ -123,7 +123,8 @@ gh release create v0.3.0 --title "NoctraOS 0.3.0" --notes-file notes.md         
 
 Then a PR updating `site/download.html` (the "Not yet published" row, file sizes, checksums, the
 VM disk with its credentials) and `README.md` (download links), merged like the others. The
-`site/` directory deploys with `wrangler.jsonc`; check how before merging a change to it.
+`site/` directory deploys with `wrangler.jsonc`: Cloudflare builds it automatically whenever
+GitHub `main` is updated, so merging the PR publishes the site.
 
 ## Cleanup
 
