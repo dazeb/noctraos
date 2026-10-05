@@ -111,7 +111,13 @@ retire_apt "apps we do not ship" \
   brave-browser brasero rhythmbox totem gnome-tour gnome-weather malcontent-gui evolution \
   zorin-appearance zorin-connect webapp-manager \
   zorin-windows-app-support-installation-shortcut neovim neovim-runtime \
-  zorin-gnome-tour-autostart zorin-os-tour-video
+  zorin-gnome-tour-autostart zorin-os-tour-video zorin-os-census
+
+# Zorin's census cron job reports the account count, an install id and the OS version to
+# census.zorinos.com. NoctraOS does not report to Zorin. The ISO is built without it
+# (iso/strip-census.sh); this covers a machine that took the one-liner on an existing Zorin.
+# apt only removes the package, and a removed package's cron files stay, so delete them.
+sudo rm -f /etc/cron.daily/zorin-os-census /etc/cron.hourly/zorin-os-census
 
 # Zorin's first-login "Welcome to Zorin OS" tour (GNOME Tour) is started from a per-user
 # autostart file copied out of /etc/skel. NoctraOS has its own welcome (noctraos-welcome).

@@ -106,6 +106,7 @@ assets/boot/                boot-chain artwork: plymouth/noctraos (two-step them
                             grub/noctraos (theme.txt + generated pixmaps/.pf2),
                             isolinux/ (splash + theme.cfg), generate-boot-assets.py
                             (outputs are committed; JetBrains Mono, OFL)
+iso/strip-census.sh         sourced by the build script: removes Zorin's census (installer checkbox, cron jobs)
 iso/boot-theme.sh           sourced by the build script: themes the extracted ISO
                             tree, the live initrd and the squashfs
 iso/initrd-theme.py         swaps the Plymouth theme inside casper/initrd.zstd
