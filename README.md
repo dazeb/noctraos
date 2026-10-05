@@ -422,11 +422,14 @@ testing happens in a VM (`iso/local-vm.sh`); see [AGENTS.md](AGENTS.md).
 
 ## Status & roadmap
 
-Version **0.3.0**. Tested end-to-end on Zorin OS 18.1 in a VM: full install,
-idempotent re-runs, first-boot provisioning from the ISO, and an unattended
-install from the custom ISO. The 0.3.0 release itself is **not published** — no
-tag, no GitHub release, no downloadable ISO or VM disk yet; the
-[release runbook](docs/release-runbook.md) is the ordered list of what is left.
+Version **0.3.0**. The provisioner has been run on Zorin OS 18.1 in a VM: full install,
+idempotent re-runs, first-boot provisioning from the ISO, and an unattended install from
+the custom ISO. **Those runs predate PR #17** (app policy, AppManager, the Welcome and
+Appearance apps, Hermes changes); every ISO built so far was made before it, so the
+current `main` has not been through that full cycle and the ISOs must be rebuilt and
+re-tested. The 0.3.0 release itself is **not published** — no tag, no GitHub release,
+no downloadable ISO or VM disk yet; the [release runbook](docs/release-runbook.md) is
+the ordered list of what is left.
 
 Not yet verified: the Welcome running during first-boot provisioning on a
 from-scratch install, a full interactive install of the release ISO, the exported
