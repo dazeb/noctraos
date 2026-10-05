@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# noctraos-copyq: start CopyQ for the tray with the NoctraOS look.
+#  - CopyQ must run as an X11 (XWayland) client: GNOME has no wlr-data-control, so a
+#    native-Wayland CopyQ cannot watch the clipboard and silently records nothing.
+#  - Its tray icon is drawn from its own resources, not the icon theme, so the theme override
+#    in assets/icons/overrides does not reach it; the only knob is the session icon colour,
+#    which is not saved, so set it again after every start. White, not CopyQ's green.
+export QT_QPA_PLATFORM=xcb
+(
+  socket="${XDG_CONFIG_HOME:-$HOME/.config}/copyq/.copyq_s"
+  for _ in $(seq 1 60); do
+    sleep 0.5
+    [ -S "$socket" ] || continue
+    copyq iconColor '#ffffff' >/dev/null 2>&1
+    [ "$(copyq iconColor 2>/dev/null)" = '#ffffff' ] && exit 0
+  done
+) &
+exec copyq "$@"

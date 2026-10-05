@@ -2,10 +2,9 @@
 Type=Application
 Name=Clipboard History (CopyQ)
 Comment=Permanent clipboard history — runs in the tray
-# CopyQ must run as an X11 (XWayland) client: GNOME has no wlr-data-control, so a
-# native-Wayland CopyQ cannot watch the clipboard ("Failed to activate Wayland
-# clipboard") and silently records nothing.
-Exec=env QT_QPA_PLATFORM=xcb copyq
+# The wrapper runs CopyQ as an X11 (XWayland) client (GNOME has no wlr-data-control, so a
+# native-Wayland CopyQ records nothing) and sets its tray icon white. See bin/noctraos-copyq.
+Exec=noctraos-copyq
 Icon=copyq
 Terminal=false
 Categories=Utility;

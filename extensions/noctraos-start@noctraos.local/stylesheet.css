@@ -28,3 +28,15 @@
 .noctra-start-here { margin: 8px 8px 0; background-color: #1a1a1a; border-left: 2px solid #e68e0d; border-radius: 0; }
 .noctra-start-here-open { font-size: 11px; font-weight: bold; color: #e68e0d; padding: 7px 10px; border-radius: 0; }
 .noctra-start-here-open:hover, .noctra-start-here-open:focus { background-color: #2a2a2a; }
+
+.noctra-start-apps { padding: 0 8px; spacing: 4px; }
+.noctra-start-app-row { spacing: 4px; }
+.noctra-start-app { padding: 8px 0; border-radius: 0; border: 1px solid transparent; }
+.noctra-start-app:hover, .noctra-start-app:focus { background-color: #2a2a2a; }
+.noctra-start-app-editing { border-color: #e68e0d; }
+.noctra-start-app-label { font-size: 10px; padding-top: 4px; }
+.noctra-start-app-remove { font-size: 10px; color: #e68e0d; }
+.noctra-start-entry { background-color: #1a1a1a; color: #bebebe; border: 1px solid #333333; border-radius: 0;
+  padding: 5px 8px; caret-color: #e68e0d; selection-background-color: #e68e0d; selected-color: #121212; }
+.noctra-start-entry:focus { border-color: #e68e0d; }
+.noctra-start-picker { spacing: 1px; }
