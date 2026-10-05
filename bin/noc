@@ -182,7 +182,7 @@ cmd_doctor() {
   if [ -x /usr/local/bin/app-manager ]; then
     ok "AppManager: $(cat /opt/appmanager/VERSION 2>/dev/null || echo installed)"
   else
-    bad "AppManager: missing (run: bash ~/.local/share/noctraos/install/04_appmanager.sh)"
+    bad "AppManager: missing (run: bash ~/.local/share/noctraos/install.sh --only 04_appmanager.sh)"
   fi
   if dpkg-query -W libfuse2t64 >/dev/null 2>&1 || dpkg-query -W libfuse2 >/dev/null 2>&1; then
     ok "FUSE 2: installed (AppImages can mount)"

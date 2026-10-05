@@ -28,13 +28,17 @@ source "$REPO_ROOT/install/lib.sh"
 SKIP_AI=0
 SKIP_GUI=0
 SKIP_GPU=0
-for arg in "$@"; do
-  case "$arg" in
+ONLY=""
+while [ $# -gt 0 ]; do
+  case "$1" in
     --skip-ai)  SKIP_AI=1 ;;
     --skip-gui) SKIP_GUI=1 ;;
     --skip-gpu) SKIP_GPU=1 ;;
-    *) die "Unknown option: $arg (supported: --skip-ai --skip-gui --skip-gpu)" ;;
+    --only)     [ $# -ge 2 ] || die "--only needs a module file name, e.g. --only 04_appmanager.sh"
+                ONLY="$2"; shift ;;
+    *) die "Unknown option: $1 (supported: --skip-ai --skip-gui --skip-gpu --only <module>)" ;;
   esac
+  shift
 done
 
 echo "======================================================"
@@ -47,6 +51,15 @@ run_module() {
   log "───────────────────── $1 ─────────────────────"
   bash "$REPO_ROOT/install/$1"
 }
+
+# Re-run a single module (e.g. to retry an optional download) with the full
+# environment set up above, then stop.
+if [ -n "$ONLY" ]; then
+  [ -f "$REPO_ROOT/install/$ONLY" ] || die "no such module: install/$ONLY"
+  run_module "$ONLY"
+  log "✔ Module $ONLY finished. Full log: $LOG_FILE"
+  exit 0
+fi
 
 run_module 00_preflight.sh
 run_module 01_system.sh
@@ -75,7 +88,7 @@ else
   run_module 04_workstation_apps.sh
   # Non-core: a flaky GitHub download must not abort onboarding.
   run_module 04_appmanager.sh \
-    || warn "AppManager install did not complete — continuing. Retry: bash install/04_appmanager.sh"
+    || warn "AppManager install did not complete — continuing. Retry: bash ~/.local/share/noctraos/install.sh --only 04_appmanager.sh"
   run_module 05_mouse_ergonomics.sh
   run_module 06_desktop_theme.sh
   run_module 08_shell_theme.sh
