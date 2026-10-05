@@ -1,6 +1,10 @@
 # First-run onboarding (draft)
 
-Status: **design draft, nothing built yet.** Goals come from
+Status: **first version built** (`bin/noctraos-welcome`: screens 1, 2, 4 and 5 as four
+screens, the keypress detected through the search schema's `first-used` key, the first-boot
+runner starts it while provisioning runs). Not built yet: screen 3's prefilled queries (needs
+the D-Bus `Open(query)` call) and the provisioner log panel (a status line stands in for it).
+It replaces Zorin's "Welcome to Zorin OS" tour (GNOME Tour), which module 04c removes. Goals come from
 [objectives.md](objectives.md): put **Super+Space** front and center for people
 moving from Windows, without a terminal, without a lecture.
 

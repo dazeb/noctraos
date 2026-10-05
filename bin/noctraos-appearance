@@ -1,0 +1,158 @@
+#!/usr/bin/env python3
+"""noctraos-appearance — wallpaper and fonts.
+
+NoctraOS fixes the theme and the taskbar layout, so there is no theme switcher here. This is
+the small, safe panel for the two things people actually change: the wallpaper and the fonts.
+Changes apply immediately (GSettings) and every font setting can be reset.
+"""
+import sys
+from pathlib import Path
+
+import gi
+
+gi.require_version('Gtk', '3.0')
+gi.require_version('Gdk', '3.0')
+gi.require_version('GdkPixbuf', '2.0')
+from gi.repository import Gdk, GdkPixbuf, Gio, GLib, Gtk  # noqa: E402
+
+APP_ID = 'local.noctraos.Appearance'
+WALLPAPERS = Path('/usr/local/share/backgrounds/noctraos')
+BACKGROUND = 'org.gnome.desktop.background'
+INTERFACE = 'org.gnome.desktop.interface'
+FONTS = [
+    ('font-name', 'Interface'),
+    ('document-font-name', 'Documents'),
+    ('monospace-font-name', 'Terminal and code'),
+]
+CSS = b"""
+.wallpaper { padding: 4px; border: 2px solid transparent; border-radius: 2px; background: none; }
+.wallpaper.current { border-color: #e68e0d; }
+"""
+
+
+def current_wallpaper(settings):
+    return settings.get_string('picture-uri-dark') or settings.get_string('picture-uri')
+
+
+class Appearance(Gtk.ApplicationWindow):
+    def __init__(self, app):
+        super().__init__(application=app, title='Appearance')
+        self.set_default_size(760, 560)
+        self.set_icon_name('noctraos-appearance')
+        self.background = Gio.Settings.new(BACKGROUND)
+        self.interface = Gio.Settings.new(INTERFACE)
+        notebook = Gtk.Notebook()
+        notebook.append_page(self._wallpaper_page(), Gtk.Label(label='Wallpaper'))
+        notebook.append_page(self._fonts_page(), Gtk.Label(label='Fonts'))
+        self.add(notebook)
+
+    # -- wallpaper ---------------------------------------------------------------------
+    def _wallpaper_page(self):
+        page = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12, margin=18)
+        scroller = Gtk.ScrolledWindow(vexpand=True)
+        self.flow = Gtk.FlowBox(selection_mode=Gtk.SelectionMode.NONE, max_children_per_line=3,
+                                min_children_per_line=2, homogeneous=True, row_spacing=8,
+                                column_spacing=8)
+        scroller.add(self.flow)
+        page.pack_start(scroller, True, True, 0)
+        self.buttons = {}
+        for path in sorted(WALLPAPERS.glob('*.jpg')):
+            self._add_wallpaper(path)
+        if not self.buttons:
+            page.pack_start(Gtk.Label(label='No bundled wallpapers found.'), False, False, 0)
+        choose = Gtk.Button(label='Choose a picture…', halign=Gtk.Align.START)
+        choose.connect('clicked', self._on_choose)
+        page.pack_start(choose, False, False, 0)
+        self.background.connect('changed', lambda *_: self._mark_current())
+        self._mark_current()
+        return page
+
+    def _add_wallpaper(self, path):
+        try:
+            pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(str(path), 220, 124, True)
+        except GLib.Error:
+            return
+        button = Gtk.Button()
+        button.get_style_context().add_class('wallpaper')
+        button.add(Gtk.Image.new_from_pixbuf(pixbuf))
+        button.set_tooltip_text(path.stem.replace('-', ' ').title())
+        button.connect('clicked', lambda *_: self._set_wallpaper(path))
+        self.flow.add(button)
+        self.buttons[path.as_uri()] = button
+
+    def _set_wallpaper(self, path):
+        uri = Path(path).as_uri()
+        self.background.set_string('picture-uri', uri)
+        self.background.set_string('picture-uri-dark', uri)
+
+    def _mark_current(self):
+        current = current_wallpaper(self.background)
+        for uri, button in self.buttons.items():
+            context = button.get_style_context()
+            (context.add_class if uri == current else context.remove_class)('current')
+
+    def _on_choose(self, *_):
+        dialog = Gtk.FileChooserDialog(title='Choose a picture', transient_for=self,
+                                       action=Gtk.FileChooserAction.OPEN)
+        dialog.add_buttons('Cancel', Gtk.ResponseType.CANCEL, 'Set wallpaper', Gtk.ResponseType.OK)
+        images = Gtk.FileFilter()
+        images.set_name('Pictures')
+        images.add_pixbuf_formats()
+        dialog.add_filter(images)
+        if dialog.run() == Gtk.ResponseType.OK:
+            self._set_wallpaper(dialog.get_filename())
+        dialog.destroy()
+
+    # -- fonts -------------------------------------------------------------------------
+    def _fonts_page(self):
+        grid = Gtk.Grid(row_spacing=14, column_spacing=18, margin=24, halign=Gtk.Align.START,
+                        valign=Gtk.Align.START)
+        for row, (key, title) in enumerate(FONTS):
+            grid.attach(Gtk.Label(label=title, xalign=0), 0, row, 1, 1)
+            button = Gtk.FontButton.new_with_font(self.interface.get_string(key))
+            button.connect('font-set', lambda btn, key=key: self.interface.set_string(
+                key, btn.get_font()))
+            grid.attach(button, 1, row, 1, 1)
+            self.interface.connect(f'changed::{key}', lambda s, k, btn=button: btn.set_font(
+                s.get_string(k)))
+        row = len(FONTS)
+        grid.attach(Gtk.Label(label='Text size', xalign=0), 0, row, 1, 1)
+        scale = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, 0.75, 1.75, 0.05)
+        scale.set_value(self.interface.get_double('text-scaling-factor'))
+        scale.set_size_request(260, -1)
+        scale.add_mark(1.0, Gtk.PositionType.BOTTOM, 'Default')
+        scale.connect('value-changed', lambda s: self.interface.set_double(
+            'text-scaling-factor', round(s.get_value(), 2)))
+        self.scale = scale
+        grid.attach(scale, 1, row, 1, 1)
+        reset = Gtk.Button(label='Reset fonts', halign=Gtk.Align.START)
+        reset.connect('clicked', self._on_reset)
+        grid.attach(reset, 1, row + 1, 1, 1)
+        return grid
+
+    def _on_reset(self, *_):
+        for key, _title in FONTS:
+            self.interface.reset(key)
+        self.interface.reset('text-scaling-factor')
+        self.scale.set_value(self.interface.get_double('text-scaling-factor'))
+
+
+class App(Gtk.Application):
+    def __init__(self):
+        super().__init__(application_id=APP_ID, flags=Gio.ApplicationFlags.FLAGS_NONE)
+
+    def do_startup(self):
+        Gtk.Application.do_startup(self)
+        provider = Gtk.CssProvider()
+        provider.load_from_data(CSS)
+        Gtk.StyleContext.add_provider_for_screen(
+            Gdk.Screen.get_default(), provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+
+    def do_activate(self):
+        window = self.props.active_window or Appearance(self)
+        window.show_all()
+        window.present()
+
+
+if __name__ == '__main__':
+    sys.exit(App().run(sys.argv))

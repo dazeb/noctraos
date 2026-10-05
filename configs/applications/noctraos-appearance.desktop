@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Appearance
+GenericName=Wallpaper and fonts
+Comment=Change the wallpaper and fonts
+Exec=/usr/local/bin/noctraos-appearance
+Icon=noctraos-appearance
+Categories=Settings;DesktopSettings;GTK;
+Terminal=false
+StartupNotify=true
+Keywords=appearance;wallpaper;background;font;text size;theme;

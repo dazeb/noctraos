@@ -60,6 +60,8 @@ bin/
   noc-menu                  zenity control panel
   noctraos-hermes           Hermes Desktop launcher/installer: launch | install | status.
                             Sets HERMES_GUEST_ONBOARDING=1 (free tier), seeds the Ollama fallback
+  noctraos-welcome          first-run welcome (GTK; replaces Zorin's tour), --force/--provisioning
+  noctraos-appearance       wallpaper + fonts panel (we fix theme/layout, so no theme switcher)
   noctraos-agent            agent launcher wrapper: installs npm package on
                             first use, then execs the agent
 configs/

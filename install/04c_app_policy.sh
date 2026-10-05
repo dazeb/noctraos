@@ -92,7 +92,16 @@ replace_with_flatpak com.github.xournalpp.xournalpp xournalpp
 retire_apt "apps we do not ship" \
   brave-browser brasero rhythmbox totem gnome-tour gnome-weather malcontent-gui evolution \
   zorin-appearance zorin-connect webapp-manager \
-  zorin-windows-app-support-installation-shortcut neovim neovim-runtime
+  zorin-windows-app-support-installation-shortcut neovim neovim-runtime \
+  zorin-gnome-tour-autostart zorin-os-tour-video
+
+# Zorin's first-login "Welcome to Zorin OS" tour (GNOME Tour) is started from a per-user
+# autostart file copied out of /etc/skel. NoctraOS has its own welcome (noctraos-welcome).
+# The package removal above drops the skel copy; remove any that already reached an account.
+for f in /etc/skel/.config/autostart/zorin-gnome-tour-autostart.desktop \
+         "$TARGET_HOME/.config/autostart/zorin-gnome-tour-autostart.desktop"; do
+  [ -f "$f" ] && sudo rm -f "$f"
+done
 
 # Vim is the exception: vim-common/vim-tiny are depended on by Zorin's zorin-os-minimal
 # metapackage, so removing them would remove that too (the guard refuses). Its launcher is

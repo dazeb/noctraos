@@ -127,6 +127,8 @@ export default class SearchExtension extends Extension {
             this._close();
             return;
         }
+        if (!this._settings.get_boolean('first-used'))
+            this._settings.set_boolean('first-used', true);
         this._render([], '↑↓ Choose · Enter Open/copy · Esc Close');
         this._maybeShowSetupBanner();
     }

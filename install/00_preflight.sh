@@ -54,8 +54,14 @@ fi
 
 log "Checking disk space..."
 avail_gb="$(df -BG --output=avail / | tail -n 1 | tr -dc '0-9')"
-if [ "$avail_gb" -lt 25 ]; then
-  die "Only ${avail_gb}GiB free on / — 25GiB minimum (AI models + language runtimes)."
+# A fresh install needs room for the models and runtimes. A machine that already finished
+# first-boot provisioning is only updating, so it needs far less.
+min_gb=25
+if [ -f "$TARGET_HOME/.local/share/noctraos/.provisioned" ]; then
+  min_gb=8
+fi
+if [ "$avail_gb" -lt "$min_gb" ]; then
+  die "Only ${avail_gb}GiB free on / — ${min_gb}GiB minimum (AI models + language runtimes)."
 fi
 log "OK: ${avail_gb}GiB free on /"
 
