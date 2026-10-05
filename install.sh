@@ -38,7 +38,7 @@ for arg in "$@"; do
 done
 
 echo "======================================================"
-echo "  NoctraOS :: mouse-first AI developer workstation"
+echo "  NoctraOS :: AI-first developer workstation"
 echo "======================================================"
 log "Log file: $LOG_FILE"
 log "Target user: $TARGET_USER ($TARGET_HOME)"

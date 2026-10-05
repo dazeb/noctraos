@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# noc-menu — zenity control panel for noctraos (mouse-first maintenance).
+# noc-menu — zenity control panel for noctraos (AI-first maintenance).
 set -u
 
 term_run() {
@@ -32,7 +32,7 @@ while true; do
     "About")
       zenity --info \
         --title="NoctraOS" \
-        --text="NoctraOS provisioner\nMouse-first AI developer workstation, built on Zorin OS.\n\nManage from a terminal with: noc" \
+        --text="NoctraOS provisioner\nAI-first developer workstation, built on Zorin OS.\n\nManage from a terminal with: noc" \
         --width=420 2>/dev/null
       ;;
   esac

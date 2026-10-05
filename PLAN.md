@@ -16,7 +16,7 @@
 
 ## 1. Mission
 
-Turn a fresh Zorin OS machine into a complete, **mouse-first AI development
+Turn a fresh Zorin OS machine into a complete, **AI-first development
 workstation** with one command:
 
 ```bash
@@ -76,7 +76,7 @@ noctraos/
 ├── install.sh             # orchestrator (logging, flags, user resolution)
 ├── bin/
 │   ├── noc                # management CLI (update | doctor | models)
-│   └── noc-menu           # zenity control panel (mouse-first maintenance)
+│   └── noc-menu           # zenity control panel (AI-first maintenance)
 ├── install/
 │   ├── lib.sh             # shared helpers: log/warn/die, as_user, apt_install
 │   ├── 00_preflight.sh
