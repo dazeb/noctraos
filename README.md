@@ -34,17 +34,17 @@ Prefer to review first: `git clone https://github.com/dazeb/noctraos && cd noctr
 |------|----------|
 | Local AI | [Ollama](https://ollama.com) on `127.0.0.1:11434` with `qwen2.5-coder:7b` (coding) and `nomic-embed-text` (embeddings for RAG) |
 | GPU acceleration | Auto-detects NVIDIA and AMD GPUs at onboarding: NVIDIA → signed Ubuntu driver + CUDA toolkit, AMD → ROCm (see [GPU setup](#gpu-setup)) |
-| Agents menu | **Hermes** (desktop app, preinstalled, free to start — no signup, local Ollama as offline fallback) plus **Codex, Claude Code, OpenCode, Grok, Gemini CLI, Qwen Code** — each launches in a terminal and installs itself on first use (with your consent) |
+| Agents menu | **Hermes** (desktop app, preinstalled, free to start with no signup — its free tier runs on Nous Research's cloud, so prompts leave the computer; one click for local-only, and the local Ollama model is the offline fallback) plus **Codex, Claude Code, OpenCode, Grok, Gemini CLI, Qwen Code** — each launches in a terminal and installs itself on first use (with your consent) |
 | Local LLM menu | **AI Models** manager and **AI Health Check**; editor chat through Continue |
 | Editor | [Microsoft VS Code](https://code.visualstudio.com) + Continue.dev (pre-wired to local Ollama), GitLens, Prettier, Python, Go |
 | Agent sessions | [Herdr](https://herdr.dev) persistent workspaces, installed through mise and launched from Development |
 | Workstation apps | Chromium, Obsidian, LocalSend, Pinta, Moonlight, LibreOffice, MPV, Kdenlive, OBS Studio, Flameshot, Xournal++, Evince, GNOME Disks, and Sushi preview |
-| Developer tools | btop, bat, eza, fd-find, fzf, ripgrep, zoxide, neovim, tmux, Starship, lazygit, lazydocker, GitHub CLI, Docker/Compose, clang, Ruby, ffmpeg, ImageMagick, yt-dlp, tldr |
+| Developer tools | btop, bat, eza, fd-find, fzf, ripgrep, zoxide, tmux, Starship, lazygit, lazydocker, GitHub CLI, Docker/Compose, clang, Ruby, ffmpeg, ImageMagick, yt-dlp, tldr |
 | Task manager | Mission Center (Flathub) — the familiar Task-Manager role: CPU/RAM/GPU and running apps |
 | Runtimes | [mise](https://mise.jdx.dev) managing Node LTS, Python 3.12, Go — system-wide, for every user |
 | Mouse ergonomics | Nautilus right-click: *Open in VS Code*, *Ask AI to Explain* (sends the file to local Ollama, answers in a dialog), *Open Terminal Here* |
 | **Super+Space search** | One overlay that searches apps, files and folders, CopyQ clipboard history, the web, and (opt-in, offered after first browser use) your Chromium/Firefox browser history; settings in *Search settings* (the gear). Installed by module 09 |
-| AppImages | [AppManager](https://github.com/kem-a/AppManager) — double-click any `.AppImage` for a drag-and-drop install window (menu entry, icon, auto-updates); FUSE 2 is preinstalled so other AppImages run too. Installed by module 04c (`04_appmanager.sh`) |
+| AppImages | [AppManager](https://github.com/kem-a/AppManager) — double-click any `.AppImage` for a drag-and-drop install window (menu entry, icon, auto-updates); FUSE 2 is preinstalled so other AppImages run too. Installed by module 04d (`04d_appmanager.sh`) |
 | Clipboard | [CopyQ](https://hluk.github.io/CopyQ/) permanent clipboard history — tray-resident, survives reboots, searchable, image support, 1000 entries |
 | Desktop | NoctraOS-Dark shell theme, AI-first start menu, white menu icons, neon polygonal 4K wallpapers, dark mode, minimize/maximize/close window buttons, pinned taskbar |
 | Maintenance | `noc` CLI + `noc-menu` GUI panel |
@@ -242,7 +242,7 @@ boot.sh ──► install.sh ──► modules 00–08
    02 mise                  │  runtime manager, login + interactive shells
    03 ai core               │  Ollama daemon, coding + embedding models
    04 gui apps              │  VS Code (+5 extensions), Mission Center, CopyQ
-   04c appmanager           │  AppManager (AppImage installer/updater); FUSE 2 comes from 01
+   04d appmanager           │  AppManager (AppImage installer/updater); FUSE 2 comes from 01
    05 mouse ergonomics      │  Nautilus right-click scripts
    06 desktop theme         │  ergonomics gsettings, wallpapers, Agents menu,
                             │  AI-first application menu tree

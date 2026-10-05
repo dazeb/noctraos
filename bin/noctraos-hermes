@@ -2,6 +2,9 @@
 # noctraos-hermes — Hermes Desktop launcher and installer.
 #   noctraos-hermes            launch the app (installs it first if missing)
 #   noctraos-hermes install    idempotent: runtime + desktop app + model defaults
+#   noctraos-hermes local      local-only: Ollama is the primary and the Nous free tier stays off,
+#                              so nothing typed to Hermes leaves this computer (persistent)
+#   noctraos-hermes ready      exit 0 when the runtime and the desktop app are both built
 #   noctraos-hermes status     print what is installed / configured
 #
 # First-run onboarding: until ~/.hermes/.noctraos-onboarded exists, the launch
@@ -85,6 +88,20 @@ explicit_provider() {
   [ -n "$v" ] && [ "$v" != "auto" ]
 }
 
+# `hermes desktop` writes its own launcher (com.nousresearch.hermes.desktop) on every run, which
+# would be a second "Hermes" next to ours (our wrapper sets the free tier and the onboarding
+# prompt, theirs does not). Hide it, then stop it being rewritten: Hermes honours
+# desktop.manage_launcher_entry=false for an entry that already exists.
+hide_hermes_own_launcher() {
+  local e="$HOME/.local/share/applications/com.nousresearch.hermes.desktop"
+  [ -f "$e" ] || return 0
+  if ! grep '^NoDisplay=true' "$e" >/dev/null; then
+    awk '/^NoDisplay=/ {next} {print} /^\[Desktop Entry\]/ {print "NoDisplay=true"}' "$e" > "$e.new" \
+      && mv "$e.new" "$e"
+  fi
+  config_has desktop.manage_launcher_entry || hermes_set desktop.manage_launcher_entry false
+}
+
 hermes_set() { "$HERMES_BIN" config set "$@" >/dev/null 2>&1; }
 
 install_runtime() {
@@ -161,6 +178,7 @@ cmd_install() {
   build_app || { say "ERROR: desktop build failed"; return 1; }
   seed_ollama_fallback
   seed_vm_electron_flags
+  hide_hermes_own_launcher
 }
 
 cmd_status() {
@@ -174,6 +192,21 @@ cmd_status() {
   ollama_ready && echo "ollama:  $OLLAMA_MODEL ready" || echo "ollama:  $OLLAMA_MODEL not ready"
 }
 
+# The free tier is Nous Research's cloud: prompts typed to Hermes leave this computer. This is
+# the one-click way to keep them here. It is persistent (config.yaml); to go back to the free
+# tier run `hermes config set model.provider auto`.
+cmd_local() {
+  if ! ollama_ready; then
+    say "ERROR: the local model $OLLAMA_MODEL is not ready yet — try again in a few minutes"
+    return 1
+  fi
+  hermes_set model.provider custom
+  hermes_set model.default "$OLLAMA_MODEL"
+  hermes_set model.base_url "$OLLAMA_API/v1"
+  say "OK: Hermes will use the local model only (Nous free tier off)"
+  LOCAL_ONLY=1 cmd_launch
+}
+
 cmd_launch() {
   if ! runtime_ready || ! app_ready; then
     # Desktop entries have no terminal; first-run install needs one to show progress.
@@ -185,7 +218,11 @@ cmd_launch() {
   fi
   offline_first_launch_fallback
   seed_vm_electron_flags
-  export HERMES_GUEST_ONBOARDING=1
+  hide_hermes_own_launcher
+  # Local-only never enables the free tier: it would still contact Nous for its identity.
+  if [ "${LOCAL_ONLY:-}" != 1 ]; then
+    export HERMES_GUEST_ONBOARDING=1
+  fi
   if onboarding_active; then
     HERMES_EPHEMERAL_SYSTEM_PROMPT="$(cat "$ONBOARD_FILE")"
     export HERMES_EPHEMERAL_SYSTEM_PROMPT
@@ -195,7 +232,9 @@ cmd_launch() {
 
 case "${1:-launch}" in
   launch)  cmd_launch ;;
+  local)   cmd_local ;;
   install) cmd_install ;;
+  ready)   runtime_ready && app_ready ;;
   status)  cmd_status ;;
-  *) echo "usage: noctraos-hermes [launch|install|status]" >&2; exit 1 ;;
+  *) echo "usage: noctraos-hermes [launch|local|install|ready|status]" >&2; exit 1 ;;
 esac

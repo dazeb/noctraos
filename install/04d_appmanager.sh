@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Module 04c: AppManager (github.com/kem-a/AppManager) — drag-and-drop AppImage
+# Module 04d: AppManager (github.com/kem-a/AppManager) — drag-and-drop AppImage
 # installer and updater. Double-clicking an .AppImage opens its install window.
 # The release AppImage is self-contained (bundled uruntime, no FUSE needed to run
 # it), so it is installed system-wide to /opt and linked into /usr/local/bin.

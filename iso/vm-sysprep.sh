@@ -42,6 +42,9 @@ rm -rf "$H"/sessions "$H"/logs "$H"/memories "$H"/cache "$H"/audio_cache "$H"/ch
 # Keep config.yaml (free-tier primary, Ollama fallback, VM Electron flags) and the
 # seed marker so the wrapper does not re-seed over it.
 
+# The welcome app retires itself with a marker; a downloader of the image must see it.
+rm -f "$HOME_DIR/.config/noctraos/welcome-done"
+
 log "shell history, caches"
 rm -f "$HOME_DIR"/.bash_history /root/.bash_history "$HOME_DIR"/.python_history "$HOME_DIR"/.viminfo
 rm -rf "$HOME_DIR"/.npm/_cacache "$HOME_DIR"/.npm/_logs "$HOME_DIR"/.cache/pip "$HOME_DIR"/.cache/uv

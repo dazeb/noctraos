@@ -34,7 +34,7 @@ while [ $# -gt 0 ]; do
     --skip-ai)  SKIP_AI=1 ;;
     --skip-gui) SKIP_GUI=1 ;;
     --skip-gpu) SKIP_GPU=1 ;;
-    --only)     [ $# -ge 2 ] || die "--only needs a module file name, e.g. --only 04_appmanager.sh"
+    --only)     [ $# -ge 2 ] || die "--only needs a module file name, e.g. --only 04d_appmanager.sh"
                 ONLY="$2"; shift ;;
     *) die "Unknown option: $1 (supported: --skip-ai --skip-gui --skip-gpu --only <module>)" ;;
   esac
@@ -82,13 +82,14 @@ else
 fi
 
 if [ "$SKIP_GUI" -eq 1 ]; then
-  log "SKIP 04/04b/04c/05/06/08/09/10/11 (--skip-gui)"
+  log "SKIP 04/04b/04c/04d/05/06/08/09/10/11 (--skip-gui)"
 else
   run_module 04_gui_apps.sh
   run_module 04_workstation_apps.sh
+  run_module 04c_app_policy.sh
   # Non-core: a flaky GitHub download must not abort onboarding.
-  run_module 04_appmanager.sh \
-    || warn "AppManager install did not complete — continuing. Retry: bash ~/.local/share/noctraos/install.sh --only 04_appmanager.sh"
+  run_module 04d_appmanager.sh \
+    || warn "AppManager install did not complete — continuing. Retry: bash ~/.local/share/noctraos/install.sh --only 04d_appmanager.sh"
   run_module 05_mouse_ergonomics.sh
   run_module 06_desktop_theme.sh
   run_module 08_shell_theme.sh

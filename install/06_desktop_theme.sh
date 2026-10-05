@@ -47,6 +47,8 @@ sudo mkdir -p /usr/local/share/applications /usr/share/desktop-directories \
               /usr/local/bin
 sudo install -m 755 "$REPO_ROOT/bin/noctraos-agent" /usr/local/bin/noctraos-agent
 sudo install -m 755 "$REPO_ROOT/bin/noctraos-hermes" /usr/local/bin/noctraos-hermes
+sudo install -m 755 "$REPO_ROOT/bin/noctraos-welcome" /usr/local/bin/noctraos-welcome
+sudo install -m 755 "$REPO_ROOT/bin/noctraos-appearance" /usr/local/bin/noctraos-appearance
 sudo install -D -m 644 "$REPO_ROOT/configs/hermes/onboarding.md" /usr/local/share/noctraos/hermes/onboarding.md
 for f in "$REPO_ROOT"/configs/applications/*.desktop; do
   [ -f "$f" ] && sudo install -m 644 "$f" /usr/local/share/applications/
