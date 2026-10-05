@@ -186,6 +186,16 @@ class PasswordStoreTests(unittest.TestCase):
             self.assertEqual((home / ".local/share/keyrings/default").read_text(), "login")
             self.assertFalse(self.seed.login_keyring(home))
 
+    def test_an_empty_argv_json_is_treated_as_missing(self):
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            argv = home / ".vscode/argv.json"
+            argv.parent.mkdir(parents=True)
+            argv.write_text("")
+            self.assertTrue(self.seed.vscode_argv(home))
+            self.assertIn('"password-store": "basic"', argv.read_text())
+            self.assertFalse(self.seed.vscode_argv(home))
+
 
 if __name__ == "__main__":
     unittest.main()

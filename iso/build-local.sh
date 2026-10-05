@@ -57,6 +57,7 @@ set -Eeuo pipefail
 mkdir -p /work
 mount -o loop /host/work.img /work
 trap 'cd /; umount /work 2>/dev/null || true' EXIT
+git config --global --add safe.directory '*'   # a REPO_URL=file:// clone is owned by the host user
 rm -rf /work/src /work/tmp   # the image is reused between runs: start from a clean tree
 git clone -q --depth 1 "${REPO_URL:-https://github.com/dazeb/noctraos.git}" /work/src
 git -C /work/src log -1 --format="building main at %h %s"

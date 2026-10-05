@@ -50,6 +50,8 @@ Aim for **8 GB RAM minimum** (16 GB recommended) and **25 GB free disk** for set
 First login needs internet and roughly **25–40 minutes** to set up the AI tools.
 The VM disks are trial appliances: they sign in as `noctraos` (password
 `noctraos`) with passwordless sudo.
+On Proxmox, one command creates the VM: see the
+[setup guide](docs/setup.md#install-on-proxmox-ve).
 
 This is an early release, tested in VMs; a full interactive install and real
 hardware testing are still on the to-do list. Back up before installing.
@@ -65,6 +67,8 @@ or write some code. Useful feedback counts as a contribution, too.
 We're making a desktop we'd like to use, and having some fun along the way.
 You don't need to be a Linux wizard to help. **[See how to contribute](CONTRIBUTING.md)**
 or **[open an issue](https://github.com/dazeb/noctraos/issues)** and say hello.
+
+Questions, press, or a security report: **[admin@noctraos.dev](mailto:admin@noctraos.dev)**.
 
 ## Documentation
 

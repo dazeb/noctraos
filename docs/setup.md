@@ -6,6 +6,20 @@ For downloads and checksums, start at [noctraos.dev/download](https://noctraos.d
 This guide covers provisioning an existing machine, configuration, GPU setup,
 ISO builds, and day-to-day maintenance.
 
+## Install on Proxmox VE
+
+One command on the Proxmox host (as root, Proxmox VE 8 or 9) creates a ready UEFI VM, either from
+the ready-made VM disk (signs in as `noctraos` / `noctraos`, trial use) or from the installer ISO
+with an empty disk. It asks for RAM, cores and storage, checks the download against `SHA256SUMS`,
+and removes a half-made VM if anything fails.
+
+```sh
+bash <(curl -sSfL https://raw.githubusercontent.com/dazeb/noctraos/main/proxmox-install.sh)
+```
+
+Every question can be answered through environment variables instead (`NOCTRAOS_MODE`,
+`NOCTRAOS_RAM`, `NOCTRAOS_CORES`, `NOCTRAOS_STORAGE`, ...; see the top of the script).
+
 ## Provision an existing machine
 
 Use a supported base system and check the [requirements](#requirements) first.

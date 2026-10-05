@@ -63,6 +63,10 @@ AI_TIMEZONE="${NOCTRAOS_TIMEZONE:-UTC}"
 SEED_TEMPLATE="$(cd "$(dirname "$0")" && pwd)/preseed/noctraos.seed.in"
 # shellcheck source=iso/boot-theme.sh
 source "$(cd "$(dirname "$0")" && pwd)/boot-theme.sh"
+# shellcheck source=iso/strip-census.sh
+source "$(cd "$(dirname "$0")" && pwd)/strip-census.sh"
+# shellcheck source=iso/rebrand-labels.sh
+source "$(cd "$(dirname "$0")" && pwd)/rebrand-labels.sh"
 
 need() { command -v "$1" >/dev/null 2>&1 || { echo "missing dependency: $1" >&2; exit 1; }; }
 need xorriso; need unsquashfs; need mksquashfs; need git; need openssl
@@ -220,6 +224,8 @@ step "4/7 theming the boot chain (grub, isolinux, live splash, installed system)
 boot_theme_iso_tree "$ISO_TREE"
 boot_theme_initrd "$ISO_TREE"
 boot_theme_squashfs "$SQ_ROOT"
+strip_census "$SQ_ROOT"
+rebrand_labels "$SQ_ROOT" "$RELEASE_VERSION"
 
 if [ "$UNATTENDED" = 1 ]; then
 step "4/7 adding unattended boot entries (BIOS isolinux + UEFI grub)"
