@@ -10,8 +10,10 @@ relearn — except one new idea, **Super+Space** (the Windows key and Space), wh
 searches your whole system (apps, files, clipboard history, the web, and
 optionally your browser history) from a single keystroke.
 
-The product is a **bootable ISO**; the same idempotent provisioner also runs on
-an existing [Zorin OS](https://zorin.com) 18.x machine. See
+The product is a **bootable ISO** (downloads and checksums at
+[noctraos.dev/download](https://noctraos.dev/download)); the same idempotent
+provisioner, the engine inside it, can also set up a machine that already runs the
+NoctraOS base system (see [Requirements](#requirements)). See
 [the objectives](docs/objectives.md) for who this is for and where it is going.
 
 It follows the [Omakub](https://omakub.org) pattern for provisioning, with one
@@ -19,7 +21,7 @@ deliberate difference: **no terminal required**. Nothing in the day-to-day
 workflow needs one — unless you want it, because the terminal is where the agents
 live.
 
-Provision an existing Zorin OS 18.x machine:
+Provision a machine that already runs the base system:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/dazeb/noctraos/main/boot.sh | bash
@@ -40,7 +42,7 @@ Prefer to review first: `git clone https://github.com/dazeb/noctraos && cd noctr
 
 | Area | Software |
 |------|----------|
-| First run | **NoctraOS Welcome** (`noctraos-welcome`) replaces Zorin's tour: four short screens — what NoctraOS is, *press Windows+Space* (it moves on when you do), where familiar things are, and your AI. Shown once per account; on the ISO it opens while setup is still running. Reopen it any time from the Start menu. See [onboarding](docs/onboarding.md) |
+| First run | **NoctraOS Welcome** (`noctraos-welcome`) replaces the stock welcome tour: four short screens — what NoctraOS is, *press Windows+Space* (it moves on when you do), where familiar things are, and your AI. Shown once per account; on the ISO it opens while setup is still running. Reopen it any time from the Start menu. See [onboarding](docs/onboarding.md) |
 | **Super+Space search** | One overlay that searches apps, files and folders, CopyQ clipboard history, the web, and (opt-in, offered after first browser use) your Chromium/Firefox browser history; settings in *Search settings* (the gear). Installed by module 09 |
 | Start panel and dock | The **N** Start button opens a sharp, monospace panel above a centred dock: your name and an opt-in weather readout, the pinned **Agents** row, **recent files**, *All apps*, a settings gear and a "New users start here" help page. The top bar keeps the clock, tray and a Show Desktop button. See [desktop layout](docs/desktop-layout.md) |
 | Local AI | [Ollama](https://ollama.com) on `127.0.0.1:11434` with `qwen2.5-coder:7b` (coding) and `nomic-embed-text` (embeddings for RAG) |
@@ -88,15 +90,15 @@ enforces it:
 - once an app's Flatpak is installed, the apt copy is retired (LibreOffice,
   VLC, MPV, OBS Studio, Kdenlive, gThumb, Evince, Flameshot, Xournal++);
 - apps we do not ship are removed: Brave, Brasero, Rhythmbox, Videos, GNOME
-  Tour, Weather, Evolution, Zorin Appearance, Zorin Connect, Web Apps, Windows
-  App Support, Neovim; Chatbox, VSCodium and Foot are removed by module 04;
+  Tour, Weather, Evolution, the base system's own appearance, phone-link, web-app
+  and Windows-app tools, Neovim; Chatbox, VSCodium and Foot are removed by module 04;
 - removals are plain `apt-get remove` (no purge, no autoremove, user data stays),
   and each is simulated first: a package is skipped if apt would also remove the
   desktop, and if apt cannot plan the removal of one package in a set (LibreOffice,
   say), the whole set stays installed rather than being half-removed;
 - launchers that only confuse are hidden with a `NoDisplay=true` copy in
   `/usr/local/share/applications` (delete the file to undo). Vim cannot be
-  removed (Zorin's `zorin-os-minimal` depends on it), so only its launcher is hidden;
+  removed (a base-system meta-package depends on it), so only its launcher is hidden;
 - no snaps.
 
 ## The look
@@ -105,8 +107,8 @@ The main desktop design follows **Omarchy Matte Black**: charcoal surfaces,
 restrained borders, amber focus and active states, sharp (0 px) corners, and
 JetBrains Mono in the shell and terminals. GNOME remains the desktop.
 
-- **NoctraOS-Dark** derives from the installed Zorin Shell and GTK themes
-  (recoloured from Zorin's blue at build time), then applies our overrides to
+- **NoctraOS-Dark** derives from the base system's installed shell and GTK themes
+  (recoloured at build time), then applies our overrides to
   panels, menus, quick settings, notifications, dialogs, buttons, entries, and
   selection states. The original system themes are never patched in place.
 - **One palette** in `configs/theme/palette.json` generates the shell/GTK CSS,
@@ -126,7 +128,7 @@ coverage, and what is still unthemed (the lock screen and login screen). GNOME
 Terminal remains the default terminal.
 
 The [Omarchy comparison](docs/omarchy-parity.md) maps its current application
-manifest to the Zorin/Ubuntu equivalents and lists desktop-specific limits.
+manifest to the Ubuntu and Flathub equivalents and lists desktop-specific limits.
 
 ## Maintenance
 
@@ -154,8 +156,10 @@ from mise).
 
 ## Requirements
 
-- Zorin OS 18.x (Ubuntu 24.04 base). *Tested on Zorin OS 18.1; 17.x is
-  untested but the provisioner accepts any `zorin`/Ubuntu-based `/etc/os-release`.*
+- The NoctraOS base system, which is Ubuntu 24.04 LTS based (see [Credits](#credits)).
+  *Tested on the 18.1 release of that base; other Ubuntu-based systems are untested,
+  and the theme step needs the base's own shell and GTK themes. The provisioner
+  accepts any Ubuntu-based `/etc/os-release`.*
 - A user with sudo (headless/SSH runs need passwordless sudo or cached credentials)
 - ≥ 25 GB free disk (models + runtimes); a re-run of an already provisioned machine
   needs only 8 GB. The Hermes Desktop build adds about 5 GB. **8 GB RAM minimum**,
@@ -231,14 +235,15 @@ Design choices worth knowing:
 
 ## Building the NoctraOS ISO
 
-`iso/build-noctraos-iso.sh` remasters a stock Zorin live ISO. The easy way to run
+`iso/build-noctraos-iso.sh` remasters the base system's stock live ISO (see
+[Credits](#credits)). The easy way to run
 it is `iso/build-local.sh`, which does the build in a privileged Docker container
 on a workstation (about 2 minutes per ISO, work directory an ext4 image file so
 an NTFS drive can host it):
 
 ```bash
 iso/build-local.sh <dir> [release|appliance|both]    # default: release
-# <dir>/in/Zorin-OS-18.1-Core-64-bit.iso must exist first; results land in <dir>/out/
+# the base ISO (exact file name under Credits) must be in <dir>/in/ first; results land in <dir>/out/
 ```
 
 It builds from a **fresh clone of GitHub `main`**, exactly like the first-boot
@@ -250,7 +255,7 @@ runner does, so push first. There are two kinds of ISO:
 | `appliance` | Unattended install, user `noctraos` / password `noctraos`, autologin and passwordless sudo. Only a means to build the downloadable VM disk. **Never publish it.** | `noctraos-<VERSION>-appliance-build.iso` |
 
 `<VERSION>` comes from the `VERSION` file (it must match `bin/noc`; CI checks
-this), not from the Zorin base ISO.
+this), not from the base ISO.
 
 What the build does (`iso/build-noctraos-iso.sh`, also usable directly on a node
 with root and ~25 GiB scratch):
@@ -275,13 +280,13 @@ with root and ~25 GiB scratch):
 Direct use:
 
 ```bash
-sudo ./iso/build-noctraos-iso.sh Zorin-OS-18.1-Core-64-bit.iso noctraos-amd64.iso
+sudo ./iso/build-noctraos-iso.sh <base-iso> noctraos-amd64.iso
 # needs: xorriso, squashfs-tools, git, openssl, python3, zstd, cpio, root, ~25 GiB scratch (WORK_BASE=…)
 ```
 
 Two ways to install the result:
 
-- **Interactive** (the release ISO) — boot it like normal Zorin and click through
+- **Interactive** (the release ISO) — boot it and click through
   the installer ("Try or Install NoctraOS"). On first login the Welcome opens and
   a terminal asks once for your sudo password, then builds the workstation.
 - **Fully unattended** (builds with `NOCTRAOS_UNATTENDED=1`) — pick "Install
@@ -422,12 +427,12 @@ testing happens in a VM (`iso/local-vm.sh`); see [AGENTS.md](AGENTS.md).
   because autologin leaves the login keyring locked.
 - **An AppImage does not start** — FUSE 2 is preinstalled; double-click it to
   install through AppManager, or mark it executable and run it.
-- **Software Updater shows a large update in Zorin wording on first login** —
-  known and not addressed yet.
+- **Software Updater shows a large update on first login, in the base system's
+  wording** — known and not addressed yet.
 
 ## Status & roadmap
 
-Version **0.3.0**. The provisioner has been run on Zorin OS 18.1 in a VM: full install,
+Version **0.3.0**. The provisioner has been run on the 18.1 release of the base system in a VM: full install,
 idempotent re-runs, first-boot provisioning from the ISO, and an unattended install from
 the custom ISO. **Those runs predate PR #17** (app policy, AppManager, the Welcome and
 Appearance apps, Hermes changes); every ISO built so far was made before it, so the
@@ -463,10 +468,21 @@ On the roadmap, roughly in priority order:
 | [docs/onboarding.md](docs/onboarding.md) | The first-run Welcome, the shortcut audit, the clipboard decision |
 | [docs/desktop-layout.md](docs/desktop-layout.md) | Top bar, dock and the Start panel |
 | [docs/theme-design.md](docs/theme-design.md) | Palette, per-surface coverage, remaining gaps |
-| [docs/omarchy-parity.md](docs/omarchy-parity.md) | Omarchy app manifest mapped to Zorin/Ubuntu |
+| [docs/omarchy-parity.md](docs/omarchy-parity.md) | Omarchy app manifest mapped to Ubuntu and Flathub equivalents |
 | [docs/release-runbook.md](docs/release-runbook.md) | Ordered handoff for shipping 0.3.0 |
 | [AGENTS.md](AGENTS.md) | Rules, infrastructure and known pitfalls for coding agents |
 | [PLAN.md](PLAN.md) | The original build plan (historical) |
+
+## Credits
+
+NoctraOS is built on **Zorin OS 18** (Ubuntu 24.04 LTS based). The Zorin OS 18.1 Core
+ISO, named `Zorin-OS-18.1-Core-64-bit.iso`, is the input to the ISO build, and
+thanks go to the Zorin OS team and the Ubuntu community for the base it stands on.
+
+NoctraOS is an independent project. It is not affiliated with, endorsed by, or
+supported by Zorin Group or Canonical, and support comes from this repository and
+[noctraos.dev](https://noctraos.dev), not from them. Zorin OS is a trademark of Zorin
+Group, and Ubuntu is a registered trademark of Canonical Ltd.
 
 ## License
 
