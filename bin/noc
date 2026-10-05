@@ -6,7 +6,7 @@
 #   noc gpu           detect | install | status  (NVIDIA CUDA / AMD ROCm for local LLMs)
 set -uo pipefail
 
-VERSION="0.1.0"
+VERSION="0.3.0"
 OLLAMA_URL="http://127.0.0.1:11434"
 MODEL_PRESETS=("qwen2.5-coder:7b" "qwen2.5-coder:14b" "llama3.2:3b" "gemma2:2b" "deepseek-coder:6.7b" "phi4-mini")
 
