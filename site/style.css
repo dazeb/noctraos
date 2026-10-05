@@ -231,7 +231,6 @@ footer .about { display: grid; gap: 14px; max-width: 36ch; }
 /* Screenshots. Each figure links to the full-size capture. */
 .shots { display: grid; gap: 20px; margin-top: clamp(26px, 4vw, 44px); }
 .shots.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.shots.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .shots.one { grid-template-columns: minmax(0, 1fr); max-width: 640px; }
 .row .shots { grid-column: 1 / -1; }
 .shot { margin: 0; min-width: 0; }
@@ -243,4 +242,4 @@ footer .about { display: grid; gap: 14px; max-width: 36ch; }
 .shot figcaption { margin-top: 12px; color: var(--muted); font-size: 0.9375rem; line-height: 1.5; }
 .shot figcaption:empty { display: none; }
 .shot figcaption b { color: var(--fg); font-weight: 600; }
-@media (max-width: 800px) { .shots.two, .shots.three { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 800px) { .shots.two { grid-template-columns: minmax(0, 1fr); } }
