@@ -56,6 +56,11 @@ rm -f /etc/ssh/ssh_host_*
 cat > /etc/systemd/system/noctraos-ssh-hostkeys.service <<'UNIT'
 [Unit]
 Description=Generate SSH host keys on first boot of a NoctraOS image
+# DefaultDependencies=no matters: the default puts this unit AFTER basic.target, while ssh.socket
+# is BEFORE sockets.target and so before basic.target. That is an ordering cycle, and systemd
+# breaks it by deleting a job, sometimes ssh.socket/start: the image then boots with SSH off.
+DefaultDependencies=no
+After=local-fs.target
 Before=ssh.service ssh.socket
 ConditionPathExists=!/etc/ssh/ssh_host_ed25519_key
 
