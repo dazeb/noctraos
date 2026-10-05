@@ -14,7 +14,7 @@ APT_APPS=(
   exfatprogs fd-find ffmpeg ffmpegthumbnailer fzf gh
   gnome-disk-utility gnome-sushi gnome-tweaks gvfs-backends
   imagemagick inotify-tools inxi libsecret-tools
-  man-db ncdu neovim plocate qrencode ripgrep ruby
+  man-db ncdu plocate qrencode ripgrep ruby
   socat system-config-printer tesseract-ocr tldr tmux whois
   wl-clipboard yt-dlp zoxide
 )
@@ -49,7 +49,6 @@ FLATPAK_APPS=(
   org.gnome.Evince
   org.flameshot.Flameshot
   com.github.xournalpp.xournalpp
-  it.mijorus.gearlever
 )
 for app in "${FLATPAK_APPS[@]}"; do
   if sudo flatpak info "$app" >/dev/null 2>&1; then

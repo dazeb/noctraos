@@ -386,8 +386,13 @@ tail -f /root/noctraos-build.log
   host-integration apps (VS Code, CopyQ, Docker). Retirements simulate `apt-get -s remove`
   first and skip if apt would also remove a protected package (zorin-os*, gnome-shell, …);
   launchers are hidden with a `NoDisplay=true` copy in `/usr/local/share/applications`
-  (delete the file to undo), never by editing the packaged file. No snaps. AppImages need
-  `libfuse2t64` and are managed with Gear Lever (Flatpak). `hermes desktop` writes its own
+  (delete the file to undo), never by editing the packaged file. No snaps. AppImages run
+  with `libfuse2t64`; we ship no AppImage manager. Zorin Appearance, Zorin Connect, Web Apps,
+  Windows App Support and Neovim are removed (Appearance only switches Zorin layouts/themes,
+  which our branding fixes; wallpapers are Settings > Background / `noc bg`; its
+  `zorin-appearance-layouts-*` packages go with it, the zorin-menu/taskbar/desktop-icons
+  extensions our Start button and dock hook are separate packages). Vim cannot be removed
+  (zorin-os-minimal depends on vim-tiny): its launcher is hidden. `hermes desktop` writes its own
   launcher every run; the wrapper hides it and sets `desktop.manage_launcher_entry=false`.
 
 ## Verification checklist for any change

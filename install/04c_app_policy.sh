@@ -21,8 +21,8 @@ installed_matching() {
 }
 
 # ---- AppImage support -------------------------------------------------------------
-# AppImages need FUSE 2 (libfuse2t64 on Ubuntu 24.04). Gear Lever, installed from
-# Flathub by module 04b, integrates them into the menu.
+# AppImages need FUSE 2 (libfuse2t64 on Ubuntu 24.04) to run. We ship no AppImage
+# manager: a downloaded AppImage runs once it is marked executable.
 if pkg_installed libfuse2t64; then
   log "OK: libfuse2t64 already installed (AppImage support)"
 elif apt-cache show libfuse2t64 >/dev/null 2>&1; then
@@ -34,7 +34,9 @@ fi
 
 # ---- safe apt removal -------------------------------------------------------------
 # If apt would also remove any of these, the desktop would go with the app: skip instead.
-PROTECTED_RE='^(zorin-os|ubuntu-desktop|ubuntu-standard|ubuntu-minimal|gnome-shell|gdm3|nautilus|gnome-control-center|network-manager|systemd|xorg|xserver|plymouth|grub|sudo|apt|dpkg|libc6|flatpak|ollama)'
+# (gnome-shell itself, not its extensions: the Zorin Connect extension may go, but the
+# menu/taskbar/desktop-icons extensions our Start button and dock hook are protected.)
+PROTECTED_RE='^(zorin-os|ubuntu-desktop|ubuntu-standard|ubuntu-minimal|gdm3|nautilus|gnome-control-center|network-manager|systemd|xorg|xserver|plymouth|grub|sudo|apt|dpkg|libc6|flatpak|ollama|gnome-shell(-common)?$|gnome-shell-extension-zorin-(menu|taskbar|desktop-icons))'
 
 retire_apt() { # retire_apt <why> <package>...
   local why="$1" present=() p plan hit
@@ -81,8 +83,27 @@ replace_with_flatpak com.github.xournalpp.xournalpp xournalpp
 # Chromium (Flatpak) is the browser; Brave from the base image would be a second one that
 # also prompts for the keyring. Videos and Rhythmbox are covered by VLC, Brasero is a
 # disc burner, Tour clashes with our own first-run onboarding, Weather has our own widget.
+# Zorin's own extras are not part of what NoctraOS is: Appearance only switches Zorin's
+# layouts and themes (our branding fixes both; wallpapers are Settings > Background or
+# `noc bg`), Connect is the phone integration, Web Apps and Windows App Support are
+# Zorin's. Removing Appearance also takes its two "layouts" packages; the menu, taskbar
+# and desktop-icons extensions are separate packages and stay (apt confirms this in the
+# simulation, and the guard refuses otherwise). Neovim is not shipped.
 retire_apt "apps we do not ship" \
-  brave-browser brasero rhythmbox totem gnome-tour gnome-weather malcontent-gui evolution
+  brave-browser brasero rhythmbox totem gnome-tour gnome-weather malcontent-gui evolution \
+  zorin-appearance zorin-connect webapp-manager \
+  zorin-windows-app-support-installation-shortcut neovim neovim-runtime
+
+# Vim is the exception: vim-common/vim-tiny are depended on by Zorin's zorin-os-minimal
+# metapackage, so removing them would remove that too (the guard refuses). Its launcher is
+# hidden below instead.
+
+# Gear Lever (AppImage manager) is no longer shipped; remove it where an earlier run put it.
+if flatpak_has it.mijorus.gearlever; then
+  log "Removing Flatpak it.mijorus.gearlever (not shipped)"
+  sudo flatpak uninstall -y --noninteractive it.mijorus.gearlever \
+    || warn "Could not remove Gear Lever"
+fi
 
 # ---- launchers that only confuse ------------------------------------------------------
 # Packaged launchers stay as they are; a same-named file in /usr/local/share/applications
@@ -94,6 +115,8 @@ HIDE_LAUNCHERS=(
   org.gnome.SystemMonitor.desktop gnome-system-monitor-kde.desktop  # Mission Center replaces it
   com.zorin.desktop.upgrader.desktop                # "Upgrade Zorin OS": not our upgrade path
   org.freedesktop.IBus.Setup.desktop im-config.desktop org.gnome.PowerStats.desktop
+  # Fallbacks if a removal above was refused: never leave these in the menu.
+  zorin-appearance.desktop zorin-connect.desktop install-zorin-windows-app-support.desktop
 )
 hide_launcher() {
   local id="$1" src="/usr/share/applications/$1" dst="/usr/local/share/applications/$1"

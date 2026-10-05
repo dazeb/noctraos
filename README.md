@@ -39,7 +39,7 @@ Prefer to review first: `git clone https://github.com/dazeb/noctraos && cd noctr
 | Editor | [Microsoft VS Code](https://code.visualstudio.com) + Continue.dev (pre-wired to local Ollama), GitLens, Prettier, Python, Go |
 | Agent sessions | [Herdr](https://herdr.dev) persistent workspaces, installed through mise and launched from Development |
 | Workstation apps | Chromium, Obsidian, LocalSend, Pinta, Moonlight, LibreOffice, MPV, Kdenlive, OBS Studio, Flameshot, Xournal++, Evince, GNOME Disks, and Sushi preview |
-| Developer tools | btop, bat, eza, fd-find, fzf, ripgrep, zoxide, neovim, tmux, Starship, lazygit, lazydocker, GitHub CLI, Docker/Compose, clang, Ruby, ffmpeg, ImageMagick, yt-dlp, tldr |
+| Developer tools | btop, bat, eza, fd-find, fzf, ripgrep, zoxide, tmux, Starship, lazygit, lazydocker, GitHub CLI, Docker/Compose, clang, Ruby, ffmpeg, ImageMagick, yt-dlp, tldr |
 | Task manager | Mission Center (Flathub) — the familiar Task-Manager role: CPU/RAM/GPU and running apps |
 | Runtimes | [mise](https://mise.jdx.dev) managing Node LTS, Python 3.12, Go — system-wide, for every user |
 | Mouse ergonomics | Nautilus right-click: *Open in VS Code*, *Ask AI to Explain* (sends the file to local Ollama, answers in a dialog), *Open Terminal Here* |
