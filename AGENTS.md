@@ -23,6 +23,8 @@ anonymously. Never make it private, never commit secrets.
 ## Repository map
 
 ```
+proxmox-install.sh          one-command Proxmox VE installer: downloads the release qcow2 or ISO, checks it against
+                            SHA256SUMS, builds a UEFI VM; NOCTRAOS_* env vars answer every prompt (README, docs/setup.md)
 boot.sh                     remote fetcher: clones repo to ~/.local/share/noctraos,
                             runs install.sh; env: NOCTRAOS_REPO_URL, NOCTRAOS_BRANCH, NOCTRAOS_HOME
 install.sh                  orchestrator: logging, TARGET_USER resolution, flags

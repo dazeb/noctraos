@@ -68,6 +68,8 @@ We're making a desktop we'd like to use, and having some fun along the way.
 You don't need to be a Linux wizard to help. **[See how to contribute](CONTRIBUTING.md)**
 or **[open an issue](https://github.com/dazeb/noctraos/issues)** and say hello.
 
+Questions, press, or a security report: **[admin@noctraos.dev](mailto:admin@noctraos.dev)**.
+
 ## Documentation
 
 | Looking for… | Start here |

@@ -38,6 +38,13 @@ an issue so we can agree on the direction before you spend a weekend on it.
 It's fine to open a draft PR or ask for help when you're stuck. Documentation
 and screenshot contributions don't need an OS rebuild.
 
+## Contact
+
+Email **admin@noctraos.dev** for questions, press, partnerships, or anything you'd
+rather not post in public. Bugs and ideas are best as
+[GitHub issues](https://github.com/dazeb/noctraos/issues) so others can follow along.
+Security reports go in the [security policy](SECURITY.md).
+
 ## Where things live
 
 | Area | Starting points |
