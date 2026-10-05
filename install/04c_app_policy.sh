@@ -40,7 +40,7 @@ fi
 PROTECTED_RE='^(zorin-os|ubuntu-desktop|ubuntu-standard|ubuntu-minimal|gdm3|nautilus|gnome-control-center|network-manager|systemd|xorg|xserver|plymouth|grub|sudo|apt|dpkg|libc6|flatpak|ollama|gnome-shell(-common)?$|gnome-shell-extension-zorin-(menu|taskbar|desktop-icons))'
 
 retire_apt() { # retire_apt <why> <package>...
-  local why="$1" requested=() present=() ok=() p plan collateral hit
+  local why="$1" requested=() present=() ok=() p plan plan_out collateral hit
   shift
   requested=("$@")
   for p in "${requested[@]}"; do pkg_installed "$p" && present+=("$p"); done
@@ -50,7 +50,15 @@ retire_apt() { # retire_apt <why> <package>...
   # zorin-os-something and still be fine to remove. Simulate first: "Remv <pkg> ..." lines are
   # exactly what apt would remove.
   for p in "${present[@]}"; do
-    plan="$(sudo apt-get -s remove "$p" 2>/dev/null | awk '/^Remv /{print $2}')"
+    # apt cannot always plan a removal (e.g. libreoffice-style-colibre: on its own it would break
+    # libreoffice-core). Under pipefail that failure would abort the whole install. Packages in a
+    # set depend on each other, so removing only part of it would leave a half-removed set that
+    # the next run finishes: when any one cannot be planned, the whole set stays installed.
+    if ! plan_out="$(sudo apt-get -s remove "$p" 2>/dev/null)"; then
+      warn "Keeping all of: $why — apt cannot plan the removal of $p"
+      return 0
+    fi
+    plan="$(awk '/^Remv /{print $2}' <<<"$plan_out")"
     collateral="$(printf '%s\n' $plan | grep -vxF -f <(printf '%s\n' "${requested[@]}") || true)"
     hit="$(grep -E "$PROTECTED_RE" <<<"$collateral" || true)"
     if [ -n "$hit" ]; then

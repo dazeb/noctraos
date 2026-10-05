@@ -7,6 +7,9 @@
   .nx .keys { text-align:center; margin:0 0 14px; }
   .nx .key { display:inline-block; min-width:92px; padding:9px 16px; margin:0 6px; background:#1e1e1e;
              border:1px solid #333; border-bottom:3px solid #e68e0d; color:#eaeaea; font-size:18px; text-align:center; }
+  .nx .key.icon { min-width:0; padding:12px 14px 9px; }
+  .nx .key svg { vertical-align:middle; }
+  .nx .or { color:#8a8a8d; font-size:13px; margin:0 2px; }
   .nx .plus { color:#8a8a8d; font-size:20px; }
   .nx .lead { text-align:center; font-size:15px; line-height:22px; color:#eaeaea; margin-bottom:14px; }
   .nx ul { list-style:none; margin:0; padding:0; border-top:1px solid #333; }
@@ -15,7 +18,13 @@
   .nx li b { color:#eaeaea; font-weight:normal; }
 </style>
 <div class="nx">
-  <div class="keys"><span class="key">Windows</span><span class="plus">+</span><span class="key">Space</span></div>
+  <div class="keys">
+    <span class="key icon" title="Windows key"><svg viewBox="0 0 24 24" width="22" height="22" aria-label="Windows key"><path fill="#eaeaea" d="M3 4.6 10.2 3.6v7.2H3zM11.2 3.5 21 2v8.8h-9.8zM3 12.2h7.2v7.2L3 18.4zM11.2 12.2H21V22l-9.8-1.4z"/></svg></span>
+    <span class="or">or</span>
+    <span class="key icon" title="Command key (Mac)"><svg viewBox="0 0 24 24" width="22" height="22" aria-label="Command key"><path fill="none" stroke="#eaeaea" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M15 6v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3"/></svg></span>
+    <span class="plus">+</span>
+    <span class="key">Space</span>
+  </div>
   <div class="lead">Search everything from one place:<br />apps, files, clipboard, the web and your browser history.</div>
   <ul>
     <li><b>AI first.</b> That one shortcut is the only one to learn.</li>
