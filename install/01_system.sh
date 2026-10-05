@@ -19,6 +19,17 @@ PYTHON_BUILD_PKGS=(
 log "Installing core packages: ${CORE_PKGS[*]} ${PYTHON_BUILD_PKGS[*]}"
 sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "${CORE_PKGS[@]}" "${PYTHON_BUILD_PKGS[@]}"
 
+# FUSE: most AppImages mount themselves through libfuse2 (named libfuse2t64 on
+# Ubuntu 24.04+, libfuse2 before the t64 transition); fuse3 provides fusermount3.
+for p in fuse3 libfuse2t64 libfuse2; do
+  if dpkg-query -W -f='${Status}' "$p" 2>/dev/null | grep -Fx 'install ok installed' >/dev/null; then
+    log "OK: $p already installed"
+  elif apt-cache show "$p" >/dev/null 2>&1 && ! { [ "$p" = libfuse2 ] && dpkg-query -W libfuse2t64 >/dev/null 2>&1; }; then
+    sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "$p" \
+      || warn "FUSE package failed to install: $p"
+  fi
+done
+
 # Optional packages whose names vary across Zorin/Ubuntu releases.
 for p in nautilus gnome-terminal nautilus-extension-gnome-terminal; do
   if apt-cache show "$p" >/dev/null 2>&1; then

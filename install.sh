@@ -69,10 +69,13 @@ else
 fi
 
 if [ "$SKIP_GUI" -eq 1 ]; then
-  log "SKIP 04/04b/05/06/08/09/10/11 (--skip-gui)"
+  log "SKIP 04/04b/04c/05/06/08/09/10/11 (--skip-gui)"
 else
   run_module 04_gui_apps.sh
   run_module 04_workstation_apps.sh
+  # Non-core: a flaky GitHub download must not abort onboarding.
+  run_module 04_appmanager.sh \
+    || warn "AppManager install did not complete — continuing. Retry: bash install/04_appmanager.sh"
   run_module 05_mouse_ergonomics.sh
   run_module 06_desktop_theme.sh
   run_module 08_shell_theme.sh
