@@ -91,12 +91,15 @@ download() {  # download URL FILE: resumable, so a dropped connection does not s
 }
 verify() {  # verify FILE [NAME]: the release SHA256SUMS must list NAME (default: the file's name) and agree
     local file=$1 name=${2:-${1##*/}} want have
-    wget -q "$BASE_URL/SHA256SUMS" -O "$SCRATCH_SUMS" || die "Could not download $BASE_URL/SHA256SUMS"
+    wget -q "$BASE_URL/SHA256SUMS" -O "$SCRATCH_SUMS" || { echo "ERROR: Could not download $BASE_URL/SHA256SUMS" >&2; return 1; }
     want=$(awk -v n="$name" '$2 == n || $2 == "*" n {print $1; exit}' "$SCRATCH_SUMS")
-    [[ -n $want ]] || die "$name is not listed in SHA256SUMS."
+    [[ -n $want ]] || { echo "ERROR: $name is not listed in SHA256SUMS." >&2; return 1; }
     echo 'Verifying SHA-256...'
     have=$(sha256sum "$file" | awk '{print $1}')
-    [[ $have == "$want" ]] || die "SHA-256 mismatch for $name (expected $want, got $have). The file may be damaged; delete it and run again."
+    if [[ $have != "$want" ]]; then
+        echo "ERROR: SHA-256 mismatch for $name (expected $want, got $have). The file may be damaged." >&2
+        return 1
+    fi
     echo "OK: $name matches SHA256SUMS"
 }
 
@@ -156,11 +159,11 @@ cd "$SCRATCH"
 # Everything is downloaded and verified before the VM exists, so a cancelled or failed run leaves nothing behind.
 if [[ $NOCTRAOS_MODE == image ]]; then
     download "$BASE_URL/$IMAGE_FILE" "$IMAGE_FILE"
-    verify "$IMAGE_FILE"
+    verify "$IMAGE_FILE" || exit 1
 else
-    ISO_PATH=$(pvesh get "/storage/$ISO_STORAGE" --output-format json 2> /dev/null | sed -n 's|.*"path" *: *"\([^"]*\)".*|\1|p')
-    [[ -n $ISO_PATH && -d $ISO_PATH/template/iso ]] || die "Storage '$ISO_STORAGE' is not a directory storage with an ISO folder."
-    TARGET="$ISO_PATH/template/iso/$ISO_FILE"
+    # Let Proxmox say where the volume lives: a storage may map its content types to custom folders.
+    TARGET=$(pvesm path "$ISO_STORAGE:iso/$ISO_FILE") || die "Could not resolve $ISO_STORAGE:iso/$ISO_FILE; is '$ISO_STORAGE' a directory storage?"
+    mkdir -p "${TARGET%/*}"
     # Reuse an ISO from an earlier run when it still matches the release checksum.
     if [[ -f $TARGET ]] && (wget -q "$BASE_URL/SHA256SUMS" -O "$SCRATCH_SUMS" && verify "$TARGET" "$ISO_FILE") &> /dev/null; then
         echo "OK: $ISO_FILE is already on $ISO_STORAGE and matches SHA256SUMS"
