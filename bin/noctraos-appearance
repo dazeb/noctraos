@@ -1,4 +1,6 @@
-#!/usr/bin/env python3
+#!/usr/bin/python3
+# System Python on purpose: it has PyGObject; a mise-managed python3 (first on PATH in a
+# session) does not. Same reason bin/noctraos-search execs /usr/bin/python3.
 """noctraos-appearance — wallpaper and fonts.
 
 NoctraOS fixes the theme and the taskbar layout, so there is no theme switcher here. This is
@@ -109,11 +111,13 @@ class Appearance(Gtk.ApplicationWindow):
                         valign=Gtk.Align.START)
         for row, (key, title) in enumerate(FONTS):
             grid.attach(Gtk.Label(label=title, xalign=0), 0, row, 1, 1)
-            button = Gtk.FontButton.new_with_font(self.interface.get_string(key))
-            button.connect('font-set', lambda btn, key=key: self.interface.set_string(
-                key, btn.get_font()))
+            # A plain button that shows the real setting: Gtk.FontButton shows "None" for a
+            # family that is not installed (Zorin's default document font is Cantarell).
+            button = Gtk.Button(label=self.interface.get_string(key), halign=Gtk.Align.FILL)
+            button.set_size_request(260, -1)
+            button.connect('clicked', lambda _btn, key=key, title=title: self._choose_font(key, title))
             grid.attach(button, 1, row, 1, 1)
-            self.interface.connect(f'changed::{key}', lambda s, k, btn=button: btn.set_font(
+            self.interface.connect(f'changed::{key}', lambda s, k, btn=button: btn.set_label(
                 s.get_string(k)))
         row = len(FONTS)
         grid.attach(Gtk.Label(label='Text size', xalign=0), 0, row, 1, 1)
@@ -129,6 +133,13 @@ class Appearance(Gtk.ApplicationWindow):
         reset.connect('clicked', self._on_reset)
         grid.attach(reset, 1, row + 1, 1, 1)
         return grid
+
+    def _choose_font(self, key, title):
+        dialog = Gtk.FontChooserDialog(title=f'{title} font', transient_for=self)
+        dialog.set_font(self.interface.get_string(key))
+        if dialog.run() == Gtk.ResponseType.OK and dialog.get_font():
+            self.interface.set_string(key, dialog.get_font())
+        dialog.destroy()
 
     def _on_reset(self, *_):
         for key, _title in FONTS:

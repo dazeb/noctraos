@@ -39,20 +39,29 @@ fi
 PROTECTED_RE='^(zorin-os|ubuntu-desktop|ubuntu-standard|ubuntu-minimal|gdm3|nautilus|gnome-control-center|network-manager|systemd|xorg|xserver|plymouth|grub|sudo|apt|dpkg|libc6|flatpak|ollama|gnome-shell(-common)?$|gnome-shell-extension-zorin-(menu|taskbar|desktop-icons))'
 
 retire_apt() { # retire_apt <why> <package>...
-  local why="$1" present=() p plan hit
+  local why="$1" requested=() present=() ok=() p plan collateral hit
   shift
-  for p in "$@"; do pkg_installed "$p" && present+=("$p"); done
+  requested=("$@")
+  for p in "${requested[@]}"; do pkg_installed "$p" && present+=("$p"); done
   [ "${#present[@]}" -gt 0 ] || return 0
-  # Simulate first: "Remv <pkg> ..." lines are exactly what apt would remove.
-  plan="$(sudo apt-get -s remove "${present[@]}" 2>/dev/null | awk '/^Remv /{print $2}')"
-  hit="$(grep -E "$PROTECTED_RE" <<<"$plan" || true)"
-  if [ -n "$hit" ]; then
-    warn "Keeping ${present[*]} ($why): removing it would also remove: $(tr '\n' ' ' <<<"$hit")"
-    return 0
-  fi
-  log "Removing $why: ${present[*]}"
-  sudo DEBIAN_FRONTEND=noninteractive apt-get remove -y "${present[@]}" \
-    || warn "Could not remove: ${present[*]}"
+  # Judge each package on its own, so one that cannot go does not hold up the rest, and only
+  # by what apt would remove BEYOND what we asked for: a package we named may itself be called
+  # zorin-os-something and still be fine to remove. Simulate first: "Remv <pkg> ..." lines are
+  # exactly what apt would remove.
+  for p in "${present[@]}"; do
+    plan="$(sudo apt-get -s remove "$p" 2>/dev/null | awk '/^Remv /{print $2}')"
+    collateral="$(printf '%s\n' $plan | grep -vxF -f <(printf '%s\n' "${requested[@]}") || true)"
+    hit="$(grep -E "$PROTECTED_RE" <<<"$collateral" || true)"
+    if [ -n "$hit" ]; then
+      warn "Keeping $p ($why): removing it would also remove: $(tr '\n' ' ' <<<"$hit")"
+    else
+      ok+=("$p")
+    fi
+  done
+  [ "${#ok[@]}" -gt 0 ] || return 0
+  log "Removing $why: ${ok[*]}"
+  sudo DEBIAN_FRONTEND=noninteractive apt-get remove -y "${ok[@]}" \
+    || warn "Could not remove: ${ok[*]}"
 }
 
 replace_with_flatpak() { # replace_with_flatpak <flatpak id> <package>...
@@ -104,8 +113,8 @@ for f in /etc/skel/.config/autostart/zorin-gnome-tour-autostart.desktop \
 done
 
 # Vim is the exception: vim-common/vim-tiny are depended on by Zorin's zorin-os-minimal
-# metapackage, so removing them would remove that too (the guard refuses). Its launcher is
-# hidden below instead.
+# metapackage, so removing them would remove that too (the guard would refuse). It is not
+# in the list; its launcher is hidden below instead.
 
 # Gear Lever (AppImage manager) is no longer shipped; remove it where an earlier run put it.
 if flatpak_has it.mijorus.gearlever; then

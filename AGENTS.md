@@ -397,6 +397,20 @@ tail -f /root/noctraos-build.log
   (zorin-os-minimal depends on vim-tiny): its launcher is hidden. `hermes desktop` writes its own
   launcher every run; the wrapper hides it and sets `desktop.manage_launcher_entry=false`.
 
+- **Python GUI apps must pin `#!/usr/bin/python3`.** In a real session a mise-managed `python3`
+  is first on PATH and has no PyGObject, so `#!/usr/bin/env python3` dies with `No module named
+  'gi'` at autostart while working fine from an SSH shell (different PATH). `noctraos-welcome`
+  and `noctraos-appearance` hit this; `noctraos-search` already execs `/usr/bin/python3`.
+- **`retire_apt` judges each package alone and only by collateral removals.** Batching them let one
+  false positive (`zorin-os-tour-video` matches the protected `zorin-os` prefix) block all of
+  them, and counting the requested package itself as a hit is wrong.
+- **Local KVM test VM (ubuntubox):** `qemu-system-x86_64 -enable-kvm` with OVMF, user-mode
+  networking (`hostfwd` 2222->22), `-usb -device usb-tablet`, a monitor socket for `sendkey` and
+  `screendump`, and a **QMP socket for clicks**: HMP `mouse_move` is relative and a tablet ignores
+  it, QMP `input-send-event` with `abs` axes (0..32767) works. Keep the disk on ext4
+  (/mnt/nvme1), not NTFS. ISO builds run in a privileged Docker container with an ext4 image
+  file on the 2 TB drive as the work dir (NTFS cannot hold the unpacked system); ~2 min per ISO.
+
 ## Verification checklist for any change
 
 1. `bash -n` + shellcheck (docker) clean on touched scripts.
