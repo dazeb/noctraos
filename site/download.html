@@ -37,7 +37,7 @@
     <p class="eyebrow"><span class="dot"></span>Download</p>
     <h1>Get Noctra OS 0.3.0</h1>
     <p class="lede">Put the installer on a USB stick, start your PC from it, and Noctra sets itself up the first time you log in.</p>
-    <div class="cta"><a class="btn primary" href="https://dl.noctraos.dev/releases/v0.3.0/noctraos-0.3.0-amd64.iso">Download the ISO</a><a class="btn ghost" href="#verify">Check your download</a></div>
+    <div class="cta"><a class="btn primary" href="https://dl.noctraos.dev/releases/v0.3.0/noctraos-0.3.0-amd64.iso">Download the ISO</a><a class="btn ghost" href="#proxmox">On Proxmox</a><a class="btn ghost" href="#verify">Check your download</a></div>
   </div>
 </div>
 
@@ -65,7 +65,7 @@
 <section id="proxmox">
   <div class="wrap">
     <div class="head"><h2>On Proxmox</h2><p class="lede">One command on the Proxmox host (as root, Proxmox VE 8 or 9) creates a ready virtual machine. It asks for memory, processor cores and storage, checks the download, and cleans up after itself if anything fails.</p></div>
-    <div class="term-line" style="max-width:860px">
+    <div class="term-line">
       <code id="proxmox-cmd">bash &lt;(curl -sSfL https://raw.githubusercontent.com/dazeb/noctraos/main/proxmox-install.sh)</code>
       <button type="button" data-copy="proxmox-cmd" aria-label="Copy command">Copy</button>
     </div>
