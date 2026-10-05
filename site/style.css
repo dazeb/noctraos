@@ -220,3 +220,5 @@ footer .about { display: grid; gap: 14px; max-width: 36ch; }
   #files td { border: 0; padding: 4px 18px; }
   #files td:last-child { padding-top: 12px; }
 }
+
+.size { margin-left: 6px; color: var(--muted); font-size: 0.8125rem; white-space: nowrap; }
