@@ -15,8 +15,8 @@
 # no passwordless sudo. Why an image file: the work directory must be a real Linux filesystem (the
 # unpacked system has symlinks, device nodes and ownership); an NTFS drive cannot hold it, so an
 # ext4 image file on that drive is loop-mounted INSIDE the container. --privileged is only for that
-# mount. Everything is built from a fresh clone of GitHub main (REPO_URL to override), exactly
-# like the first-boot runner, so push first.
+# mount. Everything is built from a fresh clone of GitHub main (REPO_URL to override, and
+# NOCTRAOS_BRANCH=nightly for the nightly image), exactly like the first-boot runner, so push first.
 #
 #   release    interactive installer: no seed, no password hash, no unattended boot entry. This is
 #              the ISO that gets published. The run FAILS if any of that is found in it.
@@ -58,8 +58,8 @@ mkdir -p /work
 mount -o loop /host/work.img /work
 trap 'cd /; umount /work 2>/dev/null || true' EXIT
 rm -rf /work/src /work/tmp   # the image is reused between runs: start from a clean tree
-git clone -q --depth 1 "${REPO_URL:-https://github.com/dazeb/noctraos.git}" /work/src
-git -C /work/src log -1 --format="building main at %h %s"
+git clone -q --depth 1 --branch "${NOCTRAOS_BRANCH:-main}" "${REPO_URL:-https://github.com/dazeb/noctraos.git}" /work/src
+git -C /work/src log -1 --format="building ${NOCTRAOS_BRANCH:-main} at %h %s"
 VERSION="$(tr -d '[:space:]' < /work/src/VERSION)"
 export WORK_BASE=/work/tmp; mkdir -p "$WORK_BASE"
 BASE=/host/in/Zorin-OS-18.1-Core-64-bit.iso
@@ -92,6 +92,6 @@ fi
 echo "=== ALL DONE $(date +%H:%M)"
 INNER
 
-docker run --rm --privileged -e WHAT="$WHAT" ${REPO_URL:+-e REPO_URL="$REPO_URL"} -v "$DIR:/host" "$IMAGE" \
+docker run --rm --privileged -e WHAT="$WHAT" ${REPO_URL:+-e REPO_URL="$REPO_URL"} ${NOCTRAOS_BRANCH:+-e NOCTRAOS_BRANCH="$NOCTRAOS_BRANCH"} -v "$DIR:/host" "$IMAGE" \
   bash /host/run-build.sh
 ls -lh "$DIR/out"
