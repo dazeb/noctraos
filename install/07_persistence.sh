@@ -20,9 +20,9 @@ sudo install -m 644 "$REPO_ROOT/configs/vscode/continue_config.yaml" \
   /etc/skel/.continue/config.yaml
 sudo install -m 644 "$REPO_ROOT/configs/vscode/settings.json" \
   /etc/skel/.config/Code/User/settings.json
-if [ -f /etc/skel/.local/share/nautilus/scripts/Open_in_VSCodium ]; then
-  sudo rm -f /etc/skel/.local/share/nautilus/scripts/Open_in_VSCodium
-fi
+for old in Open_in_VSCodium Ask_AI_to_Explain Open_Terminal_Here Open_in_VS_Code; do
+  sudo rm -f "/etc/skel/.local/share/nautilus/scripts/$old"
+done
 sudo install -m 644 "$REPO_ROOT/configs/copyq/copyq.conf" \
   /etc/skel/.config/copyq/copyq.conf
 sudo install -m 644 "$REPO_ROOT/configs/theme/herdr.toml" \
@@ -41,6 +41,8 @@ for src in "$REPO_ROOT/configs/nautilus-scripts/"*; do
   sudo install -m 755 "$src" "/etc/skel/.local/share/nautilus/scripts/$(basename "$src")"
 done
 sudo chmod -R go+rX /etc/skel/.config /etc/skel/.continue /etc/skel/.local
+# ...except the keyring directory, which stays private to the account.
+[ -d /etc/skel/.local/share/keyrings ] && sudo chmod -R go-rwx /etc/skel/.local/share/keyrings
 
 log "Installing noc management CLI..."
 # Clean break from the pre-rename CLI name (zom → noc).

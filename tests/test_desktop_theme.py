@@ -135,6 +135,57 @@ class PasswordStoreTests(unittest.TestCase):
             self.assertIn('"password-store": "basic",', text)
             self.assertIn('"enable-crash-reporter": true', text)
 
+    def keyring_file(self, home, content):
+        path = home / ".local/share/keyrings/login.keyring"
+        path.parent.mkdir(parents=True)
+        path.write_bytes(content)
+        return path
+
+    def test_keyring_is_created_unencrypted_and_made_the_default(self):
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            self.assertTrue(self.seed.login_keyring(home))
+            keyring = home / ".local/share/keyrings/login.keyring"
+            self.assertTrue(keyring.read_text().startswith("[keyring]\n"))
+            self.assertEqual((home / ".local/share/keyrings/default").read_text(), "login")
+            self.assertEqual(keyring.stat().st_mode & 0o777, 0o600)
+            self.assertEqual(keyring.parent.stat().st_mode & 0o777, 0o700)
+            self.assertFalse(self.seed.login_keyring(home))        # idempotent
+
+    def test_empty_encrypted_keyring_is_replaced(self):
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            empty = self.seed.ENCRYPTED_MAGIC + b"\x00" * 90         # about the size of an empty one
+            keyring = self.keyring_file(home, empty)
+            self.assertTrue(self.seed.login_keyring(home))
+            self.assertTrue(keyring.read_bytes().startswith(b"[keyring]"))
+
+    def test_keyring_holding_secrets_is_never_touched(self):
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            full = self.seed.ENCRYPTED_MAGIC + b"\x01" * 400
+            keyring = self.keyring_file(home, full)
+            self.assertFalse(self.seed.login_keyring(home))
+            self.assertEqual(keyring.read_bytes(), full)
+            self.assertFalse((home / ".local/share/keyrings/default").exists())
+
+    def test_unknown_keyring_format_is_never_touched(self):
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            keyring = self.keyring_file(home, b"something else entirely")
+            self.assertFalse(self.seed.login_keyring(home))
+            self.assertEqual(keyring.read_bytes(), b"something else entirely")
+
+    def test_existing_unencrypted_keyring_is_kept_and_made_default(self):
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            body = b"[keyring]\ndisplay-name=Login\n\n[1]\nitem-type=0\nsecret=keep-me\n"
+            keyring = self.keyring_file(home, body)
+            self.assertTrue(self.seed.login_keyring(home))          # default file was missing
+            self.assertEqual(keyring.read_bytes(), body)             # contents untouched
+            self.assertEqual((home / ".local/share/keyrings/default").read_text(), "login")
+            self.assertFalse(self.seed.login_keyring(home))
+
 
 if __name__ == "__main__":
     unittest.main()

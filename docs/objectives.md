@@ -106,10 +106,12 @@ some stock icons) are tracked in the coverage table in `theme-design.md`.
 - **Stay on GNOME** (Zorin base) until the current experience is complete.
   Moving to KDE Plasma was considered and deferred; revisit with a time-boxed
   spike only after the GNOME work is done.
-- **Autologin keyring prompt: fixed for what we install.** A locked login
-  keyring made Chromium ask for a password on first use; Chromium and VS Code now
-  use a non-keyring password store. Browsers the user installs themselves can
-  still prompt (see `AGENTS.md`).
+- **Autologin keyring prompt: fixed for every app.** Autologin never unlocks the
+  account's keyring, so Hermes, browsers and VS Code asked for a password on first
+  use. Setup now gives the account an unencrypted login keyring while it is empty
+  (and Chromium and VS Code also keep a non-keyring password store). Secrets in it
+  are stored without a password, an accepted trade-off. A keyring that already
+  holds secrets is left alone and can still prompt (see `AGENTS.md`).
 - **Flatpak and AppImage first.** apt is for CLI tools, system tools and
   host-integration apps; the app set and the removals are in `install/04c_app_policy.sh`.
 - **Be honest about where AI runs.** The local Ollama model stays on the computer;

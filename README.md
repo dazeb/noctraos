@@ -7,7 +7,7 @@ panel built around AI agents, a first-run welcome, polyglot runtimes, and a dark
 theme with amber highlights. Everything is where a Windows user expects it (a
 dock with a Start button, window buttons, a task manager), so there is nothing to
 relearn — except one new idea, **Super+Space** (the Windows key and Space), which
-searches your whole system (apps, files, clipboard history, the web, and
+searches your computer (apps, the files in your home folder, clipboard history, the web, and
 optionally your browser history) from a single keystroke.
 
 The product is a **bootable ISO** (downloads and checksums at
@@ -422,9 +422,10 @@ testing happens in a VM (`iso/local-vm.sh`); see [AGENTS.md](AGENTS.md).
 - **Hermes and privacy** — the local Ollama model never leaves the computer, but
   Hermes' free tier is a cloud service. For local-only use pick *Hermes, local only*
   in the Welcome, or run `noctraos-hermes local` (undo: `hermes config set model.provider auto`).
-- **A browser asks for a keyring password** — Chromium and VS Code are set up to
-  avoid it. Browsers you install yourself (Brave, Chrome, Edge) still prompt,
-  because autologin leaves the login keyring locked.
+- **An app asks for a keyring password** — setup gives your account an unencrypted
+  login keyring (while it is empty), so Hermes, browsers and VS Code do not ask. The
+  catch: secrets in it are stored without a password. A keyring that already holds
+  secrets is left as it is and can still prompt.
 - **An AppImage does not start** — FUSE 2 is preinstalled; double-click it to
   install through AppManager, or mark it executable and run it.
 - **Software Updater shows a large update on first login, in the base system's

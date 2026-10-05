@@ -9,6 +9,11 @@ from gi.repository import Gdk, Gio, Gtk
 import browsers
 
 
+def expanded_roots(settings):
+    """The saved folders as absolute paths (the default is '~', the home folder)."""
+    return [str(Path(root).expanduser()) for root in settings.get_strv('roots')]
+
+
 def choose_history(settings, parent=None):
     """Ask which browser(s) to search. Closing the dialog changes nothing."""
     from main import request_index
@@ -111,11 +116,11 @@ def show_settings(settings):
         choose.connect('clicked', lambda _button: (choose_history(settings, window),
                                                    toggles['history'].set_active(settings.get_boolean('history'))))
         box.pack_start(choose, False, False, 0)
-        label('Search folders — one absolute path per line. Use / for the whole accessible system.')
+        label('Search folders — one absolute path per line. Your home folder by default; use / for the whole accessible system (system files then appear in results).')
         roots = Gtk.TextView(wrap_mode=Gtk.WrapMode.WORD_CHAR)
         roots.get_accessible().set_name('Search folders')
         roots.set_size_request(-1, 80)
-        roots.get_buffer().set_text('\n'.join(settings.get_strv('roots')))
+        roots.get_buffer().set_text('\n'.join(expanded_roots(settings)))
         box.pack_start(roots, False, False, 0)
         add_folder = Gtk.Button(label='Add folder…', halign=Gtk.Align.START)
         box.pack_start(add_folder, False, False, 0)
@@ -211,7 +216,7 @@ def show_settings(settings):
                 notice.set_text('That shortcut is used by ' + ', '.join(name.replace('-', ' ') for name in conflicts) + '. Choose another.')
                 return
             changed = any(settings.get_boolean(k) != toggles[k].get_active()
-                          for k in ('files', 'hidden', 'contents', 'history')) or paths != settings.get_strv('roots')
+                          for k in ('files', 'hidden', 'contents', 'history')) or paths != expanded_roots(settings)
             settings.delay()
             for name, toggle in toggles.items():
                 settings.set_boolean(name, toggle.get_active())

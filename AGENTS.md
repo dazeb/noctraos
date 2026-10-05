@@ -94,7 +94,8 @@ configs/
   gsettings/, systemd/      search and Start-panel schemas; the file-index user timer
   theme/                    palette.json (source of truth) + templates/remaps -> shell/GTK CSS, Herdr and btop palettes
   xdg/                      gnome-applications.menu (AI-first tree), agents merge
-  nautilus-scripts/         Open_in_VS_Code, Ask_AI_to_Explain, Open_Terminal_Here
+  nautilus-scripts/         "Open in VS Code", "Ask AI to Explain", "Open Terminal Here" (spaces, not
+                            underscores: a menu label eats "_" as a mnemonic marker)
 assets/
   wallpapers/               6 seeded 4K JPEG scenes + generate-wallpapers.py
   icons/                    white SVG glyphs (agents, Local LLM, category tiles)
@@ -321,17 +322,25 @@ tail -f /root/noctraos-build.log
   theme keys (the wallpaper keys have no `:zorin` entry, so those did apply). The ISO's
   `90_noctraos-live.gschema.override` therefore repeats the `:zorin` group names.
 - **Autologin leaves the login keyring locked**, so apps that use the Secret
-  Service show an "Authentication required" prompt on first use. Fixed for what we
-  install by using a non-keyring store (`scripts/seed-password-store.py`, run by
-  modules 04 and 07): Chromium (Flatpak) gets `--password-store=basic` in
-  `chromium-flags.conf`, VS Code gets `"password-store": "basic"` in
-  `~/.vscode/argv.json`. Measured on VM 114 with `dbus-monitor`: Chromium made 5
-  Secret Service calls and showed the prompt before, 0 and no prompt after.
-  VS Code made 0 calls at startup either way (the setting is preventive; it only
-  matters when something stores a secret). **Not covered:** any browser the user
-  installs themselves (Brave, Chrome, Edge) still prompts, and saved browser
-  passwords in the basic store are only obfuscated, not protected by a keyring —
-  an accepted trade-off. Firefox does not use the Secret Service.
+  Service (Hermes Desktop, browsers, VS Code) show an "Authentication required"
+  prompt on first use: the keyring is encrypted with the account password, which
+  an autologin session never types. `scripts/seed-password-store.py` (modules 04
+  and 07) therefore replaces the user's login keyring with an **unencrypted** one
+  (`~/.local/share/keyrings/login.keyring` plus `default`) when it is missing or
+  empty (about 105 bytes), then module 04 restarts `gnome-keyring-daemon` so it
+  re-reads it. `Unlock` then returns at once with no prompt, for every app. A
+  keyring that holds secrets, or one in a format we do not recognise, is never
+  touched. It also still adds `--password-store=basic` for Chromium (Flatpak) and
+  `"password-store": "basic"` for VS Code. Trade-off, accepted: secrets are stored
+  without a password, like the flags always did. Passing `--password-store=basic`
+  to Hermes' Electron (`desktop.electron_flags`) does **not** stop its prompt
+  (checked: the flag was on the process and the dialog still came), so do not
+  go that way. Existing keyrings that hold secrets keep prompting on autologin.
+- **Search indexes the home folder, not `/`.** `roots` defaults to `['~']`. With `/` the
+  index filled with system paths (`/usr/lib/...`, Flatpak assets) that outranked the user's
+  own files. `/` is still available in Search settings. A user who saved their own `roots`
+  keeps it. Nautilus script files are named with plain spaces: a menu label eats `_` as a
+  mnemonic marker ("AskAItoExplain").
 - **Driving the VM desktop for tests**: over SSH, unlock the session
   (`gdbus call ... org.gnome.ScreenSaver.SetActive false`), take screenshots with
   `gnome-screenshot -f`, inject keys through `/dev/uinput` (needs sudo). Never
