@@ -86,6 +86,9 @@ iso/build-noctraos-iso.sh   ISO remaster pipeline (runs on the Proxmox node);
                             NOCTRAOS_UNATTENDED=1 + NOCTRAOS_USER/PASSWORD/…
                             bake an unattended-install seed and boot entries
 iso/preseed/noctraos.seed.in  Ubiquity/d-i seed template for the above
+iso/vm-sysprep.sh           run inside a fully provisioned VM before exporting its disk as a
+                            downloadable image: strips machine id, SSH host keys, Hermes
+                            identity/history, logs; refuses to run on bare metal
 ```
 
 ## Non-negotiable rules
@@ -170,7 +173,10 @@ iso/preseed/noctraos.seed.in  Ubiquity/d-i seed template for the above
 - **Unattended ISO build** (v0.3+): the build script clones the provisioner
   from GitHub for the squashfs, so push first; the seed template is read from
   the script's own `iso/preseed/` dir. Unattended builds imply autologin +
-  NOPASSWD sudo for the created user.
+  NOPASSWD sudo for the created user. **A release build is the same command
+  without `NOCTRAOS_UNATTENDED`**: no seed, no password hash, no unattended boot
+  entry (an unattended entry wipes the disk without asking). VERSION must match
+  `bin/noc`; the output is named `noctraos-<VERSION>-amd64.iso`.
 
 ## Commands
 
