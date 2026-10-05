@@ -46,7 +46,8 @@ These override the mockup where they differ.
   Terminal, browser, Software) sit under Agents. The `+` tile opens a searchable list of every
   installed app; Edit (or right-click) removes one. The list is the per-user gsettings key
   `pinned-apps`; a default that is not installed falls back to a stand-in (gedit, Firefox, ...)
-  or is skipped. Not yet run on a VM: check it on the local KVM test VM after the next deploy.
+  or is skipped. Verified on the local KVM VM (2026-10-05, Zorin 18.1, GNOME Shell 46): defaults, the
+  picker, adding, Edit-mode removal, Escape handling and launching.
 - **Wallpaper:** the current set stays; better ones are welcome at any time
   (the generator is `assets/wallpapers/generate-wallpapers.py`).
 

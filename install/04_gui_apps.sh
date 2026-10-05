@@ -107,6 +107,7 @@ if have copyq; then
       "$TARGET_HOME/.config/copyq/copyq.conf"
     log "OK: CopyQ preseeded (1000-entry permanent history, silent)"
   fi
+  sudo install -m 755 "$REPO_ROOT/bin/noctraos-copyq" /usr/local/bin/noctraos-copyq
   sudo install -m 644 "$REPO_ROOT/configs/autostart/copyq.desktop" \
     "$TARGET_HOME/.config/autostart/copyq.desktop"
   sudo chown "$TARGET_USER:$(id -gn "$TARGET_USER")" \

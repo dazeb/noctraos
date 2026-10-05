@@ -71,6 +71,7 @@ bin/
   noctraos-agent            agent launcher wrapper: installs npm package on
                             first use, then execs the agent
   noctraos-search           wrapper that execs the system-Python search app (search/)
+  noctraos-copyq            CopyQ autostart wrapper: runs it under XWayland, sets the tray icon white
   noctraos-weather          Open-Meteo lookup for the Start panel (keyless; city is a user choice)
 branding/setup-branding.py  once-per-account dock + top-bar layout (marker desktop-layout-v1)
 extensions/                 GNOME Shell extensions: noctraos-search (Super+Space overlay),
@@ -227,10 +228,10 @@ iso/vm-sysprep.sh           run inside a fully provisioned VM before exporting i
 ```bash
 # static checks (docker shellcheck — not installed on this host)
 bash -n boot.sh install.sh install/*.sh bin/noc bin/noc-gpu bin/noc-menu bin/noctraos-agent \
-  bin/noctraos-hermes bin/noctraos-search configs/nautilus-scripts/*     # other bin/ files are Python
+  bin/noctraos-copyq bin/noctraos-hermes bin/noctraos-search configs/nautilus-scripts/*     # other bin/ files are Python
 docker run --rm -v "$PWD:/mnt" koalaman/shellcheck:stable --severity=warning \
   boot.sh install.sh install/*.sh bin/noc bin/noc-gpu bin/noc-menu bin/noctraos-agent \
-  bin/noctraos-hermes configs/nautilus-scripts/*     # same list as CI
+  bin/noctraos-copyq bin/noctraos-hermes configs/nautilus-scripts/*     # same list as CI
 python3 -m unittest discover -s tests                # 31 tests: theme composition, GPU detection
 python3 scripts/render-theme.py --check              # committed theme outputs match palette.json
 
@@ -289,6 +290,9 @@ tail -f /root/noctraos-build.log
   on a full-screen root actor and decides "outside click" by pointer coordinates —
   `event.get_source()` is null for clicks on the root and a stage-level
   `captured-event` handler never fires under a grab. Both were tried and failed.
+- **CopyQ's tray icon ignores the icon theme.** It is drawn from CopyQ's own resources, so the white
+  override in `assets/icons/overrides` only reaches its window/app icon. The tray colour is the session
+  `iconColor`, which is not saved: `bin/noctraos-copyq` sets it white after every start (verified on VM).
 - **CopyQ must run with `QT_QPA_PLATFORM=xcb`.** As a native-Wayland client it
   logs "Failed to activate Wayland clipboard" and records nothing on GNOME
   (no wlr-data-control). The autostart entry sets it; keep it that way.

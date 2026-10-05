@@ -34,7 +34,7 @@ shell:
     - |
       fail=0
       for f in boot.sh install.sh install/*.sh bin/noc bin/noc-menu bin/noc-gpu bin/noctraos-hermes \
-               bin/noctraos-agent bin/noctraos-search configs/nautilus-scripts/* iso/*.sh; do
+               bin/noctraos-agent bin/noctraos-copyq bin/noctraos-search configs/nautilus-scripts/* iso/*.sh; do
         [ -f "$f" ] || continue
         bash -n "$f" || fail=1
         shellcheck --severity=warning "$f" || fail=1

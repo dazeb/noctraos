@@ -326,7 +326,8 @@ export default class NoctraStart extends Extension {
         const row = new St.BoxLayout({x_expand: true});
         row.add_child(new St.Label({text: 'APPS', style_class: 'noctra-start-section', x_expand: true}));
         this._editButton = new St.Button({label: 'Edit', style_class: 'noctra-start-text-button',
-            reactive: true, can_focus: true, accessible_name: 'Edit the apps list'});
+            reactive: true, can_focus: true, y_align: Clutter.ActorAlign.END,
+            accessible_name: 'Edit the apps list'});
         this._editButton.connect('clicked', () => {
             this._editing = !this._editing;
             this._picking = false;
