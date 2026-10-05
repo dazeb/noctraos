@@ -176,7 +176,7 @@ class Welcome(Gtk.ApplicationWindow):
         self.stuck.connect('clicked', self._on_stuck)
         box.pack_start(self.stuck, False, False, 0)
         self.stuck_help = label('Some keyboards, laptops and remote sessions swallow this shortcut. '
-                                'You can also use the search box in the Start menu (the N at the '
+                                'You can also use the search box in the Start menu (the Noctra logo at the '
                                 'bottom-left), and change the shortcut in Search settings.', 'muted')
         box.pack_start(self.stuck_help, False, False, 0)
         return box
@@ -185,7 +185,7 @@ class Welcome(Gtk.ApplicationWindow):
         box = page_box()
         box.pack_start(label('Where familiar things are', 'title'), False, False, 0)
         rows = [
-            ('Start button', 'The N at the bottom-left. Apps, search, power.'),
+            ('Start button', 'The Noctra logo at the bottom-left. Apps, search, power.'),
             ('Task Manager', 'Mission Center, pinned in the taskbar.'),
             ('File Explorer', 'Files, pinned in the taskbar.'),
             ('Screenshots', 'The Print key opens the screenshot tool.'),
