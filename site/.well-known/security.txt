@@ -1,0 +1,5 @@
+Contact: mailto:admin@noctraos.dev
+Expires: 2027-10-05T00:00:00.000Z
+Preferred-Languages: en
+Policy: https://github.com/dazeb/noctraos/blob/main/SECURITY.md
+Canonical: https://noctraos.dev/.well-known/security.txt
