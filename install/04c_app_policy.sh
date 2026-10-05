@@ -161,5 +161,15 @@ for id in "${HIDE_LAUNCHERS[@]}"; do
   hide_launcher "$id"
 done
 
+# The apt LibreOffice cannot always be removed (apt cannot plan it, see above). While the
+# Flatpak is there, its apps are the ones we show: hide the apt copy's launchers so Search and
+# the menu list each Office app once, not twice.
+if flatpak_has org.libreoffice.LibreOffice; then
+  for src in /usr/share/applications/libreoffice-*.desktop; do
+    [ -f "$src" ] || continue
+    hide_launcher "$(basename "$src")"
+  done
+fi
+
 sudo update-desktop-database >/dev/null 2>&1 || true
 log "Application policy complete."

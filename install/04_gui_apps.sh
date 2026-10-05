@@ -114,11 +114,18 @@ if have copyq; then
 fi
 
 # ---- No keyring prompt (autologin leaves the login keyring locked) --------------
-# VS Code and Chromium would ask for a keyring password on first use; store their
-# secrets without the keyring instead. Browsers installed later by the user are not
-# covered (see AGENTS.md).
-as_user python3 "$REPO_ROOT/scripts/seed-password-store.py" "$TARGET_HOME" \
-  || warn "Could not set the keyring-free password store"
+# Every app that uses the Secret Service (Hermes, browsers, VS Code) would ask for a
+# keyring password on first use. Make the login keyring an unencrypted one (only when it
+# is empty), and give Chromium and VS Code their own keyring-free store as well.
+if seeded="$(as_user python3 "$REPO_ROOT/scripts/seed-password-store.py" "$TARGET_HOME")"; then
+  log "$seeded"
+  # The running keyring daemon has the old (locked) keyring in memory: have it re-read the file.
+  case "$seeded" in
+    *keyring*) as_user systemctl --user try-restart gnome-keyring-daemon.service >/dev/null 2>&1 || true ;;
+  esac
+else
+  warn "Could not set the keyring-free password store"
+fi
 
 sudo update-desktop-database >/dev/null 2>&1 || true
 log "GUI applications complete."

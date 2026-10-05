@@ -6,7 +6,7 @@
     <key name="files" type="b"><default>true</default><summary>Search files and folders</summary></key>
     <key name="clipboard" type="b"><default>true</default><summary>Search CopyQ text history</summary></key>
     <key name="web" type="b"><default>true</default><summary>Offer web search</summary></key>
-    <key name="roots" type="as"><default>['/']</default><summary>Folders to index</summary></key>
+    <key name="roots" type="as"><default>['~']</default><summary>Folders to index</summary><description>Your home folder by default; '~' is expanded when the index is built. Use '/' to index the whole accessible system, which also lists system files in the results.</description></key>
     <key name="hidden" type="b"><default>false</default><summary>Include hidden files</summary></key>
     <key name="history" type="b"><default>false</default><summary>Search browser history</summary></key>
     <key name="history-browsers" type="as"><default>[]</default><summary>Browsers whose history is searched</summary></key>

@@ -5,10 +5,12 @@ source "$REPO_ROOT/install/lib.sh"
 
 SCRIPTS_DIR="$TARGET_HOME/.local/share/nautilus/scripts"
 as_user mkdir -p "$SCRIPTS_DIR"
-# Retire the old installer-owned menu action; keep the user's editor settings.
-if as_user test -f "$SCRIPTS_DIR/Open_in_VSCodium"; then
-  as_user rm -f "$SCRIPTS_DIR/Open_in_VSCodium"
-fi
+# Retire old installer-owned menu actions; keep the user's editor settings. The underscore
+# names are the previous spelling: a menu label treats "_" as a mnemonic marker and drops it
+# ("AskAItoExplain"), so the scripts are named with plain spaces now.
+for old in Open_in_VSCodium Ask_AI_to_Explain Open_Terminal_Here Open_in_VS_Code; do
+  as_user rm -f "$SCRIPTS_DIR/$old"
+done
 
 for src in "$REPO_ROOT/configs/nautilus-scripts/"*; do
   [ -f "$src" ] || continue
