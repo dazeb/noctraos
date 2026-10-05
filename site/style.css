@@ -209,3 +209,14 @@ footer .about { display: grid; gap: 14px; max-width: 36ch; }
   html { scroll-behavior: auto; }
   *, *::before, *::after { transition-duration: 0.01ms !important; }
 }
+
+/* Download table: stack each file as a block on phones so the button stays visible. */
+@media (max-width: 640px) {
+  #files table { min-width: 0; }
+  #files thead { display: none; }
+  #files table, #files tbody, #files tr, #files td { display: block; }
+  #files tr { padding: 18px 0; border-bottom: 1px solid var(--line); }
+  #files tr:last-child { border-bottom: 0; }
+  #files td { border: 0; padding: 4px 18px; }
+  #files td:last-child { padding-top: 12px; }
+}

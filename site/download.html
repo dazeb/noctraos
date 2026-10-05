@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="description" content="Download the Noctra OS installer ISO. System requirements and install steps.">
+<meta name="description" content="Download Noctra OS 0.3.0: the installer ISO and virtual machine disks, with checksums, system requirements and install steps.">
 <meta name="theme-color" content="#0b0a09">
 <title>Download · Noctra OS</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -37,26 +37,42 @@
     <p class="eyebrow"><span class="dot"></span>Download</p>
     <h1>Get Noctra OS 0.3.0</h1>
     <p class="lede">Put the installer on a USB stick, start your PC from it, and Noctra sets itself up the first time you log in.</p>
+    <div class="cta"><a class="btn primary" href="https://dl.noctraos.dev/noctraos-0.3.0-amd64.iso">Download the ISO</a><a class="btn ghost" href="#verify">Check your download</a></div>
   </div>
 </div>
 
-<section>
+<section id="files">
   <div class="wrap">
-    <div class="head"><h2>Releases</h2></div>
+    <div class="head"><h2>Noctra OS 0.3.0</h2><p class="lede">Based on Ubuntu 24.04 LTS, for Intel and AMD PCs. Most people want the ISO.</p></div>
     <div class="scroll">
       <table>
-        <thead><tr><th>Release</th><th>Based on</th><th>File</th><th>Status</th></tr></thead>
+        <thead><tr><th>File</th><th>Use it for</th><th>Download</th></tr></thead>
         <tbody>
-          <tr><td>Noctra OS 0.3.0</td><td>Ubuntu 24.04 LTS</td><td>Installer (<code>.iso</code> file)</td><td><span class="status">Not yet published</span></td></tr>
+          <tr><td><strong>Installer</strong><br><code>noctraos-0.3.0-amd64.iso</code></td><td>Installing on a PC. Copy it to a USB stick and start your PC from it.</td><td><a class="btn primary" href="https://dl.noctraos.dev/noctraos-0.3.0-amd64.iso">ISO</a></td></tr>
+          <tr><td><strong>Virtual machine disk</strong><br><code>noctraos-0.3.0.qcow2</code></td><td>Running Noctra in KVM, QEMU or Proxmox.</td><td><a class="btn ghost" href="https://dl.noctraos.dev/noctraos-0.3.0.qcow2">QCOW2</a></td></tr>
+          <tr><td><strong>Virtual machine disk</strong><br><code>noctraos-0.3.0.vmdk</code></td><td>Running Noctra in VMware or VirtualBox.</td><td><a class="btn ghost" href="https://dl.noctraos.dev/noctraos-0.3.0.vmdk">VMDK</a></td></tr>
+          <tr><td><strong>Checksums</strong><br><code>SHA256SUMS</code></td><td>Checking that your download is complete and unchanged.</td><td><a class="btn ghost" href="https://dl.noctraos.dev/SHA256SUMS">SHA256SUMS</a></td></tr>
         </tbody>
       </table>
     </div>
-    <p class="alt" style="margin-top:16px">The ready-made download is not published yet. If you are comfortable with developer tools, you can build the installer yourself from the repository.</p>
-    <div class="term-line" style="margin-top:20px;max-width:640px">
-      <code id="clonecmd">git clone https://github.com/dazeb/noctraos</code>
-      <button type="button" data-copy="clonecmd" aria-label="Copy clone command">Copy</button>
+    <p class="alt" style="margin-top:16px">Using a virtual machine? Create a new machine, attach the disk file as its hard drive, and start it. Prefer to build it yourself? The <a href="https://github.com/dazeb/noctraos#readme">README</a> has the instructions.</p>
+  </div>
+</section>
+
+<section id="verify">
+  <div class="wrap">
+    <div class="head"><h2>Check your download</h2><p class="lede">The files are large. A quick check confirms that nothing was lost on the way. Download <code>SHA256SUMS</code> into the same folder, then run:</p></div>
+    <p class="alt" style="margin-bottom:10px"><strong>Linux</strong></p>
+    <div class="term-line" style="max-width:720px">
+      <code id="verify-linux">sha256sum -c SHA256SUMS --ignore-missing</code>
+      <button type="button" data-copy="verify-linux" aria-label="Copy command">Copy</button>
     </div>
-    <p class="alt" style="margin-top:12px"><a href="https://github.com/dazeb/noctraos#readme">Build instructions are in the README</a></p>
+    <p class="alt" style="margin:20px 0 10px"><strong>Windows</strong> (PowerShell). Compare the result with the line for your file in <code>SHA256SUMS</code>.</p>
+    <div class="term-line" style="max-width:720px">
+      <code id="verify-win">Get-FileHash .\noctraos-0.3.0-amd64.iso -Algorithm SHA256</code>
+      <button type="button" data-copy="verify-win" aria-label="Copy command">Copy</button>
+    </div>
+    <p class="alt" style="margin-top:16px">Linux prints <code>OK</code> next to each file that matches. If a file does not match, download it again.</p>
   </div>
 </section>
 
