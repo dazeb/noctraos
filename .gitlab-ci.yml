@@ -1,0 +1,87 @@
+# GitLab CI for noctraos, run by the homelab GitLab (http://192.168.8.111:8929) on its
+# Docker runner. GitHub Actions is not available on this account, so this is the CI.
+# It replaces .github/workflows/ci.yml; keep the two checks in step if both are ever used.
+#
+#   check   shell syntax + shellcheck, the VERSION / bin/noc / bin/noc-gpu match, the unit
+#           tests, and the theme outputs matching configs/theme/palette.json.
+#   deploy  publishes site/ to Cloudflare Workers (wrangler.jsonc at the repo root), from
+#           the default branch only, and only when site/ or wrangler.jsonc changed.
+#
+# Before the deploy job will run, the project needs these CI/CD variables (Settings > CI/CD):
+#   CLOUDFLARE_API_TOKEN   masked + protected; a token that may edit Workers
+#   CLOUDFLARE_ACCOUNT_ID  the Cloudflare account that owns the `noctraos` Worker
+#   DEPLOY_ALLOWED         "yes" — a deliberate second switch, so a green pipeline never
+#                          touches production until someone decided it should
+# Cloudflare may also be building this Worker from GitHub (Workers Builds); if so, turn one
+# of the two off, or every push to main deploys twice.
+
+stages:
+  - check
+  - deploy
+
+variables:
+  TZ: UTC
+  DEBIAN_FRONTEND: noninteractive
+
+# Run branch pipelines, and merge request pipelines, but not both for the same push.
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: never
+    - if: $CI_COMMIT_BRANCH
+
+shell:
+  stage: check
+  image: ubuntu:24.04
+  before_script:
+    - apt-get update -qq
+    - apt-get install -y -qq shellcheck >/dev/null
+  script:
+    - |
+      fail=0
+      for f in boot.sh install.sh install/*.sh bin/noc bin/noc-menu bin/noc-gpu bin/noctraos-hermes \
+               bin/noctraos-agent bin/noctraos-search configs/nautilus-scripts/* iso/*.sh; do
+        [ -f "$f" ] || continue
+        bash -n "$f" || fail=1
+        shellcheck --severity=warning "$f" || fail=1
+      done
+      exit $fail
+
+version:
+  stage: check
+  image: ubuntu:24.04
+  script:
+    - |
+      v=$(tr -d '[:space:]' < VERSION)
+      fail=0
+      for f in bin/noc bin/noc-gpu; do
+        grep -q "^VERSION=\"$v\"" "$f" || { echo "$f does not match VERSION ($v)"; fail=1; }
+      done
+      exit $fail
+
+tests:
+  stage: check
+  image: ubuntu:24.04
+  before_script:
+    - apt-get update -qq
+    - apt-get install -y -qq python3 jq >/dev/null   # jq: noc-gpu detect --json, used by the GPU tests
+  script:
+    - python3 -B -m unittest discover -s tests -v
+    - python3 -B scripts/render-theme.py --check
+
+deploy-site:
+  stage: deploy
+  image: node:22-bookworm
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $DEPLOY_ALLOWED == "yes"
+      changes:
+        - site/**/*
+        - wrangler.jsonc
+        - .gitlab-ci.yml
+  script:
+    - test -n "$CLOUDFLARE_API_TOKEN" && test -n "$CLOUDFLARE_ACCOUNT_ID" || { echo "CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID must be set"; exit 1; }
+    - npx --yes wrangler@4 deploy
+  environment:
+    name: production
+  resource_group: production

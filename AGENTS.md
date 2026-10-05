@@ -78,7 +78,9 @@ help/index.html             "New users start here" page the Start panel opens
 scripts/                    render-theme.py, build-desktop-theme.py, seed-password-store.py
 tests/                      unittest: theme composition (test_desktop_theme), GPU detection (test_gpu_detect)
 site/                       project website (static, deployed via wrangler.jsonc); keep claims in step with README
-.github/workflows/ci.yml    bash -n + shellcheck on shell scripts, VERSION == bin/noc == bin/noc-gpu
+.gitlab-ci.yml              the working CI (homelab GitLab, project dazeb/noctraos, Docker runner): shell checks,
+                            VERSION match, unit tests, theme check, and the gated Cloudflare deploy of site/
+.github/workflows/ci.yml    shell + VERSION checks only; GitHub Actions does not run on this account
 .agents/skills, skills-lock.json  vendored pstack agent skills (.claude/skills symlinks into them); not product code
 configs/
   mise/config.toml          node=lts, python=3.12, go=latest, terminal tools

@@ -380,9 +380,11 @@ python3 -m unittest discover -s tests -v                                       #
 python3 scripts/render-theme.py --check                                        # committed theme outputs match palette.json
 ```
 
-CI (`.github/workflows/ci.yml`) runs `bash -n` and shellcheck at warning severity
-on the shell scripts and checks that `bin/noc` and `bin/noc-gpu` carry the same
-version as `VERSION`; the unit tests and the theme check are run by hand. Never run
+CI runs the same checks: `.gitlab-ci.yml` (the homelab GitLab and its Docker runner;
+GitHub Actions is not available on this account) does `bash -n` and shellcheck at
+warning severity, the `VERSION` / `bin/noc` / `bin/noc-gpu` match, the unit tests and
+the theme check, and can deploy `site/` to Cloudflare from `main`.
+`.github/workflows/ci.yml` carries the shell and version checks only. Never run
 `install.sh` on a development workstation: it changes the machine. Runtime
 testing happens in a VM (`iso/local-vm.sh`); see [AGENTS.md](AGENTS.md).
 
