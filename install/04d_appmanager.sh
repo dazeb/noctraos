@@ -54,16 +54,18 @@ if m:
     print(os.environ["TAG"], "https://github.com" + m.group(1), d.group(1) if d else "")
 '
 }
-read -r TAG URL SHA < <(release_via_api || true)
-[ -n "${URL:-}" ] || read -r TAG URL SHA < <(release_via_page || true)
-if [ -z "${URL:-}" ]; then
+# `read` fails on empty output, which set -e would turn into a silent exit: tolerate it explicitly.
+TAG='' URL='' SHA=''
+read -r TAG URL SHA < <(release_via_api || true) || true
+[ -n "$URL" ] || read -r TAG URL SHA < <(release_via_page || true) || true
+if [ -z "$URL" ]; then
   if fully_installed; then
     log "OK: AppManager $(installed_version) present (could not check for a newer release)"
     exit 0
   fi
   die "could not reach GitHub to find the AppManager release (rate limit or no network)"
 fi
-[ -n "${SHA:-}" ] || die "release publishes no sha256 digest for $URL; refusing an unverified download"
+[ -n "$SHA" ] || die "release publishes no sha256 digest for $URL; refusing an unverified download"
 
 if fully_installed && [ "$(installed_version)" = "$TAG" ]; then
   log "OK: AppManager $TAG already installed"
