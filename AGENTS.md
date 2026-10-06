@@ -49,7 +49,7 @@ install/
   05_mouse_ergonomics.sh    Nautilus right-click scripts
   06_desktop_theme.sh       gsettings ergonomics, wallpapers, Agents menu,
                             AI-first /etc/xdg/menus/gnome-applications.menu
-  07_persistence.sh         /etc/skel defaults, noc + noc-menu install
+  07_persistence.sh         /etc/skel defaults, noc + Control Panel install (retires the old noc-menu)
   08_shell_theme.sh         NoctraOS-Dark shell + GTK themes (derived, not
                             shipped), white menu icons, terminal/app palette
   09_super_search.sh        Super+Space search, Noctra start button and Start panel:
@@ -64,7 +64,7 @@ bin/
   noc                       CLI: update [--json] [--only ..] | doctor [--json] | status | models [list [--json]|default|presets|pull|rm|gui]
                             | bg [list|next|set] | gpu. Sourceable (tests call its functions); NOC_OLLAMA_URL overrides the Ollama URL
   noc-gpu                   GPU detect | install | status (NVIDIA driver+CUDA, AMD ROCm); VERSION must match noc
-  noc-menu                  zenity control panel
+  noctraos-control          wrapper that execs the system-Python Control Panel (control/)
   noctraos-hermes           Hermes Desktop launcher/installer: launch | local | cloud | mode | install | ready | status.
                             Sets HERMES_GUEST_ONBOARDING=1 (free tier), seeds the Ollama fallback
   noctraos-welcome          first-run welcome (GTK; replaces Zorin's tour), --force/--provisioning
@@ -77,11 +77,13 @@ bin/
 branding/setup-branding.py  once-per-account dock + top-bar layout (marker desktop-layout-v1)
 extensions/                 GNOME Shell extensions: noctraos-search (Super+Space overlay),
                             noctraos-start (Start panel), noctraos-branding (flat top bar, Show Desktop)
+control/                    Control Panel (docs/control-panel-plan.md): panel.py = pure formatting of `noc ... --json`
+                            (unit-tested, no GTK), main.py = GTK3 window; installed to /usr/local/share/noctraos-control
 search/                     search app: file index (SQLite), CopyQ bridge, browser history, settings window
 help/index.html             "New users start here" page the Start panel opens
 scripts/                    render-theme.py, build-desktop-theme.py, seed-password-store.py
 tests/                      unittest: theme composition (test_desktop_theme), GPU detection (test_gpu_detect),
-                            noc/noctraos-hermes JSON modes (test_noc_cli)
+                            noc/noctraos-hermes JSON modes (test_noc_cli), Control Panel cards (test_control_core)
 site/                       project website (static, deployed via wrangler.jsonc); keep claims in step with README
                             every page head carries canonical, Open Graph, Twitter and JSON-LD metadata; social cards live in
                             site/img/social/ (1200x630), favicons/manifest/robots.txt/sitemap.xml/.well-known/security.txt in site/
@@ -234,12 +236,12 @@ iso/vm-sysprep.sh           run inside a fully provisioned VM before exporting i
 
 ```bash
 # static checks (docker shellcheck — not installed on this host)
-bash -n boot.sh install.sh install/*.sh bin/noc bin/noc-gpu bin/noc-menu bin/noctraos-agent \
+bash -n boot.sh install.sh install/*.sh bin/noc bin/noc-gpu bin/noctraos-control bin/noctraos-agent \
   bin/noctraos-copyq bin/noctraos-hermes bin/noctraos-search configs/nautilus-scripts/*     # other bin/ files are Python
 docker run --rm -v "$PWD:/mnt" koalaman/shellcheck:stable --severity=warning \
-  boot.sh install.sh install/*.sh bin/noc bin/noc-gpu bin/noc-menu bin/noctraos-agent \
+  boot.sh install.sh install/*.sh bin/noc bin/noc-gpu bin/noctraos-control bin/noctraos-agent \
   bin/noctraos-copyq bin/noctraos-hermes configs/nautilus-scripts/*     # same list as CI
-python3 -m unittest discover -s tests                # 62 tests: theme, GPU detection, noc JSON modes
+python3 -m unittest discover -s tests                # 79 tests: theme, GPU detection, noc JSON modes, Control Panel
 python3 scripts/render-theme.py --check              # committed theme outputs match palette.json
 
 # wallpaper iteration (venv at ~/workspace/scratch/zorin-img-venv: pillow+numpy)
@@ -410,6 +412,10 @@ tail -f /root/noctraos-build.log
   hardware; on this dev box `noc gpu install --dry-run` is safe (it detects the
   active driver + manual CUDA 13.3 and touches nothing).
 
+- **The Control Panel is a GUI for `noc`, nothing more.** `control/main.py` calls `noc ... --json`
+  on a thread (`background()`), never blocks GTK, and every page needs a "not ready yet" state
+  (Ollama down, no network) rather than an exception. Put anything that can be tested without
+  GTK in `control/panel.py`. A card is only clickable when its sidebar page exists.
 - **One default model, one file.** `noc models default <name>` writes `~/.config/noctraos/model`;
   precedence everywhere is `NOCTRAOS_MODEL`, then that file, then `qwen2.5-coder:7b`. The Welcome
   app, `noctraos-hermes`, "Ask AI to Explain" and (by rewriting its `    model:` lines) the seeded
@@ -419,6 +425,17 @@ tail -f /root/noctraos-build.log
   keys of `doctor --json`, `status --json`, `models list --json`, `models presets --json` and the
   `update --json` event stream stable (tests/test_noc_cli.py pins them). In JSON mode `noc update`
   uses `sudo -n`, so a missing credential fails with a message instead of hanging with no TTY.
+- **A real AMD GPU test VM exists on TrueNAS** (`192.168.8.111`, VM id 1 `noctraosgputest`, created
+  2026-10-06; manage it with `midclt call vm.start|vm.stop 1` over `ssh root@192.168.8.111`). It has the
+  Radeon RX 580 (Polaris, `0a:00.0`, already on vfio-pci with its audio function and a clean IOMMU
+  group) passed through, 4 vCPU / 8 GiB, a 64 GiB zvol `ssdpool0/noctraos-gpu-test` holding a
+  provisioned NoctraOS disk, and a macvlan NIC (the NAS itself cannot reach it; other LAN hosts can;
+  DHCP, find it by MAC `00:a0:98:71:01:df`). User `noctraos`/`noctraos`. Verified there: `noc gpu detect`
+  picks the Vulkan tier, `noc gpu install --vendor amd` installs Mesa Vulkan and is a no-op the second
+  time, `vulkaninfo` shows RADV POLARIS10, and Ollama with `OLLAMA_VULKAN=1` runs qwen2.5-coder:7b 100%
+  on the GPU (29/29 layers). Not covered: ROCm (Polaris has none) and NVIDIA. Do not start it
+  while the NAS is under memory pressure (it takes 8 GiB); stop it when done. The dev workstation's
+  RTX 3080 Ti drives the desktop, so it cannot be passed through without ending the session.
 - **Hermes' free tier is a cloud service: prompts leave the machine.** Everything the welcome app
   and README say about "local AI" is about the Ollama model; Hermes resolves to the Nous cloud
   unless it is local-only. Never describe Hermes as local without that qualification. The welcome

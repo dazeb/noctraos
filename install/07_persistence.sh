@@ -49,20 +49,17 @@ log "Installing noc management CLI..."
 sudo rm -f /usr/local/bin/zom /usr/local/bin/zom-menu /usr/local/bin/zom-gpu \
   /usr/local/share/applications/zom-menu.desktop
 sudo install -m 755 "$REPO_ROOT/bin/noc" /usr/local/bin/noc
-sudo install -m 755 "$REPO_ROOT/bin/noc-menu" /usr/local/bin/noc-menu
 sudo install -m 755 "$REPO_ROOT/bin/noc-gpu" /usr/local/bin/noc-gpu
 
-sudo mkdir -p /usr/local/share/applications
-sudo tee /usr/local/share/applications/noc-menu.desktop >/dev/null <<'EOF'
-[Desktop Entry]
-Type=Application
-Name=NoctraOS Control Panel
-Comment=Update and health-check your NoctraOS workstation
-Exec=noc-menu
-Icon=applications-system
-Terminal=false
-Categories=System;
-EOF
+log "Installing the Control Panel (replaces the old zenity noc-menu)..."
+# Clean break: the zenity panel and its launcher are gone, not aliased.
+sudo rm -f /usr/local/bin/noc-menu /usr/local/share/applications/noc-menu.desktop
+sudo mkdir -p /usr/local/share/noctraos-control
+for f in "$REPO_ROOT"/control/*.py; do
+  sudo install -m 644 "$f" "/usr/local/share/noctraos-control/$(basename "$f")"
+done
+sudo install -m 755 "$REPO_ROOT/bin/noctraos-control" /usr/local/bin/noctraos-control
+# The launcher (configs/applications/noctraos-control.desktop) and icon are installed by module 06.
 
 log "Persistence complete: new users inherit mise, Continue and Nautilus script defaults."
-log "Manage the workstation with: noc (CLI) or noc-menu (GUI)."
+log "Manage the workstation with: noc (CLI) or the NoctraOS Control Panel (GUI)."

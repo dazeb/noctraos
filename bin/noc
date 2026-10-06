@@ -569,7 +569,7 @@ main() {
       echo "  noc models      manage local AI models (list | default | presets | pull | rm | gui)"
       echo "  noc bg          cycle or set the wallpaper (list | next | set)"
       echo "  noc gpu         GPU setup for local LLMs (detect | install | status)"
-      echo "  noc-menu        the same maintenance tasks from a GUI panel"
+      echo "  noctraos-control  the NoctraOS Control Panel (GUI)"
       ;;
   esac
 }
