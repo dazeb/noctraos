@@ -61,7 +61,7 @@ install/
                             free Nous tier primary, local Ollama fallback; runs LAST (25+ min, no sudo)
                             (module order in install.sh: 00 01 02 02b 03 04 04_workstation 04c 04d 05 06 08 09 10 07 11)
 bin/
-  noc                       CLI: update [--json] [--only ..] | doctor [--json] | status | models [list [--json]|default|presets|pull|rm|gui]
+  noc                       CLI: update [--json] [--only ..] | updates | doctor [--json] | status | models [list [--json]|default|presets|pull|rm]
                             | bg [list|next|set] | gpu. Sourceable (tests call its functions); NOC_OLLAMA_URL overrides the Ollama URL
   noc-gpu                   GPU detect | install | status (NVIDIA driver+CUDA, AMD ROCm); VERSION must match noc
   noctraos-control          wrapper that execs the system-Python Control Panel (control/)
@@ -243,7 +243,7 @@ bash -n boot.sh install.sh install/*.sh bin/noc bin/noc-gpu bin/noc-privileged b
 docker run --rm -v "$PWD:/mnt" koalaman/shellcheck:stable --severity=warning \
   boot.sh install.sh install/*.sh bin/noc bin/noc-gpu bin/noc-privileged bin/noctraos-control bin/noctraos-agent \
   bin/noctraos-copyq bin/noctraos-hermes configs/nautilus-scripts/*     # same list as CI
-python3 -m unittest discover -s tests                # 79 tests: theme, GPU detection, noc JSON modes, Control Panel
+python3 -m unittest discover -s tests                # 119 tests: theme, GPU detection, noc JSON modes, root helper, Control Panel
 python3 scripts/render-theme.py --check              # committed theme outputs match palette.json
 
 # wallpaper iteration (venv at ~/workspace/scratch/zorin-img-venv: pillow+numpy)
@@ -414,6 +414,17 @@ tail -f /root/noctraos-build.log
   hardware; on this dev box `noc gpu install --dry-run` is safe (it detects the
   active driver + manual CUDA 13.3 and touches nothing).
 
+- **Root work in the Control Panel goes through `bin/noc-privileged` and nothing else.** pkexec runs
+  `/usr/local/libexec/noctraos/noc-privileged` (polkit action `dev.noctraos.privileged`, `auth_admin_keep`:
+  one prompt for several calls). It is an allowlist of fixed verbs: `update apt,flatpak` execs the
+  root-owned `/usr/local/bin/noc update --json`, and `module <name>` re-runs only the modules in its
+  `MODULES` array. Modules are run from the **root-owned snapshot** `/usr/local/share/noctraos/repo`
+  that module 07 refreshes, NEVER from `~/.local/share/noctraos` (a user-writable clone would be a
+  root escalation). Add a module to `MODULES` only if it is idempotent and safe unattended; extend
+  `tests/test_noc_privileged.py` with it. Never add a verb that takes a path, a command line or a
+  package name from the caller. The Updates page runs root steps first (one prompt), then the user's
+  own steps through `noc update --json`; it never uses a bare `sudo` and has no cancel for apt (a
+  half-finished upgrade is worse than a slow one).
 - **The Control Panel is a GUI for `noc`, nothing more.** `control/main.py` calls `noc ... --json`
   on a thread (`background()`), never blocks GTK, and every page needs a "not ready yet" state
   (Ollama down, no network) rather than an exception. Put anything that can be tested without
