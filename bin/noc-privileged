@@ -3,6 +3,7 @@
 #
 #   noc-privileged update <apt|flatpak>[,<...>]   noc update --json for the system-level steps
 #   noc-privileged module <module-file>           re-run one install module (allowlist below)
+#   noc-privileged gpu-install <nvidia|amd|all>   noc-gpu install for one vendor (drivers + CUDA/ROCm/Vulkan)
 #
 # This is an allowlist, never a shell: each operation is a fixed verb with validated arguments, it
 # only runs root-owned code (/usr/local/bin/noc and the root-owned snapshot of the repo written by
@@ -15,6 +16,8 @@ NOC=/usr/local/bin/noc
 # Modules the panel may re-run. Add a name here only if it is idempotent and safe to run unattended.
 MODULES=(04d_appmanager.sh)
 UPDATE_STEPS=(apt flatpak)
+GPU=/usr/local/bin/noc-gpu
+GPU_VENDORS=(nvidia amd all)
 
 refuse() { echo "noc-privileged: $*" >&2; exit 2; }
 
@@ -27,6 +30,8 @@ validate_update() {
   IFS=',' read -ra want <<<"$steps"
   for s in "${want[@]}"; do in_list "$s" "${UPDATE_STEPS[@]}" || return 1; done
 }
+
+validate_vendor() { in_list "${1:-}" "${GPU_VENDORS[@]}"; }
 
 validate_module() { in_list "$1" "${MODULES[@]}" && [ -f "$SNAPSHOT/install/$1" ]; }
 
@@ -55,7 +60,14 @@ main() {
       mkdir -p /var/log/noctraos && chmod 755 /var/log/noctraos
       clean_env SUDO_USER="$user" NOCTRAOS_LOG="/var/log/noctraos/module-$(date +%Y%m%d-%H%M%S).log" \
         bash "$SNAPSHOT/install.sh" --only "$2" ;;
-    *) refuse "usage: noc-privileged update <apt|flatpak>[,...] | module <name>" ;;
+    gpu-install)
+      [ $# -eq 2 ] || refuse "gpu-install: expected one vendor"
+      validate_vendor "$2" || refuse "gpu-install: vendor must be one of: ${GPU_VENDORS[*]}"
+      local gpu_user
+      gpu_user="$(invoking_user)" || refuse "gpu-install: cannot tell which user asked (run it through pkexec)"
+      # noc-gpu adds this user to the render/video groups; it is also what `sudo noc gpu install` uses.
+      clean_env SUDO_USER="$gpu_user" TARGET_USER="$gpu_user" "$GPU" install --vendor "$2" ;;
+    *) refuse "usage: noc-privileged update <apt|flatpak>[,...] | module <name> | gpu-install <vendor>" ;;
   esac
 }
 

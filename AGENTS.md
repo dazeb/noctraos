@@ -63,11 +63,11 @@ install/
 bin/
   noc                       CLI: update [--json] [--only ..] | updates | doctor [--json] | status | models [list [--json]|default|presets|pull|rm]
                             | bg [list|next|set] | gpu. Sourceable (tests call its functions); NOC_OLLAMA_URL overrides the Ollama URL
-  noc-gpu                   GPU detect | install | status (NVIDIA driver+CUDA, AMD ROCm); VERSION must match noc
+  noc-gpu                   GPU detect [--json] | install | status [--json] (NVIDIA driver+CUDA, AMD ROCm); VERSION must match noc
   noctraos-control          wrapper that execs the system-Python Control Panel (control/)
-  noc-privileged            root side of the panel, run through pkexec: allowlisted `update apt,flatpak` and `module <name>`
+  noc-privileged            root side of the panel, run through pkexec: allowlisted `update apt,flatpak`, `module <name>`, `gpu-install <vendor>`
                             (installed to /usr/local/libexec/noctraos; policy in configs/polkit/)
-  noctraos-hermes           Hermes Desktop launcher/installer: launch | local | cloud | mode | install | ready | status.
+  noctraos-hermes           Hermes Desktop launcher/installer: launch | local [--no-launch] | cloud | mode | install | ready | status.
                             Sets HERMES_GUEST_ONBOARDING=1 (free tier), seeds the Ollama fallback
   noctraos-welcome          first-run welcome (GTK; replaces Zorin's tour), --force/--provisioning
   noctraos-appearance       wallpaper + fonts panel (we fix theme/layout, so no theme switcher)
@@ -243,7 +243,7 @@ bash -n boot.sh install.sh install/*.sh bin/noc bin/noc-gpu bin/noc-privileged b
 docker run --rm -v "$PWD:/mnt" koalaman/shellcheck:stable --severity=warning \
   boot.sh install.sh install/*.sh bin/noc bin/noc-gpu bin/noc-privileged bin/noctraos-control bin/noctraos-agent \
   bin/noctraos-copyq bin/noctraos-hermes configs/nautilus-scripts/*     # same list as CI
-python3 -m unittest discover -s tests                # 119 tests: theme, GPU detection, noc JSON modes, root helper, Control Panel
+python3 -m unittest discover -s tests                # 141 tests: theme, GPU detection, noc JSON modes, root helper, Control Panel
 python3 scripts/render-theme.py --check              # committed theme outputs match palette.json
 
 # wallpaper iteration (venv at ~/workspace/scratch/zorin-img-venv: pillow+numpy)
@@ -425,6 +425,16 @@ tail -f /root/noctraos-build.log
   package name from the caller. The Updates page runs root steps first (one prompt), then the user's
   own steps through `noc update --json`; it never uses a bare `sudo` and has no cancel for apt (a
   half-finished upgrade is worse than a slow one).
+- **GPU setup in the Control Panel is never automatic.** The Hardware page shows what `noc-gpu` found,
+  then a consent dialog (what gets installed, rough download size, restart/re-login needs, a free-disk
+  check) and only on "Install" runs `pkexec noc-privileged gpu-install <nvidia|amd|all>`, which execs the
+  root-owned `/usr/local/bin/noc-gpu install --vendor X` for the invoking user. It never offers an
+  install over a pending reboot or for a too-old NVIDIA card. `noc-gpu status --json` rows are parsed
+  back out of the normal text output, so keep the `OK`/`!!`/`..` markers. The sizes in
+  `panel.GPU_NEEDS` are estimates shown as "about".
+- **Privacy page rules**: the Nous free tier is a cloud service and the page must never say otherwise;
+  switching to cloud needs an explicit confirmation; a user's own Hermes provider (`mode: other`) is
+  never touched; `noctraos-hermes local --no-launch` switches without opening the app.
 - **The Control Panel is a GUI for `noc`, nothing more.** `control/main.py` calls `noc ... --json`
   on a thread (`background()`), never blocks GTK, and every page needs a "not ready yet" state
   (Ollama down, no network) rather than an exception. Put anything that can be tested without

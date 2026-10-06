@@ -459,3 +459,176 @@ def offline_message(updates):
     if updates and not updates.get('online', True):
         return 'No internet connection. Updates need the network; local AI keeps working offline.'
     return ''
+
+
+# ---- Hardware --------------------------------------------------------------------------------
+
+GPU_BIN = '/usr/local/bin/noc-gpu'
+
+# Rough download sizes in GB and the free space to insist on (about twice the download: unpacking
+# and the apt cache). Estimates, shown as "about": the real numbers depend on the release.
+GPU_NEEDS = {'nvidia': (4, 10), 'rocm': (15, 30), 'vulkan': (0.1, 2)}
+
+_VERDICTS = {
+    ('nvidia', 'modern'): 'Supported for CUDA 13.',
+    ('nvidia', 'legacy'): 'Supported for CUDA 12 (an older generation).',
+    ('nvidia', 'unsupported'): 'Too old for CUDA. Local models run on the CPU.',
+    ('amd', 'rocm'): 'Supported by ROCm.',
+    ('amd', 'override'): 'Runs ROCm with a compatibility override.',
+    ('amd', 'vulkan'): 'ROCm does not support this card. Local models can use its Vulkan backend.',
+}
+
+
+def gpu_json(*args, timeout=60):
+    """`noc-gpu <args>` as parsed JSON, None when it is missing or fails."""
+    try:
+        out = subprocess.run([GPU_BIN, *args], capture_output=True, text=True, timeout=timeout)
+        return json.loads(out.stdout)
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return None
+
+
+def gpu_verdict(gpu):
+    return _VERDICTS.get((gpu.get('vendor'), gpu.get('tier')), 'Not recognised. Local models run on the CPU.')
+
+
+def install_vendors(detect):
+    """Vendors with a GPU `noc-gpu install` can set up (a too-old NVIDIA card gets nothing)."""
+    plan = (detect or {}).get('plan') or {}
+    vendors = []
+    if plan.get('nvidia') in ('modern', 'legacy'):
+        vendors.append('nvidia')
+    if plan.get('amd') in ('rocm', 'override', 'vulkan'):
+        vendors.append('amd')
+    return vendors
+
+
+def _amd_kind(detect):
+    return ((detect or {}).get('plan') or {}).get('amd')
+
+
+def install_summary(detect):
+    """What `noc-gpu install` would do, in plain words, for the consent dialog. Never automatic."""
+    plan = (detect or {}).get('plan') or {}
+    lines = []
+    if 'nvidia' in install_vendors(detect):
+        lines.append("NVIDIA: Ubuntu's signed driver and the CUDA toolkit, about "
+                     f"{GPU_NEEDS['nvidia'][0]} GB to download.")
+    amd = plan.get('amd')
+    if amd in ('rocm', 'override'):
+        lines.append(f"AMD: ROCm and the Vulkan drivers, about {GPU_NEEDS['rocm'][0]} GB to download.")
+    elif amd == 'vulkan':
+        lines.append('AMD: the Mesa Vulkan drivers (ROCm does not support this card), a small download.')
+    if 'nvidia' in install_vendors(detect):
+        lines.append('A restart is needed afterwards: the NVIDIA driver loads at the next start. '
+                     'Local models keep running on the CPU until then.')
+    if amd in ('rocm', 'override'):
+        lines.append('You will need to log out and back in afterwards for the new GPU access to apply.')
+    lines.append('This takes several minutes. Nothing changes until you press Install.')
+    return lines
+
+
+def disk_needed_gb(detect):
+    """Free space the install should have, in GB (0 when there is nothing to install)."""
+    plan = (detect or {}).get('plan') or {}
+    needs = []
+    if 'nvidia' in install_vendors(detect):
+        needs.append(GPU_NEEDS['nvidia'][1])
+    if plan.get('amd') in ('rocm', 'override'):
+        needs.append(GPU_NEEDS['rocm'][1])
+    elif plan.get('amd') == 'vulkan':
+        needs.append(GPU_NEEDS['vulkan'][1])
+    return sum(needs)
+
+
+def install_blocker(detect, free_bytes):
+    """Why the install must not start now, or ''."""
+    need = disk_needed_gb(detect)
+    if need and free_bytes is not None and free_bytes < need * 1024 ** 3:
+        return f'Not enough free disk space: about {need} GB is needed, {fmt_bytes(free_bytes)} is free.'
+    return ''
+
+
+def hardware_state(detect, gstatus):
+    """Headline and rows for the Hardware page.
+
+    Returns {headline, level, gpus: [{name, verdict}], rows: [{status, text}], can_install, reboot}.
+    `can_install` is true only when there is something to install and the stack is not ready."""
+    gpus = [{'name': g.get('name', 'GPU'), 'verdict': gpu_verdict(g)} for g in (detect or {}).get('gpus', [])]
+    rows = list((gstatus or {}).get('rows', []))
+    reboot = bool((gstatus or {}).get('reboot_pending'))
+    ready = bool((gstatus or {}).get('ready'))
+    vendors = install_vendors(detect)
+    if detect is None:
+        headline, level = 'Could not read the GPU state', 'info'
+    elif not gpus:
+        headline, level = 'No GPU found. Local models run on the CPU.', 'info'
+    elif reboot:
+        headline, level = 'Restart to finish the GPU setup', 'warn'
+    elif ready:
+        headline, level = 'Your GPU is set up for local AI', 'ok'
+    elif vendors:
+        headline, level = 'A GPU was found but is not set up for local AI yet', 'warn'
+    else:
+        headline, level = 'This GPU is not usable for local AI. Models run on the CPU.', 'info'
+    return {'headline': headline, 'level': level, 'gpus': gpus, 'rows': rows, 'reboot': reboot,
+            'can_install': bool(vendors) and not ready and not reboot}
+
+
+def gpu_install_argv(detect):
+    """The privileged install command for everything this machine needs, or None."""
+    vendors = install_vendors(detect)
+    if not vendors:
+        return None
+    return [PKEXEC, HELPER, 'gpu-install', 'all' if len(vendors) > 1 else vendors[0]]
+
+
+# ---- Privacy ---------------------------------------------------------------------------------
+
+HERMES_LOCAL = [HERMES, 'local', '--no-launch']
+HERMES_CLOUD = [HERMES, 'cloud']
+SEARCH_SETTINGS = ['/usr/local/bin/noctraos-search', '--settings']
+WEATHER_SETUP = ['/usr/local/bin/noctraos-weather', '--setup']
+
+
+def hermes_mode():
+    """cloud | local | other, or None when Hermes is not installed."""
+    try:
+        out = subprocess.run([HERMES, 'mode'], capture_output=True, text=True, timeout=10).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return out if out in ('cloud', 'local', 'other') else None
+
+
+def hermes_privacy(mode):
+    """What the Privacy page says about Hermes for each mode. The free tier is never called local."""
+    if mode is None:
+        return {'headline': 'Hermes is not installed yet', 'level': 'info', 'can_switch': False,
+                'text': 'Hermes Desktop is set up on first boot. Come back when it is ready.'}
+    if mode == 'other':
+        return {'headline': 'Hermes uses your own provider', 'level': 'info', 'can_switch': False,
+                'text': 'You set a provider in Hermes itself, so this panel leaves it alone.'}
+    if mode == 'local':
+        return {'headline': 'Local only', 'level': 'ok', 'can_switch': True,
+                'text': 'Hermes talks to the model on this computer. Nothing you type to it leaves this computer.'}
+    return {'headline': 'Nous free tier (cloud)', 'level': 'warn', 'can_switch': True,
+            'text': "Hermes uses Nous Research's free cloud service, so what you type to it leaves this "
+                    'computer. Switch to local only to keep it here.'}
+
+
+def switch_command(target, current):
+    """argv to move Hermes to `target` ('local' or 'cloud'), None when it is already there, the
+    user runs their own provider, or the target is not a known mode."""
+    if current in (None, 'other') or target == current:
+        return None
+    return {'local': HERMES_LOCAL, 'cloud': HERMES_CLOUD}.get(target)
+
+
+def run_ok(argv, timeout=120):
+    """Run argv; returns (ok, last line of its output) so a page can say what went wrong."""
+    try:
+        out = subprocess.run(argv, capture_output=True, text=True, timeout=timeout)
+    except (OSError, subprocess.SubprocessError) as error:
+        return False, str(error)
+    text = (out.stdout + out.stderr).strip().splitlines()
+    return out.returncode == 0, (text[-1] if text else '')

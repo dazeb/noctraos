@@ -241,5 +241,41 @@ class DryRunTests(unittest.TestCase):
         self.assertEqual(result.returncode, 2)
 
 
+
+
+def status_json(*lines):
+    with tempfile.TemporaryDirectory() as d:
+        fixture = Path(d) / "lspci.txt"
+        fixture.write_text("\n".join(lines) + ("\n" if lines else ""))
+        out = subprocess.run([str(SCRIPT), "status", "--json"], capture_output=True, text=True,
+                             env={**os.environ, "NOC_GPU_LSPCI_FILE": str(fixture)}).stdout
+    return json.loads(out)
+
+
+class StatusJsonTests(unittest.TestCase):
+    def test_no_gpu_is_a_state_not_ready(self):
+        data = status_json()
+        self.assertEqual(data["gpus"], [])
+        self.assertFalse(data["ready"])
+        self.assertEqual([r["status"] for r in data["rows"]], ["note"])
+        self.assertIn("none detected", data["rows"][0]["text"])
+
+    def test_shape_with_a_gpu(self):
+        data = status_json(AMD_6600)
+        self.assertEqual(set(data), {"gpus", "ready", "reboot_pending", "rows"})
+        self.assertEqual(len(data["gpus"]), 1)
+        self.assertIn("Navi 23", data["gpus"][0])
+        self.assertTrue(data["rows"])
+        for row in data["rows"]:
+            self.assertEqual(set(row), {"status", "text"})
+            self.assertIn(row["status"], {"ok", "fail", "note"})
+            self.assertNotIn("\x1b", row["text"])         # no colour codes
+        self.assertEqual(data["rows"][0]["status"], "ok")   # the "GPU: <name>" line
+
+    def test_ready_means_every_check_passed(self):
+        data = status_json(AMD_6600)
+        self.assertEqual(data["ready"], all(r["status"] != "fail" for r in data["rows"]))
+
+
 if __name__ == "__main__":
     unittest.main()

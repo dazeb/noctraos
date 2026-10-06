@@ -2,7 +2,7 @@
 # noctraos-hermes — Hermes Desktop launcher and installer.
 #   noctraos-hermes            launch the app (installs it first if missing)
 #   noctraos-hermes install    idempotent: runtime + desktop app + model defaults
-#   noctraos-hermes local      local-only: Ollama is the primary and the Nous free tier stays off,
+#   noctraos-hermes local [--no-launch]   local-only: Ollama is the primary and the Nous free tier stays off,
 #                              so nothing typed to Hermes leaves this computer (persistent)
 #   noctraos-hermes cloud     back to the Nous free tier (undoes `local`; never touches your own provider)
 #   noctraos-hermes mode       print cloud | local | other
@@ -27,7 +27,7 @@ set -u
 HERMES_HOME="${HERMES_HOME:-$HOME/.hermes}"
 RUNTIME="$HERMES_HOME/hermes-agent"
 HERMES_BIN="$HOME/.local/bin/hermes"
-OLLAMA_API="http://127.0.0.1:11434"
+OLLAMA_API="${NOCTRAOS_OLLAMA_API:-http://127.0.0.1:11434}"
 # Default model: NOCTRAOS_MODEL, then the file `noc models default` writes, then the shipped model.
 OLLAMA_MODEL="${NOCTRAOS_MODEL:-$(head -n 1 "${XDG_CONFIG_HOME:-$HOME/.config}/noctraos/model" 2>/dev/null)}"
 OLLAMA_MODEL="${OLLAMA_MODEL:-qwen2.5-coder:7b}"
@@ -218,6 +218,8 @@ cmd_status() {
 # the one-click way to keep them here. It is persistent (config.yaml); to go back to the free
 # tier run `noctraos-hermes cloud`.
 cmd_local() {
+  local launch=1
+  [ "${1:-}" = "--no-launch" ] && launch=0   # the Control Panel switches the mode without opening the app
   if ! ollama_ready; then
     say "ERROR: the local model $OLLAMA_MODEL is not ready yet — try again in a few minutes"
     return 1
@@ -226,6 +228,7 @@ cmd_local() {
   hermes_set model.default "$OLLAMA_MODEL"
   hermes_set model.base_url "$OLLAMA_API/v1"
   say "OK: Hermes will use the local model only (Nous free tier off)"
+  [ "$launch" -eq 1 ] || return 0
   LOCAL_ONLY=1 cmd_launch
 }
 
@@ -270,7 +273,7 @@ cmd_launch() {
 
 case "${1:-launch}" in
   launch)  cmd_launch ;;
-  local)   cmd_local ;;
+  local)   shift; cmd_local "$@" ;;
   cloud)   cmd_cloud ;;
   mode)    hermes_mode ;;
   install) cmd_install ;;

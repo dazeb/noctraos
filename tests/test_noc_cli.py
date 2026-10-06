@@ -358,6 +358,27 @@ class HermesModeTests(unittest.TestCase):
         self.assertEqual(self.calls.read_text().splitlines(),
                          ["config unset model.base_url", "config unset model.default", "config set model.provider auto"])
 
+    def test_local_no_launch_sets_the_provider_and_never_opens_the_app(self):
+        server = HTTPServer(("127.0.0.1", 0), FakeOllama)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        self.config("")
+        result = self.e.run(HERMES, "local", "--no-launch", HERMES_HOME=str(self.hermes_home),
+                            NOCTRAOS_OLLAMA_API=f"http://127.0.0.1:{server.server_address[1]}",
+                            NOCTRAOS_MODEL="qwen2.5-coder:7b")
+        self.assertEqual(result.returncode, 0, result.stdout)
+        calls = self.calls.read_text().splitlines()
+        self.assertEqual(calls[0], "config set model.provider custom")
+        self.assertTrue(all(c.startswith("config set model.") for c in calls), calls)   # no `desktop`, no launch
+
+    def test_local_refuses_when_the_model_is_not_ready(self):
+        self.config("")
+        result = self.e.run(HERMES, "local", "--no-launch", HERMES_HOME=str(self.hermes_home),
+                            NOCTRAOS_OLLAMA_API="http://127.0.0.1:9")     # nothing listens: model "not ready"
+        self.assertEqual(result.returncode, 1)
+        self.assertFalse(self.calls.exists())
+
     def test_cloud_never_touches_a_users_own_provider(self):
         self.config("model:\n  provider: openrouter\n")
         self.assertEqual(self.hermes("cloud").returncode, 1)

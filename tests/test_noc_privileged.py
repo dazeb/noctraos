@@ -28,6 +28,13 @@ class ValidateTests(unittest.TestCase):
             with self.subTest(steps=bad):
                 self.assertFalse(self.ok(f"validate_update '{bad}'"))
 
+    def test_gpu_vendors(self):
+        for good in ("nvidia", "amd", "all"):
+            self.assertTrue(self.ok(f"validate_vendor {good}"), good)
+        for bad in ("", "intel", "nvidia,amd", "all;id", "NVIDIA", "--dry-run", "$(id)"):
+            with self.subTest(vendor=bad):
+                self.assertFalse(self.ok(f"validate_vendor '{bad}'"))
+
     def test_modules_need_the_allowlist_and_the_root_owned_snapshot(self):
         with tempfile.TemporaryDirectory() as d:
             (Path(d) / "install").mkdir()

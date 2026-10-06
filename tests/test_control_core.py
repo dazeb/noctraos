@@ -417,5 +417,111 @@ class RunEventsTests(unittest.TestCase):
         self.assertEqual(events[-1], {"event": "exit", "code": 127})
 
 
+def det(nvidia="none", amd="none", gpus=()):
+    return {"gpus": [dict(g) for g in gpus], "plan": {"nvidia": nvidia, "amd": amd, "amd_hsa_override": None}}
+
+
+NV = {"name": "GeForce RTX 3080 Ti", "vendor": "nvidia", "tier": "modern"}
+AMD_VK = {"name": "Radeon RX 580", "vendor": "amd", "tier": "vulkan"}
+AMD_ROCM = {"name": "Radeon RX 7900", "vendor": "amd", "tier": "rocm"}
+READY = {"gpus": ["x"], "ready": True, "reboot_pending": False, "rows": [{"status": "ok", "text": "GPU: x"}]}
+NOT_READY = {"gpus": ["x"], "ready": False, "reboot_pending": False, "rows": [{"status": "fail", "text": "no driver"}]}
+
+
+class HardwareTests(unittest.TestCase):
+    def test_verdicts(self):
+        self.assertIn("CUDA 13", panel.gpu_verdict(NV))
+        self.assertIn("Vulkan", panel.gpu_verdict(AMD_VK))
+        self.assertIn("CPU", panel.gpu_verdict({"vendor": "nvidia", "tier": "unsupported"}))
+        self.assertIn("Not recognised", panel.gpu_verdict({"vendor": "intel", "tier": "x"}))
+
+    def test_install_vendors(self):
+        self.assertEqual(panel.install_vendors(det("modern", "vulkan")), ["nvidia", "amd"])
+        self.assertEqual(panel.install_vendors(det("legacy")), ["nvidia"])
+        self.assertEqual(panel.install_vendors(det("unsupported")), [])     # too old: nothing to install
+        self.assertEqual(panel.install_vendors(det()), [])
+        self.assertEqual(panel.install_vendors(None), [])
+
+    def test_install_argv_picks_the_vendor_or_all(self):
+        self.assertEqual(panel.gpu_install_argv(det("modern", gpus=[NV])), [panel.PKEXEC, panel.HELPER, "gpu-install", "nvidia"])
+        self.assertEqual(panel.gpu_install_argv(det(amd="vulkan")), [panel.PKEXEC, panel.HELPER, "gpu-install", "amd"])
+        self.assertEqual(panel.gpu_install_argv(det("modern", "rocm"))[-1], "all")
+        self.assertIsNone(panel.gpu_install_argv(det()))
+        for d in (det("modern", "rocm"), det(amd="vulkan")):
+            self.assertNotIn("sudo", panel.gpu_install_argv(d))
+
+    def test_summary_is_honest_about_size_restart_and_consent(self):
+        text = " ".join(panel.install_summary(det("modern", gpus=[NV])))
+        self.assertIn("about 4 GB", text)
+        self.assertIn("restart is needed", text)
+        self.assertIn("Nothing changes until you press Install", text)
+        vk = " ".join(panel.install_summary(det(amd="vulkan")))
+        self.assertIn("ROCm does not support this card", vk)
+        self.assertNotIn("restart is needed", vk)
+        self.assertIn("about 15 GB", " ".join(panel.install_summary(det(amd="rocm"))))
+        self.assertIn("log out", " ".join(panel.install_summary(det(amd="rocm"))))
+
+    def test_disk_blocker(self):
+        d = det(amd="rocm")
+        self.assertEqual(panel.disk_needed_gb(d), 30)
+        self.assertIn("Not enough free disk space", panel.install_blocker(d, 10 * 1024 ** 3))
+        self.assertEqual(panel.install_blocker(d, 100 * 1024 ** 3), "")
+        self.assertEqual(panel.install_blocker(d, None), "")
+        self.assertEqual(panel.install_blocker(det(), 1), "")
+
+    def test_state(self):
+        s = panel.hardware_state(det("modern", gpus=[NV]), READY)
+        self.assertEqual((s["level"], s["can_install"]), ("ok", False))
+        self.assertEqual(s["gpus"][0]["name"], "GeForce RTX 3080 Ti")
+        s = panel.hardware_state(det("modern", gpus=[NV]), NOT_READY)
+        self.assertEqual((s["level"], s["can_install"]), ("warn", True))
+        s = panel.hardware_state(det("modern", gpus=[NV]), {**NOT_READY, "reboot_pending": True})
+        self.assertEqual((s["level"], s["can_install"], s["reboot"]), ("warn", False, True))   # never re-install over a pending reboot
+        self.assertIn("Restart", s["headline"])
+        s = panel.hardware_state(det(), {"gpus": [], "ready": False, "rows": []})
+        self.assertEqual((s["level"], s["can_install"]), ("info", False))
+        self.assertIn("CPU", s["headline"])
+        s = panel.hardware_state(det("unsupported", gpus=[{"name": "GTX 680", "vendor": "nvidia", "tier": "unsupported"}]), NOT_READY)
+        self.assertFalse(s["can_install"])
+        self.assertIn("not usable", s["headline"])
+        self.assertEqual(panel.hardware_state(None, None)["level"], "info")
+
+
+class PrivacyTests(unittest.TestCase):
+    def test_hermes_text_never_calls_the_cloud_local(self):
+        cloud = panel.hermes_privacy("cloud")
+        self.assertIn("leaves this computer", cloud["text"])
+        self.assertEqual((cloud["level"], cloud["can_switch"]), ("warn", True))
+        self.assertNotIn("Local", cloud["headline"])
+        local = panel.hermes_privacy("local")
+        self.assertEqual((local["headline"], local["level"]), ("Local only", "ok"))
+        self.assertFalse(panel.hermes_privacy("other")["can_switch"])
+        self.assertFalse(panel.hermes_privacy(None)["can_switch"])
+
+    def test_switch_command(self):
+        self.assertEqual(panel.switch_command("local", "cloud"), [panel.HERMES, "local", "--no-launch"])
+        self.assertEqual(panel.switch_command("cloud", "local"), [panel.HERMES, "cloud"])
+        self.assertIsNone(panel.switch_command("local", "local"))
+        self.assertIsNone(panel.switch_command("cloud", "other"))     # never touch the user's own provider
+        self.assertIsNone(panel.switch_command("local", None))
+        self.assertIsNone(panel.switch_command("bogus", "cloud"))
+
+    def test_local_never_launches_the_app(self):
+        self.assertIn("--no-launch", panel.HERMES_LOCAL)
+
+    def test_run_ok(self):
+        self.assertEqual(panel.run_ok(["/bin/sh", "-c", "echo a; echo b; exit 1"]), (False, "b"))
+        self.assertEqual(panel.run_ok(["/bin/sh", "-c", "echo fine"]), (True, "fine"))
+        ok, message = panel.run_ok(["/nonexistent/x"])
+        self.assertFalse(ok)
+        self.assertTrue(message)
+
+    def test_hermes_mode_when_missing(self):
+        original = panel.HERMES
+        panel.HERMES = "/nonexistent/hermes"
+        self.addCleanup(setattr, panel, "HERMES", original)
+        self.assertIsNone(panel.hermes_mode())
+
+
 if __name__ == "__main__":
     unittest.main()
