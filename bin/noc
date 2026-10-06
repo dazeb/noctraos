@@ -3,6 +3,7 @@
 #   noc update        apt + Flatpak + mise runtimes + AI models  [--json] [--only apt,flatpak,mise,models]
 #   noc doctor        health check of the whole stack  [--json]
 #   noc status        Overview data as JSON (versions, updates, Ollama, GPU, disk, Hermes)
+#   noc updates       what an update would do, as JSON (counts, apt download size, online)
 #   noc models        list [--json] | default [name] | presets [--json] | pull <model> | rm <model>
 #   noc gpu           detect | install | status  (NVIDIA CUDA / AMD ROCm for local LLMs)
 set -uo pipefail
@@ -247,7 +248,11 @@ update_label() {
 }
 
 step_apt() {
-  $SUDO apt-get update || return 1
+  # Bounded waits: with no network apt fails in seconds with a clear error instead of hanging.
+  # --error-on=any: a failed fetch is a failed step (apt otherwise exits 0 with only warnings, so an
+  # offline run would read "0 upgraded" and look like success).
+  $SUDO apt-get -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 -o Acquire::Retries=1 \
+    update --error-on=any || { echo "apt could not refresh its package lists (is the network up?)" >&2; return 1; }
   $SUDO env DEBIAN_FRONTEND=noninteractive apt-get upgrade -y
 }
 
@@ -493,6 +498,49 @@ flatpak_pending() {
   printf '%s\n' "$out" | grep -c . || true
 }
 
+# Bytes apt would download: the size column of `apt-get --print-uris`, one line per package still to
+# fetch ('uri' name size MD5Sum:..). A simulated run (-s) does not print a total, and this lists only
+# what is not already in the cache. Prints 0 when there is nothing.
+apt_download_bytes() {
+  awk '/^\047/ { s += $(NF - 1) } END { printf "%d\n", s }'
+}
+
+# Outdated mise tools as a count; null when mise is absent or cannot tell.
+mise_pending() {
+  have mise || { echo null; return; }
+  local out
+  out="$(timeout 30 mise outdated --json 2>/dev/null)" || { echo null; return; }
+  printf '%s' "$out" | jq 'length' 2>/dev/null || echo null
+}
+
+# Is there a network? Either of two unrelated hosts answering counts, so one site being down does
+# not read as "offline". NOC_ONLINE_URLS overrides the list (space separated; tests use it).
+online() {
+  local u
+  for u in ${NOC_ONLINE_URLS:-https://archive.ubuntu.com/ubuntu/ https://noctraos.dev/}; do
+    curl -fsSI --max-time 4 -o /dev/null "$u" 2>/dev/null && return 0
+  done
+  return 1
+}
+
+# noc updates [--json]: what `noc update` would do, for the Control Panel's Updates page.
+cmd_updates() {
+  local on=false apt_n=null apt_bytes=null models=0 sim
+  online && on=true
+  if have apt-get && sim="$(LC_ALL=C timeout 30 apt-get -s upgrade 2>/dev/null)"; then
+    apt_n="$(printf '%s\n' "$sim" | grep -c '^Inst ' || true)"
+    apt_bytes="$(LC_ALL=C timeout 30 apt-get -qq --print-uris upgrade 2>/dev/null | apt_download_bytes)"
+  fi
+  if have ollama; then
+    models="$(curl -fsS --max-time 5 "$OLLAMA_URL/api/tags" 2>/dev/null | jq '.models | length' 2>/dev/null || echo 0)"
+  fi
+  jq -n --argjson online "$on" --argjson apt "$apt_n" --argjson bytes "$apt_bytes" \
+    --argjson flatpak "$(flatpak_pending)" --argjson mise "$(mise_pending)" --argjson models "${models:-0}" \
+    --argjson reboot "$([ -f /var/run/reboot-required ] && echo true || echo false)" \
+    '{online:$online, apt:{count:$apt, download_bytes:$bytes}, flatpak:{count:$flatpak}, mise:{count:$mise},
+      models:{installed:$models}, reboot_required:$reboot}'
+}
+
 cmd_status() {
   local os="" ollama=false oversion="" nmodels=0 tags gpu hmode="" hready=false
   local idx="${XDG_CACHE_HOME:-$HOME/.cache}/noctraos-search/index.sqlite" idx_age=null
@@ -541,6 +589,7 @@ main() {
     update) shift; cmd_update "$@" ;;
     doctor) shift; cmd_doctor "$@" ;;
     status) shift; cmd_status "$@" ;;
+    updates) shift; cmd_updates "$@" ;;
     models) shift; cmd_models "$@" ;;
     bg)     shift; cmd_bg "$@" ;;
     gpu)    shift; have noc-gpu && exec noc-gpu "$@" \
@@ -552,6 +601,7 @@ main() {
       echo "  noc update      update apt, Flatpak apps, mise runtimes, AI models (--json, --only <steps>)"
       echo "  noc doctor      health check of the whole stack (--json)"
       echo "  noc status      versions, pending updates, Ollama, GPU, disk as JSON"
+      echo "  noc updates     what an update would do: counts, download size, online (JSON)"
       echo "  noc models      manage local AI models (list | default | presets | pull | rm)"
       echo "  noc bg          cycle or set the wallpaper (list | next | set)"
       echo "  noc gpu         GPU setup for local LLMs (detect | install | status)"

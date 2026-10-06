@@ -202,11 +202,12 @@ class HealthPage(Page):
         box = Gtk.Box(spacing=12, margin_top=8, margin_bottom=8, margin_start=8, margin_end=8)
         box.pack_start(label('●', 'mark', f'status-{row["status"]}', wrap=False), False, False, 0)
         text = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
-        text.add(label(row['label'], 'row-title'))
-        if row.get('detail'):
-            text.add(label(row['detail'], 'card-detail', chars=70))
-        box.pack_start(text, True, True, 0)
         argv = panel.fix_command(row.get('fix'))
+        text.add(label(row['label'], 'row-title'))
+        detail = panel.clean_detail(row.get('detail'), bool(argv))
+        if detail:
+            text.add(label(detail, 'card-detail', chars=70))
+        box.pack_start(text, True, True, 0)
         if argv:
             box.pack_end(button('Fix', on_click=lambda b, argv=argv: self._fix(b, argv),
                                 tooltip=f'Runs: {" ".join(argv)}'), False, False, 0)
@@ -234,6 +235,145 @@ class HealthPage(Page):
             return
         copy_to_clipboard(panel.report_text(self.rows, os.uname().release))
         self.say(self.note, 'Copied. Paste it into your bug report.')
+
+
+# ---- Updates ---------------------------------------------------------------------------------
+
+class UpdatesPage(Page):
+    LOG_LINES = 2000
+
+    def __init__(self, window):
+        super().__init__(window)
+        self.running = False
+        self.checks = {}
+        self.spinner = Gtk.Spinner()
+        self.pack_start(header('Updates', self.spinner, button('Refresh', on_click=lambda *_: self.refresh())),
+                        False, False, 0)
+        self.pack_start(label('Choose what to update. Nothing changes until you press Update.', 'lede'),
+                        False, False, 0)
+        self.offline = self.make_note()
+        self.holder = self.scroller()
+        self.update_button = button('Update selected', 'suggested', on_click=lambda *_: self.start())
+        self.update_button.set_halign(Gtk.Align.START)
+        self.pack_start(self.update_button, False, False, 0)
+        self.note = self.make_note()
+        self.progress_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6, no_show_all=True)
+        self.progress_label = label('', 'card-detail')
+        self.bar = Gtk.ProgressBar()
+        self.progress_box.add(self.progress_label)
+        self.progress_box.add(self.bar)
+        self.progress_box.add(label('Keep the computer on until this finishes.', 'muted'))
+        expander = Gtk.Expander(label='Show details')
+        view = Gtk.ScrolledWindow(min_content_height=150, hscrollbar_policy=Gtk.PolicyType.AUTOMATIC)
+        self.log = Gtk.TextView(editable=False, cursor_visible=False, monospace=True)
+        view.add(self.log)
+        expander.add(view)
+        self.progress_box.add(expander)
+        self.pack_start(self.progress_box, False, False, 0)
+
+    def on_show(self):
+        if not self.running:
+            self.refresh()
+
+    def refresh(self):
+        if self.running:
+            return
+        self.spinner.start()
+        self.update_button.set_sensitive(False)
+        background(lambda: panel.noc_json('updates', timeout=120), self._loaded)
+
+    def _loaded(self, updates):
+        self.spinner.stop()
+        if updates is None:
+            self.say(self.offline, 'Could not check for updates. Is `noc` installed?')
+            self.swap(self.holder, label('', 'muted'))
+            return
+        self.say(self.offline, panel.offline_message(updates))
+        online = not panel.offline_message(updates)
+        self.checks = {}
+        body = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10, margin_end=8)
+        for row in panel.update_rows(updates):
+            line = Gtk.Box(spacing=12, margin_top=6)
+            check = Gtk.CheckButton()
+            check.set_active(row['checked'] and online)
+            check.set_sensitive(row['available'] and online)
+            check.connect('toggled', lambda *_: self._sync())
+            self.checks[row['id']] = check
+            text = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+            text.add(label(row['title'], 'row-title'))
+            text.add(label(row['detail'], 'card-detail', chars=70))
+            line.pack_start(check, False, False, 0)
+            line.pack_start(text, True, True, 0)
+            body.add(line)
+        if updates.get('reboot_required'):
+            body.add(label('A restart is needed to finish an earlier update.', 'section'))
+        self.swap(self.holder, body)
+        self._sync()
+
+    def _sync(self):
+        """The button is live only when something is ticked (and the network is there)."""
+        self.update_button.set_sensitive(
+            not self.running and any(c.get_active() and c.get_sensitive() for c in self.checks.values()))
+
+    # -- running ---------------------------------------------------------------------------
+    def start(self):
+        selected = [step for step, check in self.checks.items() if check.get_active()]
+        if not selected or self.running:
+            return
+        self.running = True
+        self.update_button.set_sensitive(False)
+        for check in self.checks.values():
+            check.set_sensitive(False)
+        self.say(self.note, '')
+        self.log.get_buffer().set_text('')
+        self.reveal(self.progress_box)
+        progress = panel.UpdateProgress(selected)
+        self._show_progress(progress)
+
+        def work():
+            code_message = ''
+            for _ids, argv in panel.plan_chunks(selected):
+                for event in panel.run_events(argv):
+                    if event['event'] == 'exit':
+                        code_message = code_message or panel.exit_message(event['code'])
+                        continue
+                    line = progress.feed(event)
+                    GLib.idle_add(self._tick, progress, line)
+                if code_message:
+                    break
+            return progress, code_message
+
+        background(work, self._finished)
+
+    def _show_progress(self, progress):
+        self.progress_label.set_text(progress.text)
+        self.bar.set_fraction(progress.display_fraction)
+
+    def _tick(self, progress, line):
+        self._show_progress(progress)
+        if line:
+            buffer = self.log.get_buffer()
+            buffer.insert(buffer.get_end_iter(), line + '\n')
+            if buffer.get_line_count() > self.LOG_LINES:
+                buffer.delete(buffer.get_start_iter(), buffer.get_iter_at_line(buffer.get_line_count() - self.LOG_LINES))
+            self.log.scroll_to_mark(buffer.get_insert(), 0, False, 0, 0)
+        return False
+
+    def _finished(self, result):
+        progress, problem = result
+        self.running = False
+        self.progress_box.hide()
+        if problem:
+            message = problem
+        elif progress.failed:
+            names = ', '.join(panel.STEP_TITLES.get(i, i) for i in progress.failed)
+            message = f'Finished, but these did not complete: {names}. Open Show details next time for the reason.'
+        else:
+            message = 'Everything you picked is up to date.'
+        if progress.reboot_required:
+            message += ' Restart the computer to finish.'
+        self.say(self.note, message)
+        self.refresh()
 
 
 # ---- AI models -------------------------------------------------------------------------------
@@ -465,5 +605,6 @@ class AboutPage(Page):
         self.note.set_text('Copied. Paste it into your bug report.')
 
 
-PAGES = [('overview', 'Overview', OverviewPage), ('models', 'AI models', ModelsPage),
+PAGES = [('overview', 'Overview', OverviewPage), ('updates', 'Updates', UpdatesPage),
+         ('models', 'AI models', ModelsPage),
          ('health', 'Health', HealthPage), ('about', 'About', AboutPage)]

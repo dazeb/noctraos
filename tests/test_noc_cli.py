@@ -36,6 +36,10 @@ class FakeOllama(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
+    def do_HEAD(self):  # noqa: N802  (the online check uses curl -I)
+        self.send_response(200 if self.path in ("/api/tags", "/api/version") else 404)
+        self.end_headers()
+
     def log_message(self, *args):
         pass
 
@@ -224,6 +228,46 @@ class DoctorStatusTests(unittest.TestCase):
         self.assertEqual(data["ollama"]["models"], 0)
 
 
+class UpdatesCommandTests(unittest.TestCase):
+    def run_updates(self, e):
+        return json.loads(e.noc("updates", NOC_ONLINE_URLS=e.url + "/api/version").stdout)
+
+    def test_shape_and_apt_download_size(self):
+        e = Env(self)
+        e.stub("apt-get", 'case "$*" in *print-uris*) printf "\'http://x/a.deb\' a.deb 1500 MD5Sum:aa\\n\'http://x/b.deb\' b.deb 9000000 MD5Sum:bb\\n";; *) printf "Inst a\\nInst b\\nConf a\\n";; esac')
+        e.stub("flatpak", "printf 'org.a\\norg.b\\n'")
+        e.stub("mise", 'echo \'{"node":{},"go":{}}\'')
+        data = self.run_updates(e)
+        self.assertEqual(data["online"], True)
+        self.assertEqual(data["apt"], {"count": 2, "download_bytes": 9_001_500})
+        self.assertEqual(data["flatpak"], {"count": 2})
+        self.assertEqual(data["mise"], {"count": 2})
+        self.assertEqual(data["models"], {"installed": 2})
+        self.assertIsInstance(data["reboot_required"], bool)
+
+    def test_offline_and_unknowns_are_unknown_not_zero(self):
+        e = Env(self, ollama=False)
+        e.stub("apt-get", "exit 100")
+        e.stub("flatpak", "exit 1")
+        e.stub("mise", "exit 1")
+        data = self.run_updates(e)
+        self.assertEqual(data["online"], False)
+        self.assertEqual(data["apt"]["count"], None)
+        self.assertEqual(data["flatpak"]["count"], None)
+        self.assertEqual(data["mise"]["count"], None)
+
+    def test_apt_size_parser_sums_the_size_column(self):
+        lines = ("'http://a/x_1.deb' x_1.deb 94556 MD5Sum:7454\n"
+                 "'https://b/y_2.deb' y_2.deb 7776 MD5Sum:6666\n")
+        out = subprocess.run(["bash", "-c", f'source "{NOC}"; apt_download_bytes'], input=lines,
+                             capture_output=True, text=True).stdout.strip()
+        self.assertEqual(out, "102332")
+        for empty in ("", "NOTE: nothing\n"):
+            out = subprocess.run(["bash", "-c", f'source "{NOC}"; apt_download_bytes'], input=empty,
+                                 capture_output=True, text=True).stdout.strip()
+            self.assertEqual(out, "0")
+
+
 class UpdateTests(unittest.TestCase):
     def events(self, e, *args):
         result = e.noc("update", "--json", *args)
@@ -259,6 +303,14 @@ class UpdateTests(unittest.TestCase):
         self.assertEqual([x["ok"] for x in ev if x["event"] == "step_done"], [False])
         self.assertEqual(ev[-1], {"event": "done", "ok": False, "reboot_required": ev[-1]["reboot_required"]})
         self.assertIn("E: no network", [x["line"] for x in ev if x["event"] == "log"])
+
+    def test_apt_refresh_failures_fail_the_step(self):
+        e = Env(self)
+        e.stub("sudo", 'if [ "$1" = -n ]; then shift; fi; exec "$@"')
+        log = e.home / "apt-args"
+        e.stub("apt-get", f'echo "$*" >> "{log}"')
+        self.events(e, "--only", "apt")
+        self.assertIn("update --error-on=any", log.read_text().splitlines()[0])
 
     def test_unknown_step_is_refused(self):
         result = Env(self).noc("update", "--only", "reboot")

@@ -61,5 +61,34 @@ done
 sudo install -m 755 "$REPO_ROOT/bin/noctraos-control" /usr/local/bin/noctraos-control
 # The launcher (configs/applications/noctraos-control.desktop) and icon are installed by module 06.
 
+log "Installing the privileged helper (one polkit prompt for updates and repairs)..."
+sudo install -d -m 755 /usr/local/libexec/noctraos
+sudo install -m 755 "$REPO_ROOT/bin/noc-privileged" /usr/local/libexec/noctraos/noc-privileged
+sudo install -m 644 "$REPO_ROOT/configs/polkit/dev.noctraos.privileged.policy" \
+  /usr/share/polkit-1/actions/dev.noctraos.privileged.policy
+# The helper re-runs install modules as root, so it must never run them from a clone the user can
+# edit: keep a root-owned snapshot of what the modules read and run only that. Refreshed only when
+# the content changed, so a second run is a no-op.
+SNAPSHOT=/usr/local/share/noctraos/repo
+STAGE="$(mktemp -d)"
+chmod 755 "$STAGE"   # mktemp makes it 0700; the snapshot must be traversable so the diff below can read it
+trap 'rm -rf "$STAGE"' EXIT
+for item in VERSION install.sh install bin configs scripts assets help extensions branding search control; do
+  [ -e "$REPO_ROOT/$item" ] && cp -a "$REPO_ROOT/$item" "$STAGE/"
+done
+rm -rf "$STAGE/assets/promo" "$STAGE/assets/social"
+if [ -d "$SNAPSHOT" ] && diff -rq "$STAGE" "$SNAPSHOT" >/dev/null 2>&1; then
+  log "Root-owned module snapshot is current."
+else
+  sudo rm -rf "$SNAPSHOT.new"
+  sudo mkdir -p "$(dirname "$SNAPSHOT")"
+  sudo cp -a "$STAGE" "$SNAPSHOT.new"
+  sudo chown -R root:root "$SNAPSHOT.new"
+  sudo chmod -R go-w "$SNAPSHOT.new"
+  sudo rm -rf "$SNAPSHOT"
+  sudo mv "$SNAPSHOT.new" "$SNAPSHOT"
+  log "Root-owned module snapshot written to $SNAPSHOT."
+fi
+
 log "Persistence complete: new users inherit mise, Continue and Nautilus script defaults."
 log "Manage the workstation with: noc (CLI) or the NoctraOS Control Panel (GUI)."
