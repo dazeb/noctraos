@@ -55,8 +55,8 @@ NOCTRAOS_BRANCH=nightly bash boot.sh
 Static checks, the same as CI (`git push gitlab nightly` runs the GitLab pipeline):
 
 ```bash
-bash -n boot.sh install.sh install/*.sh bin/noc bin/noc-gpu bin/noc-menu bin/noctraos-agent \
-  bin/noctraos-hermes bin/noctraos-search configs/nautilus-scripts/*
+bash -n boot.sh install.sh install/*.sh bin/noc bin/noc-gpu bin/noc-privileged bin/noctraos-control \
+  bin/noctraos-agent bin/noctraos-hermes bin/noctraos-search configs/nautilus-scripts/*
 python3 -m unittest discover -s tests
 python3 scripts/render-theme.py --check
 ```
