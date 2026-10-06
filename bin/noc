@@ -495,15 +495,11 @@ flatpak_pending() {
   printf '%s\n' "$out" | grep -c . || true
 }
 
-# Bytes apt would download, from the "Need to get 0 B/724 MB of archives." line of a simulated run
-# (apt prints SI units). Empty when the line is absent (nothing to download).
+# Bytes apt would download: the size column of `apt-get --print-uris`, one line per package still to
+# fetch ('uri' name size MD5Sum:..). A simulated run (-s) does not print a total, and this lists only
+# what is not already in the cache. Prints 0 when there is nothing.
 apt_download_bytes() {
-  awk '/^Need to get / {
-         split($0, a, "/"); n = split(a[2], f, " ")
-         v = f[1]; u = f[2]; gsub(",", "", v)
-         m = (u == "kB") ? 1000 : (u == "MB") ? 1000000 : (u == "GB") ? 1000000000 : 1
-         printf "%d\n", v * m; found = 1
-       } END { if (!found) print 0 }'
+  awk '/^\047/ { s += $(NF - 1) } END { printf "%d\n", s }'
 }
 
 # Outdated mise tools as a count; null when mise is absent or cannot tell.
@@ -530,7 +526,7 @@ cmd_updates() {
   online && on=true
   if have apt-get && sim="$(LC_ALL=C timeout 30 apt-get -s upgrade 2>/dev/null)"; then
     apt_n="$(printf '%s\n' "$sim" | grep -c '^Inst ' || true)"
-    apt_bytes="$(printf '%s\n' "$sim" | apt_download_bytes)"
+    apt_bytes="$(LC_ALL=C timeout 30 apt-get -qq --print-uris upgrade 2>/dev/null | apt_download_bytes)"
   fi
   if have ollama; then
     models="$(curl -fsS --max-time 5 "$OLLAMA_URL/api/tags" 2>/dev/null | jq '.models | length' 2>/dev/null || echo 0)"

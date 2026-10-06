@@ -71,6 +71,7 @@ sudo install -m 644 "$REPO_ROOT/configs/polkit/dev.noctraos.privileged.policy" \
 # the content changed, so a second run is a no-op.
 SNAPSHOT=/usr/local/share/noctraos/repo
 STAGE="$(mktemp -d)"
+chmod 755 "$STAGE"   # mktemp makes it 0700; the snapshot must be traversable so the diff below can read it
 trap 'rm -rf "$STAGE"' EXIT
 for item in VERSION install.sh install bin configs scripts assets help extensions branding search control; do
   [ -e "$REPO_ROOT/$item" ] && cp -a "$REPO_ROOT/$item" "$STAGE/"
@@ -83,6 +84,7 @@ else
   sudo mkdir -p "$(dirname "$SNAPSHOT")"
   sudo cp -a "$STAGE" "$SNAPSHOT.new"
   sudo chown -R root:root "$SNAPSHOT.new"
+  sudo chmod -R go-w "$SNAPSHOT.new"
   sudo rm -rf "$SNAPSHOT"
   sudo mv "$SNAPSHOT.new" "$SNAPSHOT"
   log "Root-owned module snapshot written to $SNAPSHOT."

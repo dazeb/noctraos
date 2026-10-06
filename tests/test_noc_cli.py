@@ -234,12 +234,12 @@ class UpdatesCommandTests(unittest.TestCase):
 
     def test_shape_and_apt_download_size(self):
         e = Env(self)
-        e.stub("apt-get", "printf 'Inst a\\nInst b\\nNeed to get 1,500 kB/9,812 kB of archives.\\n'")
+        e.stub("apt-get", 'case "$*" in *print-uris*) printf "\'http://x/a.deb\' a.deb 1500 MD5Sum:aa\\n\'http://x/b.deb\' b.deb 9000000 MD5Sum:bb\\n";; *) printf "Inst a\\nInst b\\nConf a\\n";; esac')
         e.stub("flatpak", "printf 'org.a\\norg.b\\n'")
         e.stub("mise", 'echo \'{"node":{},"go":{}}\'')
         data = self.run_updates(e)
         self.assertEqual(data["online"], True)
-        self.assertEqual(data["apt"], {"count": 2, "download_bytes": 9_812_000})
+        self.assertEqual(data["apt"], {"count": 2, "download_bytes": 9_001_500})
         self.assertEqual(data["flatpak"], {"count": 2})
         self.assertEqual(data["mise"], {"count": 2})
         self.assertEqual(data["models"], {"installed": 2})
@@ -256,14 +256,16 @@ class UpdatesCommandTests(unittest.TestCase):
         self.assertEqual(data["flatpak"]["count"], None)
         self.assertEqual(data["mise"]["count"], None)
 
-    def test_apt_size_parser(self):
-        for line, want in [("Need to get 0 B/724 MB of archives.", "724000000"),
-                           ("Need to get 1,234 kB/9,812 kB of archives.", "9812000"),
-                           ("Need to get 0 B/1.5 GB of archives.", "1500000000"),
-                           ("nothing to do", "0")]:
-            with self.subTest(line=line):
-                self.assertEqual(subprocess.run(["bash", "-c", f'source "{NOC}"; apt_download_bytes'], input=line + "\n",
-                                                capture_output=True, text=True).stdout.strip(), want)
+    def test_apt_size_parser_sums_the_size_column(self):
+        lines = ("'http://a/x_1.deb' x_1.deb 94556 MD5Sum:7454\n"
+                 "'https://b/y_2.deb' y_2.deb 7776 MD5Sum:6666\n")
+        out = subprocess.run(["bash", "-c", f'source "{NOC}"; apt_download_bytes'], input=lines,
+                             capture_output=True, text=True).stdout.strip()
+        self.assertEqual(out, "102332")
+        for empty in ("", "NOTE: nothing\n"):
+            out = subprocess.run(["bash", "-c", f'source "{NOC}"; apt_download_bytes'], input=empty,
+                                 capture_output=True, text=True).stdout.strip()
+            self.assertEqual(out, "0")
 
 
 class UpdateTests(unittest.TestCase):
