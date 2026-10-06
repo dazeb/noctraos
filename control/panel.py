@@ -96,8 +96,7 @@ def _hermes_card(hermes):
         return Card('hermes', 'Hermes', 'Your own provider', 'Configured in Hermes itself.', 'info', 'privacy')
     # The free tier is Nous Research's cloud: never describe it as local (AGENTS.md).
     return Card('hermes', 'Hermes', 'Nous free tier',
-                'Cloud service: prompts leave this computer. Switch to local only on the Privacy page.',
-                'warn', 'privacy')
+                'Cloud service: prompts leave this computer.', 'warn', 'privacy')
 
 
 def cards(status):

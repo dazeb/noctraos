@@ -35,6 +35,7 @@ window, .content { background: #121212; color: #bebebe; }
                font-family: 'JetBrainsMono Nerd Font', monospace; }
 .sidebar row:hover { background: #1e1e1e; }
 .sidebar row:selected { background: #1e1e1e; color: #eaeaea; border-left-color: #e68e0d; }
+.sidebar row:selected label { color: #eaeaea; }
 .brand { font-size: 15px; font-weight: bold; color: #eaeaea; }
 .title { font-size: 24px; font-weight: bold; color: #eaeaea; }
 .lede { font-size: 14px; color: #8a8a8d; }
