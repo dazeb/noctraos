@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=NoctraOS Control Panel
+GenericName=Workstation control panel
+Comment=Check and maintain your NoctraOS workstation
+Exec=/usr/local/bin/noctraos-control
+Icon=noctraos-control
+Categories=System;Settings;GTK;
+Terminal=false
+StartupNotify=true
+Keywords=control;panel;settings;update;health;models;gpu;hermes;about;maintenance;

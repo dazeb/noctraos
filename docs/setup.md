@@ -50,7 +50,7 @@ noc bg list|next|set <name>   # the wallpaper set
 noc gpu detect    # what GPU you have and what would be installed
 noc gpu install   # (re)run GPU driver + CUDA/ROCm setup — safe to repeat
 noc gpu status --smoke   # verify driver, CUDA/ROCm, and run a real device probe
-noc-menu          # update, health check, models, GPU — mouse-driven
+noctraos-control  # the Control Panel: system state, mouse-driven (more pages coming)
 ```
 
 Hermes has its own launcher, also available from the Agents menu:
