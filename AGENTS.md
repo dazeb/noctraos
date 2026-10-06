@@ -569,7 +569,8 @@ steps and scripts are the same for any version).
   `iso/build-local.sh <dir> both`; first boot clones `main`. The ISO torrent in the repo root
   (`noctraos-0.3.1-amd64.iso.torrent`, web seed on dl.noctraos.dev) is for this ISO: rebuild it whenever the
   ISO changes (torf in a throwaway venv; same trackers, 4 MiB pieces). `v0.3.0` stays published beside it.
-- Released: tag `v0.3.1` (the commit the ISO was built from) and the GitHub release with links and checksums
+- Released: tag `v0.3.1` (the release merge commit: it adds the torrent and the download page to the
+  `main` the ISO was built from, 95c5097) and the GitHub release with links and checksums
   only (GitHub caps assets at 2 GiB). Do not move the tag; later fixes go in the next version. Known nit
   shipped in 0.3.1: the Control Panel's card tooltip reads "Open Ai Models" (should be "AI models").
 - Never published: the unattended/appliance ISO. The old unattended test ISO that was public at
