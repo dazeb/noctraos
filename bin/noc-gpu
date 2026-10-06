@@ -807,7 +807,9 @@ cmd_status() {
   esac
   case "$AMD_TIER" in
     rocm|override) status_amd || rc=1 ;;
-    vulkan)        have vulkaninfo && note "AMD GPU uses Vulkan only (no ROCm)" || note "AMD GPU: Vulkan tools not installed" ;;
+    # Without the Vulkan tools the card is not usable for local AI: that is "not set up", not a note.
+    vulkan)        if have vulkaninfo; then note "AMD GPU uses Vulkan only (no ROCm)"
+                   else bad "AMD GPU: Vulkan tools not installed — run: noc gpu install"; rc=1; fi ;;
   esac
   [ -f /var/run/reboot-required ] && grep -q 'noctraos-gpu' /var/run/reboot-required.pkgs 2>/dev/null \
     && { bad "reboot pending for the GPU driver"; rc=1; }

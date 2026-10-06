@@ -192,4 +192,8 @@ Model default (section 5): `~/.config/noctraos/model`; precedence `NOCTRAOS_MODE
 - [x] Phase 0: decisions, branch
 - [x] Phase 1: CLI JSON modes + tests (`doctor --json`, `status`, `update --json --only`,
       `models list --json | default | presets`, `noctraos-hermes cloud | mode`)
-- [ ] Phase 2 to 6
+- [x] Phase 2: GTK shell, Overview and About, `noc-menu` removed (#42)
+- [x] Phase 3: Health and AI models pages (#43)
+- [x] Phase 4: Updates page and the pkexec/polkit privileged helper (#45)
+- [x] Phase 5: Hardware/GPU and Privacy pages
+- [ ] Phase 6: polish and docs

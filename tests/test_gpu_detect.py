@@ -272,6 +272,34 @@ class StatusJsonTests(unittest.TestCase):
             self.assertNotIn("\x1b", row["text"])         # no colour codes
         self.assertEqual(data["rows"][0]["status"], "ok")   # the "GPU: <name>" line
 
+    def vulkan_status(self, with_tools):
+        """status --json for a Vulkan-only AMD card (Vega: no ROCm path), with or without vulkaninfo."""
+        with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as bindir:
+            fixture = Path(d) / "lspci.txt"
+            fixture.write_text(AMD_VEGA64 + "\n")
+            if with_tools:
+                stub = Path(bindir) / "vulkaninfo"
+                stub.write_text("#!/bin/sh\nexit 0\n")
+                stub.chmod(0o755)
+            out = subprocess.run([str(SCRIPT), "status", "--json"], capture_output=True, text=True,
+                                 env={**os.environ, "NOC_GPU_LSPCI_FILE": str(fixture),
+                                      "PATH": f"{bindir}:{os.environ['PATH']}"}).stdout
+        return json.loads(out)
+
+    def test_vulkan_only_card_with_the_tools_is_ready(self):
+        data = self.vulkan_status(True)
+        self.assertTrue(data["ready"])
+        self.assertIn("Vulkan only", data["rows"][-1]["text"])
+
+    def test_vulkan_only_card_without_the_tools_is_not_set_up(self):
+        import shutil
+        if shutil.which("vulkaninfo"):
+            self.skipTest("this machine has vulkaninfo, so the missing-tools case cannot be shown")
+        data = self.vulkan_status(False)
+        self.assertFalse(data["ready"])
+        self.assertEqual(data["rows"][-1]["status"], "fail")
+        self.assertIn("Vulkan tools not installed", data["rows"][-1]["text"])
+
     def test_ready_means_every_check_passed(self):
         data = status_json(AMD_6600)
         self.assertEqual(data["ready"], all(r["status"] != "fail" for r in data["rows"]))
