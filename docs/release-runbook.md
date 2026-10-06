@@ -143,8 +143,9 @@ GitHub `main` is updated, so merging the PR publishes the site.
 
 - Welcome: prefilled search examples (needs a D-Bus `Open(query)` on the search extension) and
   the provisioner log panel are not built; `docs/onboarding.md` says so.
-- The Software Updater pops "Updated software has been issued since Zorin OS 18 was released"
-  (717 MB) on first login, in Zorin wording. Not addressed.
+- The Software Updater still pops up on first login (about 700 MB of updates), but no longer in Zorin wording:
+  `configs/gsettings/90_noctraos-updates.gschema.override` turns off update-manager's first-run sentence, which
+  Zorin's patched package hardcodes as "Zorin OS".
 - `noctraos-appearance` fonts: the interface font setting (`Cantarell 11`) is not what the theme
   actually renders (Inter), so changing it may not visibly change the shell. Verify before promising.
 - Vim cannot be removed (Zorin's `zorin-os-minimal` depends on it); its launcher is hidden.

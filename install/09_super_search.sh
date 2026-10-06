@@ -49,6 +49,9 @@ for SCHEMA_FILE in org.gnome.shell.extensions.noctraos-search.gschema.xml \
                    org.gnome.shell.extensions.noctraos-start.gschema.xml; do
   install_if_changed 644 "$REPO_ROOT/configs/gsettings/$SCHEMA_FILE" "/usr/share/glib-2.0/schemas/$SCHEMA_FILE"
 done
+# System-wide defaults (override files are compiled together with the schemas).
+install_if_changed 644 "$REPO_ROOT/configs/gsettings/90_noctraos-updates.gschema.override" \
+  /usr/share/glib-2.0/schemas/90_noctraos-updates.gschema.override
 if [ "$CHANGED" -eq 1 ] || [ ! -f /usr/share/glib-2.0/schemas/gschemas.compiled ]; then
   sudo glib-compile-schemas /usr/share/glib-2.0/schemas
 fi
