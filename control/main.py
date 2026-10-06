@@ -100,7 +100,7 @@ class ControlPanel(Gtk.ApplicationWindow):
         self.list = Gtk.ListBox()
         self.list.get_style_context().add_class('sidebar')
         side.pack_start(self.list, True, True, 0)
-        hint = label('Ctrl+1 to Ctrl+7 switch pages\nCtrl+R checks again', 'muted', xalign=0)
+        hint = label('Ctrl+1 to 7: pages\nCtrl+R: check again', 'muted', xalign=0)
         hint.set_margin_start(18)
         hint.set_margin_bottom(14)
         side.pack_end(hint, False, False, 0)
@@ -142,6 +142,7 @@ class ControlPanel(Gtk.ApplicationWindow):
 
     def _selected(self, _list, row):
         if row:
+            row.grab_focus()      # the focus ring follows the selection instead of staying on the first row
             page_id = self.ids[row.get_index()]
             self.stack.set_visible_child_name(page_id)
             self.pages[page_id].on_show()

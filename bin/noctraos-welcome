@@ -199,7 +199,7 @@ class Welcome(Gtk.ApplicationWindow):
             ('Start button', 'The Noctra logo at the bottom-left. Apps, search, power.'),
             ('Task Manager', 'Mission Center, pinned in the taskbar.'),
             ('File Explorer', 'Files, pinned in the taskbar.'),
-            ('Control Panel', 'Updates, AI models, hardware, health and privacy. Search for it with Windows + Space.'),
+            ('Control Panel', 'Updates, models, hardware, health and privacy. Search for it.'),
             ('Screenshots', 'The Print key opens the screenshot tool.'),
             ('System tray', 'Network, sound and power, top right.'),
         ]

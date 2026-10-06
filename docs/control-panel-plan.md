@@ -1,5 +1,7 @@
 # NoctraOS Control Panel: rebuild plan
 
+> **Status: built** (phases 0 to 6). This is the design record; how it works now is in [control-panel.md](control-panel.md).
+
 Written 2026-10-06 for a fresh session. The current panel (`bin/noc-menu`) is a zenity list and
 needs a proper rebuild. This file is the whole brief: read it, then `AGENTS.md` and
 `docs/objectives.md`, then start at phase 0.
@@ -196,4 +198,4 @@ Model default (section 5): `~/.config/noctraos/model`; precedence `NOCTRAOS_MODE
 - [x] Phase 3: Health and AI models pages (#43)
 - [x] Phase 4: Updates page and the pkexec/polkit privileged helper (#45)
 - [x] Phase 5: Hardware/GPU and Privacy pages
-- [ ] Phase 6: polish and docs
+- [x] Phase 6: keyboard, tooltips, screen-fit, headless smoke test, entry points (Start panel, welcome, help), docs, site and README screenshots
