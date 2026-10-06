@@ -126,8 +126,8 @@ def og_term():
 
 CARDS = {
     "og-home": (1200, 630, "site/img/social", lambda: og(
-        "A familiar Linux desktop, with <em>AI</em> ready when you are.",
-        "Windows + Space finds anything. Local models and AI coding assistants, one click from Start.",
+        "An <em>AI</em> development workstation OS.",
+        "Local models and AI coding assistants, one click from Start. Windows + Space finds anything.",
         og_shot("desktop", "64% 78%"), ["Free download", "Based on Ubuntu 24.04", "0.3.0"])),
     "og-features": (1200, 630, "site/img/social", lambda: og(
         "Search, assistants and local AI, <em>set up</em> for you.",
