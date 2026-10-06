@@ -249,7 +249,10 @@ update_label() {
 
 step_apt() {
   # Bounded waits: with no network apt fails in seconds with a clear error instead of hanging.
-  $SUDO apt-get -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 -o Acquire::Retries=1 update || return 1
+  # --error-on=any: a failed fetch is a failed step (apt otherwise exits 0 with only warnings, so an
+  # offline run would read "0 upgraded" and look like success).
+  $SUDO apt-get -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 -o Acquire::Retries=1 \
+    update --error-on=any || { echo "apt could not refresh its package lists (is the network up?)" >&2; return 1; }
   $SUDO env DEBIAN_FRONTEND=noninteractive apt-get upgrade -y
 }
 

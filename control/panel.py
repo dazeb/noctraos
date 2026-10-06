@@ -189,6 +189,15 @@ def health_headline(rows):
     return 'Everything checks out', 'ok'
 
 
+_RUN_HINT = re.compile(r'\s*\(run: [^)]*\)')
+
+
+def clean_detail(detail, has_fix):
+    """`noc doctor` details end with a "(run: <command>)" hint for people at a terminal; when the
+    panel has a Fix button the hint is just noise."""
+    return _RUN_HINT.sub('', detail or '') if has_fix else (detail or '')
+
+
 def fix_command(fix):
     """The argv for a doctor row's `fix`, or None when the panel cannot run it."""
     return FIXES.get(fix)
@@ -323,29 +332,32 @@ def update_rows(updates):
     mise = (updates.get('mise') or {}).get('count')
     models = (updates.get('models') or {}).get('installed') or 0
     rows = []
+    offline = updates.get('online') is False
 
     def row(step, detail, available, checked):
         rows.append({'id': step, 'title': STEP_TITLES[step], 'detail': detail,
                      'available': available, 'checked': checked and available})
 
+    # Offline, a count of 0 only means "none known from the last check", never "up to date".
+    nothing = 'Could not check without internet.' if offline else 'Up to date.'
     n = apt.get('count')
     if n is None:
         row('apt', 'Could not check.', False, False)
     elif n == 0:
-        row('apt', 'Up to date.', False, False)
+        row('apt', nothing, False, False)
     else:
         size = apt.get('download_bytes')
         row('apt', _plural(n, 'update') + (f', {fmt_bytes(size)} to download' if size else ''), True, True)
     if flatpak is None:
         row('flatpak', 'Could not check.', False, False)
     elif flatpak == 0:
-        row('flatpak', 'Up to date.', False, False)
+        row('flatpak', nothing, False, False)
     else:
         row('flatpak', _plural(flatpak, 'update'), True, True)
     if mise is None:
         row('mise', 'Could not check.', False, False)
     elif mise == 0:
-        row('mise', 'Up to date.', False, False)
+        row('mise', nothing, False, False)
     else:
         row('mise', _plural(mise, 'tool') + ' can be updated', True, True)
     if models:

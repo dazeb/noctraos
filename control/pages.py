@@ -202,11 +202,12 @@ class HealthPage(Page):
         box = Gtk.Box(spacing=12, margin_top=8, margin_bottom=8, margin_start=8, margin_end=8)
         box.pack_start(label('●', 'mark', f'status-{row["status"]}', wrap=False), False, False, 0)
         text = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
-        text.add(label(row['label'], 'row-title'))
-        if row.get('detail'):
-            text.add(label(row['detail'], 'card-detail', chars=70))
-        box.pack_start(text, True, True, 0)
         argv = panel.fix_command(row.get('fix'))
+        text.add(label(row['label'], 'row-title'))
+        detail = panel.clean_detail(row.get('detail'), bool(argv))
+        if detail:
+            text.add(label(detail, 'card-detail', chars=70))
+        box.pack_start(text, True, True, 0)
         if argv:
             box.pack_end(button('Fix', on_click=lambda b, argv=argv: self._fix(b, argv),
                                 tooltip=f'Runs: {" ".join(argv)}'), False, False, 0)

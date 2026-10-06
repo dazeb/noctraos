@@ -304,6 +304,14 @@ class UpdateTests(unittest.TestCase):
         self.assertEqual(ev[-1], {"event": "done", "ok": False, "reboot_required": ev[-1]["reboot_required"]})
         self.assertIn("E: no network", [x["line"] for x in ev if x["event"] == "log"])
 
+    def test_apt_refresh_failures_fail_the_step(self):
+        e = Env(self)
+        e.stub("sudo", 'if [ "$1" = -n ]; then shift; fi; exec "$@"')
+        log = e.home / "apt-args"
+        e.stub("apt-get", f'echo "$*" >> "{log}"')
+        self.events(e, "--only", "apt")
+        self.assertIn("update --error-on=any", log.read_text().splitlines()[0])
+
     def test_unknown_step_is_refused(self):
         result = Env(self).noc("update", "--only", "reboot")
         self.assertEqual(result.returncode, 2)

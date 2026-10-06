@@ -154,6 +154,13 @@ class HealthTests(unittest.TestCase):
         for argv in panel.FIXES.values():
             self.assertNotIn("sudo", argv)
 
+    def test_run_hint_is_dropped_only_when_there_is_a_button(self):
+        hint = "missing (run: bash ~/.local/share/noctraos/install.sh --only 04d_appmanager.sh)"
+        self.assertEqual(panel.clean_detail(hint, True), "missing")
+        self.assertEqual(panel.clean_detail(hint, False), hint)
+        self.assertEqual(panel.clean_detail(None, True), "")
+        self.assertEqual(panel.clean_detail("running (0.35.1)", True), "running (0.35.1)")
+
     def test_report(self):
         text = panel.report_text(ROWS, "6.8.0")
         self.assertIn("kernel: 6.8.0", text)
@@ -318,6 +325,18 @@ class UpdateRowTests(unittest.TestCase):
 
     def test_sparse_input_does_not_raise(self):
         self.assertEqual(len(panel.update_rows({})), 4)
+
+    def test_offline_zero_is_not_up_to_date(self):
+        zero = {**UPDATES, "apt": {"count": 0, "download_bytes": 0}, "flatpak": {"count": 0}, "mise": {"count": 0}}
+        for step, row in rows_by_id({**zero, "online": False}).items():
+            if step != "models":
+                self.assertEqual(row["detail"], "Could not check without internet.")
+        for step, row in rows_by_id(zero).items():
+            if step != "models":
+                self.assertEqual(row["detail"], "Up to date.")
+
+    def test_offline_still_shows_known_pending_updates(self):
+        self.assertEqual(rows_by_id({**UPDATES, "online": False})["apt"]["detail"], "3 updates, 690.5 MB to download")
 
     def test_offline_message(self):
         self.assertIn("No internet", panel.offline_message({"online": False}))
