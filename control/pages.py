@@ -77,6 +77,13 @@ class Page(Gtk.Box):
         return note
 
     @staticmethod
+    def reveal(box):
+        """Show a no_show_all container and its children (show_all() skips such a widget)."""
+        box.set_no_show_all(False)
+        box.show_all()
+        box.set_no_show_all(True)
+
+    @staticmethod
     def say(note, text):
         note.set_text(text)
         note.set_visible(bool(text))
@@ -372,7 +379,7 @@ class ModelsPage(Page):
             return
         self.pulling, self.stop = name, False
         self.say(self.note, '')
-        self.progress_box.show_all()
+        self.reveal(self.progress_box)
         self.progress_label.set_text(f'Starting {name}…')
         self.bar.set_fraction(0)
         self._set_busy(True)
