@@ -41,6 +41,7 @@
 #   NOCTRAOS_LOCALE      (default en_US.UTF-8)
 #   NOCTRAOS_KEYMAP      console layout code          (default us)
 #   NOCTRAOS_TIMEZONE    (default UTC)
+#   NOCTRAOS_BRANCH      provisioner branch (default main; nightly builds use nightly)
 #
 # The seed carries the password hash — anyone with the ISO can read it.
 # Only bake throwaway credentials.
@@ -49,6 +50,7 @@ set -Eeuo pipefail
 SRC_ISO="${1:?usage: build-noctraos-iso.sh <zorin-live.iso> [out.iso]}"
 OUT_ISO="${2:-noctraos-amd64.iso}"
 REPO="${REPO_URL:-https://github.com/dazeb/noctraos.git}"
+BRANCH="${NOCTRAOS_BRANCH:-main}"   # provisioner branch baked in AND fetched at first boot (nightly builds)
 WORK_BASE="${WORK_BASE:-/var/tmp}"
 
 UNATTENDED="${NOCTRAOS_UNATTENDED:-0}"
@@ -100,7 +102,7 @@ unsquashfs -no-progress -d "$SQ_ROOT" "$ISO_TREE/casper/filesystem.squashfs" >/d
 
 step "4/7 injecting provisioner"
 rm -rf "$SQ_ROOT/opt/noctraos"
-git clone --depth 1 "$REPO" "$SQ_ROOT/opt/noctraos" >/dev/null 2>&1
+git clone --depth 1 --branch "$BRANCH" "$REPO" "$SQ_ROOT/opt/noctraos" >/dev/null 2>&1
 rm -rf "$SQ_ROOT/opt/noctraos/.git"
 
 # The release version comes from the provisioner snapshot (VERSION), never from the
@@ -124,6 +126,7 @@ MARKER="$DEST/.provisioned"
 AUTOSTART="$HOME/.config/autostart/noctraos-setup.desktop"
 LOG="$DEST-firstboot.log"
 REPO_URL="https://github.com/dazeb/noctraos.git"
+REPO_BRANCH="__NOCTRAOS_BRANCH__"   # substituted at ISO build time
 
 if [ -f "$MARKER" ]; then rm -f "$AUTOSTART"; exit 0; fi
 mkdir -p "$HOME/.local/share" "$(dirname "$LOG")"
@@ -135,7 +138,7 @@ echo "======================================================"
 rm -rf "$DEST"
 if command -v git >/dev/null 2>&1 \
    && curl -fsSI --max-time 8 https://github.com >/dev/null 2>&1 \
-   && git clone --depth 1 "$REPO_URL" "$DEST" >/dev/null 2>&1; then
+   && git clone --depth 1 --branch "$REPO_BRANCH" "$REPO_URL" "$DEST" >/dev/null 2>&1; then
   echo "noctraos: provisioner fetched from GitHub (latest)"
 else
   cp -r /opt/noctraos "$DEST"
@@ -160,6 +163,7 @@ else
 fi
 read -r -n 1 -s -p "Press any key to close this window..."
 EOF
+sed -i "s|__NOCTRAOS_BRANCH__|$BRANCH|" "$SQ_ROOT/usr/local/sbin/noctraos-firstboot"
 chmod 755 "$SQ_ROOT/usr/local/sbin/noctraos-firstboot"
 
 cat > "$SQ_ROOT/etc/skel/.config/autostart/noctraos-setup.desktop" <<'EOF'
