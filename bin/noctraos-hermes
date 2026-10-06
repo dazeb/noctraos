@@ -102,16 +102,6 @@ hide_hermes_own_launcher() {
   config_has desktop.manage_launcher_entry || hermes_set desktop.manage_launcher_entry false
 }
 
-# The launcher uses the icon Hermes ships (Icon=hermes), exactly as upstream intends: no NoctraOS
-# redraw. `hermes desktop` installs it under that name when it writes its own launcher; if the app
-# was built without that, copy the upstream asset unchanged.
-ensure_hermes_icon() {
-  local src="$RUNTIME/apps/desktop/assets/icon.png" dst="$HOME/.local/share/icons/hicolor/512x512/apps/hermes.png"
-  compgen -G "$HOME/.local/share/icons/hicolor/*/apps/hermes.png" >/dev/null && return 0
-  [ -f "$src" ] || return 0
-  mkdir -p "$(dirname "$dst")" && cp "$src" "$dst"
-}
-
 hermes_set() { "$HERMES_BIN" config set "$@" >/dev/null 2>&1; }
 
 install_runtime() {
@@ -189,7 +179,6 @@ cmd_install() {
   seed_ollama_fallback
   seed_vm_electron_flags
   hide_hermes_own_launcher
-  ensure_hermes_icon
 }
 
 cmd_status() {
@@ -230,7 +219,6 @@ cmd_launch() {
   offline_first_launch_fallback
   seed_vm_electron_flags
   hide_hermes_own_launcher
-  ensure_hermes_icon
   # Local-only never enables the free tier: it would still contact Nous for its identity.
   if [ "${LOCAL_ONLY:-}" != 1 ]; then
     export HERMES_GUEST_ONBOARDING=1
