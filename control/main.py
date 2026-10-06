@@ -71,10 +71,22 @@ check:checked { background: #e68e0d; border-color: #e68e0d; color: #121212; }
 """
 
 
+def fit_size(width, height):
+    """The window size for this screen: the design size, but never more than 90% of the monitor
+    (logical pixels, so a HiDPI display is already accounted for)."""
+    display = Gdk.Display.get_default()
+    monitor = display.get_primary_monitor() or display.get_monitor(0) if display else None
+    if monitor is None:
+        return width, height
+    geometry = monitor.get_geometry()
+    return min(width, int(geometry.width * 0.9)), min(height, int(geometry.height * 0.9))
+
+
 class ControlPanel(Gtk.ApplicationWindow):
     def __init__(self, app):
         super().__init__(application=app, title='NoctraOS Control Panel')
-        self.set_default_size(920, 620)
+        self.set_default_size(*fit_size(920, 620))
+        self.set_size_request(560, 380)       # pages scroll, so a small or HiDPI screen still works
         self.set_icon_name('noctraos-control')
         root = Gtk.Box()
         side = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
@@ -88,6 +100,10 @@ class ControlPanel(Gtk.ApplicationWindow):
         self.list = Gtk.ListBox()
         self.list.get_style_context().add_class('sidebar')
         side.pack_start(self.list, True, True, 0)
+        hint = label('Ctrl+1 to Ctrl+7 switch pages\nCtrl+R checks again', 'muted', xalign=0)
+        hint.set_margin_start(18)
+        hint.set_margin_bottom(14)
+        side.pack_end(hint, False, False, 0)
         self.stack = Gtk.Stack(transition_type=Gtk.StackTransitionType.CROSSFADE, hexpand=True)
         self.stack.get_style_context().add_class('content')
         self.ids, self.pages = [], {}
@@ -97,13 +113,32 @@ class ControlPanel(Gtk.ApplicationWindow):
             self.stack.add_named(page, page_id)
             row = Gtk.ListBoxRow()
             row.add(label(title, xalign=0, wrap=False))
+            row.set_tooltip_text(f'{title} (Ctrl+{len(self.ids) + 1})')
             self.list.add(row)
             self.ids.append(page_id)
         self.list.connect('row-selected', self._selected)
         root.pack_start(side, False, False, 0)
         root.pack_start(self.stack, True, True, 0)
         self.add(root)
+        self.connect('key-press-event', self._on_key)
         self.open_page('overview')
+
+    def _on_key(self, _widget, event):
+        """Ctrl+1..7 pages, Ctrl+R or F5 check again, Ctrl+W or Ctrl+Q close."""
+        key = Gdk.keyval_name(event.keyval) or ''
+        ctrl = bool(event.state & Gdk.ModifierType.CONTROL_MASK)
+        if ctrl and key.isdigit() and 1 <= int(key) <= len(self.ids):
+            self.open_page(self.ids[int(key) - 1])
+        elif (ctrl and key.lower() == 'r') or key == 'F5':
+            self.pages[self.current_page()].reload()
+        elif ctrl and key.lower() in ('w', 'q'):
+            self.close()
+        else:
+            return False
+        return True
+
+    def current_page(self):
+        return self.stack.get_visible_child_name() or self.ids[0]
 
     def _selected(self, _list, row):
         if row:

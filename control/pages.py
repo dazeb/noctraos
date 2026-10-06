@@ -110,6 +110,14 @@ class Page(Gtk.Box):
     def on_show(self):
         pass
 
+    def reload(self):
+        """Ctrl+R / F5: check this page again."""
+        for name in ('refresh', 'run_check'):
+            action = getattr(self, name, None)
+            if action:
+                action()
+                return
+
     def make_note(self):
         """A one-line status label that takes no room while it is empty."""
         note = label('', 'muted')
@@ -158,6 +166,7 @@ class CardWidget(Gtk.EventBox):
             box.add(label(card.detail, 'card-detail', chars=30))
         self.add(box)
         if card.page and on_open:
+            self.set_tooltip_text(f'Open {card.page.replace("models", "AI models").title()}')
             box.get_style_context().add_class('clickable')
             self.connect('button-release-event', lambda *_: on_open(card.page))
             self.connect('realize', lambda w: w.get_window().set_cursor(
@@ -168,8 +177,8 @@ class OverviewPage(Page):
     def __init__(self, window):
         super().__init__(window)
         self.spinner = Gtk.Spinner()
-        self.pack_start(header('Overview', self.spinner, button('Refresh', on_click=lambda *_: self.refresh()),
-                               button('Run health check', on_click=lambda *_: window.open_page('health', True))),
+        self.pack_start(header('Overview', self.spinner, button('Refresh', on_click=lambda *_: self.refresh(), tooltip='Check again (Ctrl+R)'),
+                               button('Run health check', on_click=lambda *_: window.open_page('health', True), tooltip='Open Health and check everything now')),
                         False, False, 0)
         self.pack_start(label('The state of this workstation.', 'lede'), False, False, 0)
         self.holder = self.scroller()
@@ -202,7 +211,7 @@ class HealthPage(Page):
         self.rows = None
         self.checked = False
         self.spinner = Gtk.Spinner()
-        self.recheck = button('Re-check', on_click=lambda *_: self.run_check())
+        self.recheck = button('Re-check', on_click=lambda *_: self.run_check(), tooltip='Run the checks again (Ctrl+R)')
         self.copy = button('Copy report', on_click=self._copy,
                            tooltip='The whole check as text for a bug report. No files or prompts.')
         self.pack_start(header('Health', self.spinner, self.recheck, self.copy), False, False, 0)
@@ -241,7 +250,9 @@ class HealthPage(Page):
 
     def _row(self, row):
         box = Gtk.Box(spacing=12, margin_top=8, margin_bottom=8, margin_start=8, margin_end=8)
-        box.pack_start(label('●', 'mark', f'status-{row["status"]}', wrap=False), False, False, 0)
+        mark = label('●', 'mark', f'status-{row["status"]}', wrap=False)
+        mark.set_tooltip_text({'ok': 'OK', 'warn': 'Could be better', 'fail': 'Needs attention'}.get(row['status'], 'Information'))
+        box.pack_start(mark, False, False, 0)
         text = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
         argv = panel.fix_command(row.get('fix'))
         text.add(label(row['label'], 'row-title'))
@@ -286,7 +297,7 @@ class UpdatesPage(Page):
         self.running = False
         self.checks = {}
         self.spinner = Gtk.Spinner()
-        self.pack_start(header('Updates', self.spinner, button('Refresh', on_click=lambda *_: self.refresh())),
+        self.pack_start(header('Updates', self.spinner, button('Refresh', on_click=lambda *_: self.refresh(), tooltip='Check again (Ctrl+R)')),
                         False, False, 0)
         self.pack_start(label('Choose what to update. Nothing changes until you press Update.', 'lede'),
                         False, False, 0)
@@ -400,7 +411,7 @@ class ModelsPage(Page):
     def __init__(self, window):
         super().__init__(window)
         self.spinner = Gtk.Spinner()
-        self.pack_start(header('AI models', self.spinner, button('Refresh', on_click=lambda *_: self.refresh())),
+        self.pack_start(header('AI models', self.spinner, button('Refresh', on_click=lambda *_: self.refresh(), tooltip='Check again (Ctrl+R)')),
                         False, False, 0)
         self.sub = label('Models run on this computer through Ollama.', 'lede')
         self.pack_start(self.sub, False, False, 0)
@@ -590,7 +601,7 @@ class HardwarePage(Page):
         self.detect = None
         self.free_bytes = None
         self.spinner = Gtk.Spinner()
-        self.pack_start(header('Hardware', self.spinner, button('Refresh', on_click=lambda *_: self.refresh())),
+        self.pack_start(header('Hardware', self.spinner, button('Refresh', on_click=lambda *_: self.refresh(), tooltip='Check again (Ctrl+R)')),
                         False, False, 0)
         self.headline = label('', 'lede')
         self.pack_start(self.headline, False, False, 0)
@@ -709,7 +720,7 @@ class PrivacyPage(Page):
         self.mode = None
         self.syncing = False
         self.spinner = Gtk.Spinner()
-        self.pack_start(header('Privacy', self.spinner, button('Refresh', on_click=lambda *_: self.refresh())),
+        self.pack_start(header('Privacy', self.spinner, button('Refresh', on_click=lambda *_: self.refresh(), tooltip='Check again (Ctrl+R)')),
                         False, False, 0)
         self.pack_start(label('Where what you type can go, and the settings that decide it.', 'lede'),
                         False, False, 0)
