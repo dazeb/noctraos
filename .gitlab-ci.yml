@@ -33,7 +33,7 @@ shell:
   script:
     - |
       fail=0
-      for f in boot.sh install.sh install/*.sh bin/noc bin/noc-gpu bin/noctraos-hermes bin/noctraos-control \
+      for f in boot.sh install.sh install/*.sh bin/noc bin/noc-gpu bin/noc-privileged bin/noctraos-hermes bin/noctraos-control \
                bin/noctraos-agent bin/noctraos-copyq bin/noctraos-search configs/nautilus-scripts/* iso/*.sh; do
         [ -f "$f" ] || continue
         bash -n "$f" || fail=1

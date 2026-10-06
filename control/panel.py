@@ -162,9 +162,15 @@ def noc_json(*args, timeout=90):
 HERMES = '/usr/local/bin/noctraos-hermes'
 SEVERITY = {'fail': 0, 'warn': 1, 'info': 2, 'ok': 3}
 
-# Fixes the panel can run without root. "module:<name>" needs the privileged helper (phase 4), so
-# it has no entry here and its row simply shows no button: never fall back to `sudo` in a GUI.
-FIXES = {'hermes:install': [HERMES, 'install']}
+# Fixes the panel can run. Anything needing root goes through the privileged helper; a fix with no
+# entry here shows no button: never fall back to a bare `sudo` in a GUI.
+PKEXEC = '/usr/bin/pkexec'
+HELPER = '/usr/local/libexec/noctraos/noc-privileged'
+FIXES = {
+    'hermes:install': [HERMES, 'install'],
+    # Through the allowlisted root helper: one polkit prompt, never a terminal or a bare sudo.
+    'module:04d_appmanager.sh': [PKEXEC, HELPER, 'module', '04d_appmanager.sh'],
+}
 
 
 def sort_rows(rows):
@@ -291,3 +297,142 @@ def noc_run(*args, timeout=120):
         return False, str(error)
     text = (out.stdout + out.stderr).strip().splitlines()
     return out.returncode == 0, (text[-1] if text else '')
+
+
+# ---- Updates ---------------------------------------------------------------------------------
+
+# Steps that need root run through the helper; the rest run as the user.
+PRIVILEGED_STEPS = ('apt', 'flatpak')
+USER_STEPS = ('mise', 'models')
+STEP_ORDER = PRIVILEGED_STEPS + USER_STEPS
+STEP_TITLES = {'apt': 'System packages', 'flatpak': 'Apps (Flatpak)', 'mise': 'Programming languages',
+               'models': 'AI models'}
+
+
+def _plural(n, word):
+    return f'{n} {word}' if n == 1 else f'{n} {word}s'
+
+
+def update_rows(updates):
+    """Rows for the Updates page from `noc updates` JSON: id, title, detail, available, checked.
+
+    Unknown counts (no network) are never shown as "up to date", and AI models start unchecked
+    because refreshing them can re-download gigabytes."""
+    apt = (updates.get('apt') or {})
+    flatpak = (updates.get('flatpak') or {}).get('count')
+    mise = (updates.get('mise') or {}).get('count')
+    models = (updates.get('models') or {}).get('installed') or 0
+    rows = []
+
+    def row(step, detail, available, checked):
+        rows.append({'id': step, 'title': STEP_TITLES[step], 'detail': detail,
+                     'available': available, 'checked': checked and available})
+
+    n = apt.get('count')
+    if n is None:
+        row('apt', 'Could not check.', False, False)
+    elif n == 0:
+        row('apt', 'Up to date.', False, False)
+    else:
+        size = apt.get('download_bytes')
+        row('apt', _plural(n, 'update') + (f', {fmt_bytes(size)} to download' if size else ''), True, True)
+    if flatpak is None:
+        row('flatpak', 'Could not check.', False, False)
+    elif flatpak == 0:
+        row('flatpak', 'Up to date.', False, False)
+    else:
+        row('flatpak', _plural(flatpak, 'update'), True, True)
+    if mise is None:
+        row('mise', 'Could not check.', False, False)
+    elif mise == 0:
+        row('mise', 'Up to date.', False, False)
+    else:
+        row('mise', _plural(mise, 'tool') + ' can be updated', True, True)
+    if models:
+        row('models', f'Refreshes your {_plural(models, "installed model")}; downloads only what changed.', True, False)
+    else:
+        row('models', 'No models installed.', False, False)
+    return rows
+
+
+def plan_chunks(selected):
+    """Split the chosen steps into the commands to run, in order: root steps through the helper
+    (one prompt for all of them), then the user's own steps. Returns [(ids, argv)]."""
+    chosen = [s for s in STEP_ORDER if s in selected]
+    chunks = []
+    root = [s for s in chosen if s in PRIVILEGED_STEPS]
+    mine = [s for s in chosen if s in USER_STEPS]
+    if root:
+        chunks.append((root, [PKEXEC, HELPER, 'update', ','.join(root)]))
+    if mine:
+        chunks.append((mine, [NOC, 'update', '--json', '--only', ','.join(mine)]))
+    return chunks
+
+
+def exit_message(code):
+    """What a non-zero exit of a chunk means to the person, '' when it is just a failed step."""
+    return {126: 'The password prompt was cancelled, so nothing was changed.',
+            127: 'You are not allowed to do that. Ask an administrator.'}.get(code, '')
+
+
+class UpdateProgress:
+    """Folds the `noc update --json` event stream (across chunks) into overall progress."""
+
+    def __init__(self, ids):
+        self.total = len(ids)
+        self.finished = 0
+        self.failed = []
+        self.text = 'Starting…'
+        self.reboot_required = False
+
+    @property
+    def fraction(self):
+        return self.finished / self.total if self.total else 1.0
+
+    def feed(self, event):
+        """Returns the log line to append, or None."""
+        kind = event.get('event')
+        if kind == 'step':
+            self.text = f'{event.get("label", event.get("id"))}…'
+        elif kind == 'step_done':
+            self.finished += 1
+            if not event.get('ok'):
+                self.failed.append(event.get('id'))
+        elif kind == 'done':
+            self.reboot_required = self.reboot_required or bool(event.get('reboot_required'))
+        elif kind == 'log':
+            return event.get('line')
+        return None
+
+
+def run_events(argv):
+    """Run argv and yield its output as events: JSON lines as parsed, anything else (pkexec or
+    sudo messages, stderr) as {'event': 'log'}, then a final {'event': 'exit', 'code': n}."""
+    try:
+        process = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+    except OSError as error:
+        yield {'event': 'log', 'line': str(error)}
+        yield {'event': 'exit', 'code': 127}
+        return
+    with process:
+        for line in process.stdout:
+            line = line.rstrip('\n')
+            if not line:
+                continue
+            try:
+                event = json.loads(line)
+                if isinstance(event, dict) and 'event' in event:
+                    yield event
+                    continue
+            except ValueError:
+                pass
+            yield {'event': 'log', 'line': line}
+        code = process.wait()
+    yield {'event': 'exit', 'code': code}
+
+
+def offline_message(updates):
+    """Why the Update button is off, or '' when the network is fine."""
+    if updates and not updates.get('online', True):
+        return 'No internet connection. Updates need the network; local AI keeps working offline.'
+    return ''

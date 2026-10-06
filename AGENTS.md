@@ -65,6 +65,8 @@ bin/
                             | bg [list|next|set] | gpu. Sourceable (tests call its functions); NOC_OLLAMA_URL overrides the Ollama URL
   noc-gpu                   GPU detect | install | status (NVIDIA driver+CUDA, AMD ROCm); VERSION must match noc
   noctraos-control          wrapper that execs the system-Python Control Panel (control/)
+  noc-privileged            root side of the panel, run through pkexec: allowlisted `update apt,flatpak` and `module <name>`
+                            (installed to /usr/local/libexec/noctraos; policy in configs/polkit/)
   noctraos-hermes           Hermes Desktop launcher/installer: launch | local | cloud | mode | install | ready | status.
                             Sets HERMES_GUEST_ONBOARDING=1 (free tier), seeds the Ollama fallback
   noctraos-welcome          first-run welcome (GTK; replaces Zorin's tour), --force/--provisioning
@@ -236,10 +238,10 @@ iso/vm-sysprep.sh           run inside a fully provisioned VM before exporting i
 
 ```bash
 # static checks (docker shellcheck — not installed on this host)
-bash -n boot.sh install.sh install/*.sh bin/noc bin/noc-gpu bin/noctraos-control bin/noctraos-agent \
+bash -n boot.sh install.sh install/*.sh bin/noc bin/noc-gpu bin/noc-privileged bin/noctraos-control bin/noctraos-agent \
   bin/noctraos-copyq bin/noctraos-hermes bin/noctraos-search configs/nautilus-scripts/*     # other bin/ files are Python
 docker run --rm -v "$PWD:/mnt" koalaman/shellcheck:stable --severity=warning \
-  boot.sh install.sh install/*.sh bin/noc bin/noc-gpu bin/noctraos-control bin/noctraos-agent \
+  boot.sh install.sh install/*.sh bin/noc bin/noc-gpu bin/noc-privileged bin/noctraos-control bin/noctraos-agent \
   bin/noctraos-copyq bin/noctraos-hermes configs/nautilus-scripts/*     # same list as CI
 python3 -m unittest discover -s tests                # 79 tests: theme, GPU detection, noc JSON modes, Control Panel
 python3 scripts/render-theme.py --check              # committed theme outputs match palette.json

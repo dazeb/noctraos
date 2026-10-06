@@ -144,10 +144,15 @@ class HealthTests(unittest.TestCase):
         self.assertEqual(panel.health_headline([ROWS[0], ROWS[4]]), ("Everything checks out", "ok"))
         self.assertEqual(panel.health_headline([]), ("Everything checks out", "ok"))
 
-    def test_fix_buttons_only_for_fixes_that_need_no_root(self):
+    def test_fix_commands(self):
         self.assertEqual(panel.fix_command("hermes:install"), [panel.HERMES, "install"])
-        self.assertIsNone(panel.fix_command("module:04d_appmanager.sh"))  # needs the privileged helper
+        # root work only ever goes through the allowlisted helper, never a bare sudo
+        self.assertEqual(panel.fix_command("module:04d_appmanager.sh"),
+                         [panel.PKEXEC, panel.HELPER, "module", "04d_appmanager.sh"])
+        self.assertIsNone(panel.fix_command("module:00_preflight.sh"))
         self.assertIsNone(panel.fix_command(None))
+        for argv in panel.FIXES.values():
+            self.assertNotIn("sudo", argv)
 
     def test_report(self):
         text = panel.report_text(ROWS, "6.8.0")
@@ -228,9 +233,12 @@ class PullHandler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Type", "application/x-ndjson")
         self.end_headers()
-        for event in self.EVENTS:
-            self.wfile.write(json.dumps(event).encode() + b"\n\n")  # blank lines must be ignored
-            self.wfile.flush()
+        try:
+            for event in self.EVENTS:
+                self.wfile.write(json.dumps(event).encode() + b"\n\n")  # blank lines must be ignored
+                self.wfile.flush()
+        except BrokenPipeError:  # the client cancelled
+            pass
 
     def log_message(self, *args):
         pass
@@ -275,6 +283,106 @@ class NocRunTests(unittest.TestCase):
         self.addCleanup(setattr, panel, "NOC", original)
         self.assertEqual(panel.noc_run("-c", "echo one; echo two; exit 3"), (False, "two"))
         self.assertEqual(panel.noc_run("-c", "echo fine"), (True, "fine"))
+
+
+UPDATES = {"online": True, "apt": {"count": 3, "download_bytes": 724_000_000}, "flatpak": {"count": 1},
+           "mise": {"count": 0}, "models": {"installed": 2}, "reboot_required": False}
+
+
+def rows_by_id(updates):
+    return {r["id"]: r for r in panel.update_rows(updates)}
+
+
+class UpdateRowTests(unittest.TestCase):
+    def test_rows(self):
+        rows = rows_by_id(UPDATES)
+        self.assertEqual(list(rows), ["apt", "flatpak", "mise", "models"])
+        self.assertEqual(rows["apt"]["detail"], "3 updates, 690.5 MB to download")
+        self.assertTrue(rows["apt"]["checked"])
+        self.assertEqual(rows["flatpak"]["detail"], "1 update")
+        self.assertEqual((rows["mise"]["detail"], rows["mise"]["available"]), ("Up to date.", False))
+
+    def test_models_never_start_checked(self):
+        row = rows_by_id(UPDATES)["models"]
+        self.assertTrue(row["available"])
+        self.assertFalse(row["checked"])
+        self.assertFalse(rows_by_id({**UPDATES, "models": {"installed": 0}})["models"]["available"])
+
+    def test_unknown_is_not_up_to_date(self):
+        rows = rows_by_id({**UPDATES, "apt": {"count": None, "download_bytes": None}, "flatpak": {"count": None},
+                           "mise": {"count": None}})
+        for step in ("apt", "flatpak", "mise"):
+            self.assertEqual(rows[step]["detail"], "Could not check.")
+            self.assertFalse(rows[step]["available"])
+            self.assertFalse(rows[step]["checked"])
+
+    def test_sparse_input_does_not_raise(self):
+        self.assertEqual(len(panel.update_rows({})), 4)
+
+    def test_offline_message(self):
+        self.assertIn("No internet", panel.offline_message({"online": False}))
+        self.assertEqual(panel.offline_message(UPDATES), "")
+        self.assertEqual(panel.offline_message(None), "")
+
+
+class PlanTests(unittest.TestCase):
+    def test_root_steps_share_one_prompt_and_run_first(self):
+        chunks = panel.plan_chunks(["models", "flatpak", "apt", "mise"])
+        self.assertEqual(chunks[0], (["apt", "flatpak"], [panel.PKEXEC, panel.HELPER, "update", "apt,flatpak"]))
+        self.assertEqual(chunks[1], (["mise", "models"], [panel.NOC, "update", "--json", "--only", "mise,models"]))
+        self.assertEqual(len(chunks), 2)
+
+    def test_only_what_was_chosen(self):
+        self.assertEqual([ids for ids, _ in panel.plan_chunks(["mise"])], [["mise"]])
+        self.assertEqual(panel.plan_chunks([]), [])
+        self.assertEqual(panel.plan_chunks(["bogus"]), [])
+
+    def test_no_chunk_uses_sudo(self):
+        for _ids, argv in panel.plan_chunks(list(panel.STEP_ORDER)):
+            self.assertNotIn("sudo", argv)
+
+    def test_exit_messages(self):
+        self.assertIn("cancelled", panel.exit_message(126))
+        self.assertIn("not allowed", panel.exit_message(127))
+        self.assertEqual(panel.exit_message(1), "")
+        self.assertEqual(panel.exit_message(0), "")
+
+
+class ProgressTests(unittest.TestCase):
+    def test_overall_fraction_across_chunks(self):
+        p = panel.UpdateProgress(["apt", "flatpak", "mise"])
+        self.assertEqual(p.fraction, 0)
+        p.feed({"event": "step", "id": "apt", "label": "apt packages"})
+        self.assertEqual(p.text, "apt packages…")
+        self.assertEqual(p.feed({"event": "log", "line": "Reading package lists"}), "Reading package lists")
+        p.feed({"event": "step_done", "id": "apt", "ok": True})
+        self.assertAlmostEqual(p.fraction, 1 / 3)
+        p.feed({"event": "step_done", "id": "flatpak", "ok": False})
+        p.feed({"event": "done", "ok": False, "reboot_required": True})   # a chunk's done is not the end
+        self.assertAlmostEqual(p.fraction, 2 / 3)
+        p.feed({"event": "step_done", "id": "mise", "ok": True})
+        p.feed({"event": "done", "ok": True, "reboot_required": False})
+        self.assertEqual((p.fraction, p.failed, p.reboot_required), (1.0, ["flatpak"], True))
+
+    def test_empty_plan_is_complete(self):
+        self.assertEqual(panel.UpdateProgress([]).fraction, 1.0)
+
+
+class RunEventsTests(unittest.TestCase):
+    def test_json_log_and_exit(self):
+        script = ("echo '{\"event\":\"step\",\"id\":\"mise\"}'; echo plain text; echo oops >&2; "
+                  "echo '{\"not\":\"an event\"}'; echo; exit 3")
+        events = list(panel.run_events(["/bin/sh", "-c", script]))
+        self.assertEqual(events[0], {"event": "step", "id": "mise"})
+        lines = [e["line"] for e in events if e["event"] == "log"]
+        self.assertIn("plain text", lines)
+        self.assertIn("oops", lines)
+        self.assertIn('{"not":"an event"}', lines)
+        self.assertEqual(events[-1], {"event": "exit", "code": 3})
+
+    def test_missing_program(self):
+        events = list(panel.run_events(["/nonexistent/pkexec", "x"]))
+        self.assertEqual(events[-1], {"event": "exit", "code": 127})
 
 
 if __name__ == "__main__":

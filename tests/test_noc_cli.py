@@ -36,6 +36,10 @@ class FakeOllama(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
+    def do_HEAD(self):  # noqa: N802  (the online check uses curl -I)
+        self.send_response(200 if self.path in ("/api/tags", "/api/version") else 404)
+        self.end_headers()
+
     def log_message(self, *args):
         pass
 
@@ -222,6 +226,44 @@ class DoctorStatusTests(unittest.TestCase):
         data = json.loads(Env(self, ollama=False).noc("status", "--json").stdout)
         self.assertFalse(data["ollama"]["running"])
         self.assertEqual(data["ollama"]["models"], 0)
+
+
+class UpdatesCommandTests(unittest.TestCase):
+    def run_updates(self, e):
+        return json.loads(e.noc("updates", NOC_ONLINE_URLS=e.url + "/api/version").stdout)
+
+    def test_shape_and_apt_download_size(self):
+        e = Env(self)
+        e.stub("apt-get", "printf 'Inst a\\nInst b\\nNeed to get 1,500 kB/9,812 kB of archives.\\n'")
+        e.stub("flatpak", "printf 'org.a\\norg.b\\n'")
+        e.stub("mise", 'echo \'{"node":{},"go":{}}\'')
+        data = self.run_updates(e)
+        self.assertEqual(data["online"], True)
+        self.assertEqual(data["apt"], {"count": 2, "download_bytes": 9_812_000})
+        self.assertEqual(data["flatpak"], {"count": 2})
+        self.assertEqual(data["mise"], {"count": 2})
+        self.assertEqual(data["models"], {"installed": 2})
+        self.assertIsInstance(data["reboot_required"], bool)
+
+    def test_offline_and_unknowns_are_unknown_not_zero(self):
+        e = Env(self, ollama=False)
+        e.stub("apt-get", "exit 100")
+        e.stub("flatpak", "exit 1")
+        e.stub("mise", "exit 1")
+        data = self.run_updates(e)
+        self.assertEqual(data["online"], False)
+        self.assertEqual(data["apt"]["count"], None)
+        self.assertEqual(data["flatpak"]["count"], None)
+        self.assertEqual(data["mise"]["count"], None)
+
+    def test_apt_size_parser(self):
+        for line, want in [("Need to get 0 B/724 MB of archives.", "724000000"),
+                           ("Need to get 1,234 kB/9,812 kB of archives.", "9812000"),
+                           ("Need to get 0 B/1.5 GB of archives.", "1500000000"),
+                           ("nothing to do", "0")]:
+            with self.subTest(line=line):
+                self.assertEqual(subprocess.run(["bash", "-c", f'source "{NOC}"; apt_download_bytes'], input=line + "\n",
+                                                capture_output=True, text=True).stdout.strip(), want)
 
 
 class UpdateTests(unittest.TestCase):

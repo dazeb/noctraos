@@ -8,7 +8,7 @@ reimplements what the CLI does, so the two cannot drift. Slow calls run on a thr
 only ever shows a spinner, never blocks.
 
   noctraos-control                 open the panel
-  noctraos-control --page models   open it on a page (overview, models, health, about)
+  noctraos-control --page models   open it on a page (overview, updates, models, health, about)
 """
 import sys
 from pathlib import Path
@@ -64,6 +64,10 @@ button { background-image: none; background: #1e1e1e; color: #bebebe; border: 1p
 button:hover { background: #2a2a2a; }
 button:disabled { color: #555555; }
 button.link { background: none; border: none; color: #e68e0d; padding: 4px 8px; }
+button.suggested { background: #e68e0d; color: #121212; border-color: #e68e0d; font-weight: bold; }
+button.suggested:disabled { background: #3a2a10; color: #7a6a50; border-color: #3a2a10; }
+check { background: #0d0d0d; border: 1px solid #333333; border-radius: 2px; box-shadow: none; }
+check:checked { background: #e68e0d; border-color: #e68e0d; color: #121212; }
 """
 
 
