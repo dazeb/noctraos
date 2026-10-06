@@ -61,10 +61,11 @@ install/
                             free Nous tier primary, local Ollama fallback; runs LAST (25+ min, no sudo)
                             (module order in install.sh: 00 01 02 02b 03 04 04_workstation 04c 04d 05 06 08 09 10 07 11)
 bin/
-  noc                       CLI: update | doctor | models [list|pull|rm|gui] | bg [list|next|set] | gpu
+  noc                       CLI: update [--json] [--only ..] | doctor [--json] | status | models [list [--json]|default|presets|pull|rm|gui]
+                            | bg [list|next|set] | gpu. Sourceable (tests call its functions); NOC_OLLAMA_URL overrides the Ollama URL
   noc-gpu                   GPU detect | install | status (NVIDIA driver+CUDA, AMD ROCm); VERSION must match noc
   noc-menu                  zenity control panel
-  noctraos-hermes           Hermes Desktop launcher/installer: launch | local | install | ready | status.
+  noctraos-hermes           Hermes Desktop launcher/installer: launch | local | cloud | mode | install | ready | status.
                             Sets HERMES_GUEST_ONBOARDING=1 (free tier), seeds the Ollama fallback
   noctraos-welcome          first-run welcome (GTK; replaces Zorin's tour), --force/--provisioning
   noctraos-appearance       wallpaper + fonts panel (we fix theme/layout, so no theme switcher)
@@ -79,7 +80,8 @@ extensions/                 GNOME Shell extensions: noctraos-search (Super+Space
 search/                     search app: file index (SQLite), CopyQ bridge, browser history, settings window
 help/index.html             "New users start here" page the Start panel opens
 scripts/                    render-theme.py, build-desktop-theme.py, seed-password-store.py
-tests/                      unittest: theme composition (test_desktop_theme), GPU detection (test_gpu_detect)
+tests/                      unittest: theme composition (test_desktop_theme), GPU detection (test_gpu_detect),
+                            noc/noctraos-hermes JSON modes (test_noc_cli)
 site/                       project website (static, deployed via wrangler.jsonc); keep claims in step with README
                             every page head carries canonical, Open Graph, Twitter and JSON-LD metadata; social cards live in
                             site/img/social/ (1200x630), favicons/manifest/robots.txt/sitemap.xml/.well-known/security.txt in site/
@@ -237,7 +239,7 @@ bash -n boot.sh install.sh install/*.sh bin/noc bin/noc-gpu bin/noc-menu bin/noc
 docker run --rm -v "$PWD:/mnt" koalaman/shellcheck:stable --severity=warning \
   boot.sh install.sh install/*.sh bin/noc bin/noc-gpu bin/noc-menu bin/noctraos-agent \
   bin/noctraos-copyq bin/noctraos-hermes configs/nautilus-scripts/*     # same list as CI
-python3 -m unittest discover -s tests                # 31 tests: theme composition, GPU detection
+python3 -m unittest discover -s tests                # 62 tests: theme, GPU detection, noc JSON modes
 python3 scripts/render-theme.py --check              # committed theme outputs match palette.json
 
 # wallpaper iteration (venv at ~/workspace/scratch/zorin-img-venv: pillow+numpy)
@@ -408,11 +410,20 @@ tail -f /root/noctraos-build.log
   hardware; on this dev box `noc gpu install --dry-run` is safe (it detects the
   active driver + manual CUDA 13.3 and touches nothing).
 
+- **One default model, one file.** `noc models default <name>` writes `~/.config/noctraos/model`;
+  precedence everywhere is `NOCTRAOS_MODEL`, then that file, then `qwen2.5-coder:7b`. The Welcome
+  app, `noctraos-hermes`, "Ask AI to Explain" and (by rewriting its `    model:` lines) the seeded
+  Continue config read it, each with the same few lines of inline lookup: change them together.
+  `install/03_ai_core.sh` still installs the shipped model (the file does not exist yet).
+- **`noc ... --json` is a contract for the Control Panel** (`docs/control-panel-plan.md`): keep the
+  keys of `doctor --json`, `status --json`, `models list --json`, `models presets --json` and the
+  `update --json` event stream stable (tests/test_noc_cli.py pins them). In JSON mode `noc update`
+  uses `sudo -n`, so a missing credential fails with a message instead of hanging with no TTY.
 - **Hermes' free tier is a cloud service: prompts leave the machine.** Everything the welcome app
   and README say about "local AI" is about the Ollama model; Hermes resolves to the Nous cloud
   unless it is local-only. Never describe Hermes as local without that qualification. The welcome
   app discloses it and offers `noctraos-hermes local` (Ollama primary, free tier off, persistent;
-  undo with `hermes config set model.provider auto`). `noctraos-hermes ready` (runtime and app
+  undo with `noctraos-hermes cloud`, which refuses to touch a provider the user set). `noctraos-hermes ready` (runtime and app
   built) gates the Hermes buttons so they cannot start a second installer during provisioning.
 - **Hermes free tier is gated and pre-GA.** The Nous free tier only exists when
   `HERMES_GUEST_ONBOARDING=1` (or `--guest-onboarding`); `noctraos-hermes` exports it. Never

@@ -4,7 +4,9 @@
 set -u
 
 OLLAMA_URL="${NOCTRAOS_OLLAMA_URL:-http://localhost:11434}"
-MODEL="${NOCTRAOS_MODEL:-qwen2.5-coder:7b}"
+# Default model: NOCTRAOS_MODEL, then the file `noc models default` writes, then the shipped model.
+MODEL="${NOCTRAOS_MODEL:-$(head -n 1 "${XDG_CONFIG_HOME:-$HOME/.config}/noctraos/model" 2>/dev/null)}"
+MODEL="${MODEL:-qwen2.5-coder:7b}"
 
 file="$(head -n 1 <<<"${NAUTILUS_SCRIPT_SELECTED_FILE_PATHS:-}")"
 if [ -z "$file" ]; then
