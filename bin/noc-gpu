@@ -25,7 +25,7 @@
 #              NOC_GPU_LSPCI_FILE=<file>   (tests: read lspci -Dnn output from a file)
 set -uo pipefail
 
-VERSION="0.3.0"
+VERSION="0.3.1"
 
 say()  { printf '\033[1;36mnoc-gpu\033[0m %s\n' "$*"; }
 ok()   { printf '  \033[32mOK\033[0m  %s\n' "$*"; }
