@@ -7,7 +7,9 @@ needs a proper rebuild. This file is the whole brief: read it, then `AGENTS.md` 
 **Kickoff prompt for the new session**
 
 > Read `docs/control-panel-plan.md`, `AGENTS.md` and `docs/objectives.md`. Build the NoctraOS
-> Control Panel described in the plan, phase by phase, on a branch from `main`. Ask me before
+> Control Panel described in the plan, phase by phase, on one deliberately named feature branch
+> per phase, cut from an up-to-date `main` (AGENTS.md rule 8 only forbids *stray* branches; this
+> is the intended workflow, and `main` itself stays untouched until I merge). Ask me before
 > phase 1 if any "Open questions" answer changes the design; otherwise proceed, test every phase
 > on the local KVM VM (`iso/local-vm.sh`), and open one PR per phase. Never run `install.sh` on
 > this workstation, never touch the Proxmox node, and do not merge or publish without asking.
@@ -72,15 +74,21 @@ a launcher in `configs/applications/`, module 07 installs it and removes `noc-me
 | **Updates** | what will update (apt, Flatpak, mise runtimes, Ollama models) with per-item checkboxes, download size, "reboot needed" | Update selected; progress bar + expandable log; no terminal |
 | **AI models** | installed models with size, which is the default, suggestions chosen from RAM/VRAM | pull with progress, remove, set default, custom name field |
 | **Hardware** | GPU detected, driver/CUDA/ROCm state, free disk, RAM | install driver after an explicit summary + consent + reboot notice (never automatic) |
-| **Health** | the doctor checks as a list with OK / warn / fail rows and a fix button where one exists (e.g. AppManager missing → `install.sh --only 04d_appmanager.sh`) | Re-check; "Copy report" for bug reports |
-| **Privacy and AI** | Hermes: free tier (Nous cloud) or local only; search roots/browser history; weather | toggles that call `noctraos-hermes local` / the existing settings windows |
+| **Health** | the doctor checks as a list with OK / warn / fail rows and a fix button where one exists (e.g. AppManager missing → the helper's `module 04d_appmanager.sh` operation, see below) | Re-check; "Copy report" for bug reports |
+| **Privacy and AI** | Hermes: free tier (Nous cloud) or local only; search roots/browser history; weather | toggles that call `noctraos-hermes local` and the new inverse `noctraos-hermes cloud` / the existing settings windows |
 | **Appearance** | wallpaper and fonts | open `noctraos-appearance` (or embed later) |
 | **About** | version, base OS credit (Zorin OS / Ubuntu), licence, links, contact | copy diagnostics |
 
 Privileged work: do not ask for a sudo password in a terminal. Use `pkexec` with a small polkit
-policy for a root helper (`noc-privileged`: apt update/upgrade, flatpak system update, driver
-install) so the GUI gets a normal authentication dialog. Check what is already passwordless on the
-appliance image (NOPASSWD) so it does not prompt twice.
+policy for a root helper (`noc-privileged`) so the GUI gets a normal authentication dialog. Check
+what is already passwordless on the appliance image (NOPASSWD) so it does not prompt twice. The
+helper is an allowlist, never a shell: each operation is a fixed verb with validated arguments.
+Operations: apt update/upgrade, flatpak system update, driver install, and `module <name>` for the
+health-page fixes. Modules call `sudo` themselves, which has no TTY under a GTK subprocess on a
+password-protected release install, so `module` must run as root through the helper (a
+`NOCTRAOS_AS_ROOT=1`-style path in `install.sh`/`lib.sh` that skips `sudo` when already root) and
+accept only an allowlisted set of module names (start with `04d_appmanager.sh`). Any fix button
+whose operation is not in the helper is omitted rather than shelling out to `sudo`.
 
 Long jobs run as a subprocess; stream stdout line by line into the progress UI. Never block the
 GTK main loop. Ollama pulls use its HTTP API (`POST /api/pull` streams JSON progress) instead of
@@ -99,13 +107,26 @@ The GUI should consume structured output, not scrape coloured text:
   progress; steps are the four in `cmd_update`. Add `--only apt|flatpak|mise|models`.
 - `noc-gpu detect --json` already needs checking; `noc-gpu` is 819 lines with fixture-based tests
   (`tests/test_gpu_detect.py`); extend rather than reimplement.
-- `noc models list --json` (name, size, modified) and `noc models default <name>`.
+- `noc models list --json` (name, size, modified) and `noc models default <name>`. Ollama has no
+  global default, so this needs a decision first (phase 0): store the choice in one file
+  (suggested `~/.config/noctraos/model`, plain model name) and migrate **every** consumer to read
+  it, otherwise the panel claims a default the AI integrations ignore. Today they hardcode
+  `qwen2.5-coder:7b` or read a process-only `NOCTRAOS_MODEL`: `bin/noctraos-hermes:29`,
+  `bin/noctraos-welcome:35`, `install/03_ai_core.sh:6`, `configs/nautilus-scripts/Ask AI to Explain:7`,
+  `configs/vscode/continue_config.yaml` (seeded only when missing, so existing copies keep the old
+  model; say so or rewrite the model lines on change) and `configs/hermes/onboarding.md`. Precedence:
+  `NOCTRAOS_MODEL` env, then the file, then `qwen2.5-coder:7b`. Add a tested `noc models default`
+  with no argument that prints the effective model, and have the Overview card use it.
+- `noctraos-hermes cloud`: the inverse of `local` (today its undo is the manual
+  `hermes config set model.provider auto`). It must set `model.provider auto`, which the wrapper
+  already treats as unset, and undo what `local` wrote (`model.default`, `model.base_url`; check how `hermes config` clears a key), leaving free-tier state intact, so the Privacy toggle works both ways
+  without a terminal. Update the wrapper's usage string and `status` output to match.
 - Unit tests in `tests/` for every pure function (parsing, RAM to model suggestion, JSON shape).
 
 ## 6. Phases
 
-0. **Decide and scaffold.** Settle the open questions, create the branch, copy the window/CSS
-   scaffolding from `bin/noctraos-appearance` (169 lines, the smallest GTK app here).
+0. **Decide and scaffold.** Settle the open questions and the single model-default store (section
+   5), create the branch, copy the window/CSS scaffolding from `bin/noctraos-appearance` (169 lines, the smallest GTK app here).
 1. **CLI JSON modes + tests** (section 5). Acceptance: `python3 -m unittest discover -s tests`
    green; `noc doctor --json | jq .` valid on the local VM.
 2. **Shell of the app**: window, sidebar, Overview and About, the CSS, launcher, icon, install via
