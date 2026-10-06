@@ -364,6 +364,19 @@ class ProgressTests(unittest.TestCase):
         p.feed({"event": "done", "ok": True, "reboot_required": False})
         self.assertEqual((p.fraction, p.failed, p.reboot_required), (1.0, ["flatpak"], True))
 
+    def test_a_running_step_counts_as_half_done(self):
+        p = panel.UpdateProgress(["apt"])
+        self.assertEqual(p.display_fraction, 0)
+        p.feed({"event": "step", "id": "apt", "label": "apt packages"})
+        self.assertEqual(p.display_fraction, 0.5)
+        p.feed({"event": "step_done", "id": "apt", "ok": True})
+        self.assertEqual(p.display_fraction, 1.0)
+        two = panel.UpdateProgress(["apt", "mise"])
+        two.feed({"event": "step", "id": "apt"})
+        two.feed({"event": "step_done", "id": "apt", "ok": True})
+        two.feed({"event": "step", "id": "mise"})
+        self.assertEqual(two.display_fraction, 0.75)
+
     def test_empty_plan_is_complete(self):
         self.assertEqual(panel.UpdateProgress([]).fraction, 1.0)
 

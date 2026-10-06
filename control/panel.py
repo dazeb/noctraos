@@ -381,6 +381,7 @@ class UpdateProgress:
     def __init__(self, ids):
         self.total = len(ids)
         self.finished = 0
+        self.running = False
         self.failed = []
         self.text = 'Starting…'
         self.reboot_required = False
@@ -389,12 +390,22 @@ class UpdateProgress:
     def fraction(self):
         return self.finished / self.total if self.total else 1.0
 
+    @property
+    def display_fraction(self):
+        """What the bar shows: a step in progress counts as half done, so a single long step (apt)
+        does not sit at an empty bar for minutes."""
+        if not self.total:
+            return 1.0
+        return min(1.0, (self.finished + (0.5 if self.running else 0)) / self.total)
+
     def feed(self, event):
         """Returns the log line to append, or None."""
         kind = event.get('event')
         if kind == 'step':
+            self.running = True
             self.text = f'{event.get("label", event.get("id"))}…'
         elif kind == 'step_done':
+            self.running = False
             self.finished += 1
             if not event.get('ok'):
                 self.failed.append(event.get('id'))

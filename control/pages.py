@@ -296,6 +296,7 @@ class UpdatesPage(Page):
             check = Gtk.CheckButton()
             check.set_active(row['checked'] and online)
             check.set_sensitive(row['available'] and online)
+            check.connect('toggled', lambda *_: self._sync())
             self.checks[row['id']] = check
             text = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
             text.add(label(row['title'], 'row-title'))
@@ -306,7 +307,12 @@ class UpdatesPage(Page):
         if updates.get('reboot_required'):
             body.add(label('A restart is needed to finish an earlier update.', 'section'))
         self.swap(self.holder, body)
-        self.update_button.set_sensitive(online and any(c.get_sensitive() for c in self.checks.values()))
+        self._sync()
+
+    def _sync(self):
+        """The button is live only when something is ticked (and the network is there)."""
+        self.update_button.set_sensitive(
+            not self.running and any(c.get_active() and c.get_sensitive() for c in self.checks.values()))
 
     # -- running ---------------------------------------------------------------------------
     def start(self):
@@ -340,7 +346,7 @@ class UpdatesPage(Page):
 
     def _show_progress(self, progress):
         self.progress_label.set_text(progress.text)
-        self.bar.set_fraction(progress.fraction)
+        self.bar.set_fraction(progress.display_fraction)
 
     def _tick(self, progress, line):
         self._show_progress(progress)
