@@ -137,18 +137,28 @@ The GUI should consume structured output, not scrape coloured text:
 4. **Updates page + privileged helper (pkexec/polkit).** Acceptance: update runs to completion on
    the VM with a single auth dialog and a progress bar; "reboot needed" shown when
    `/var/run/reboot-required` exists; works when offline (clear message, no hang).
-5. **Hardware/GPU + Privacy pages.** The test VM has no GPU: cover detection with the fixture
-   tests, drive the install path with `noc gpu install --dry-run`, and say plainly that real
-   hardware is untested. Hermes toggle verified with `noctraos-hermes status`.
+5. **Hardware/GPU + Privacy pages.** The test VM has no GPU, and on it a bare
+   `noc gpu install --dry-run` prints "Nothing to install" (`cmd_install` in `bin/noc-gpu`
+   returns before `setup_nvidia`/`setup_amd`), so it exercises nothing. Drive the install path
+   with fixture hardware: `NOC_GPU_LSPCI_FILE=<fixture> noc gpu install --dry-run` (reuse the
+   `lspci -Dnn` fixtures in `tests/test_gpu_detect.py`; an NVIDIA and an AMD one), through the
+   GUI's privileged helper too, and say plainly that real hardware is untested. Hermes toggle verified with `noctraos-hermes status`.
 6. **Polish and docs**: keyboard navigation, tooltips, empty and error states, HiDPI, screenshots
    for `site/` and the README, update `docs/onboarding.md`, `docs/desktop-layout.md`,
    `AGENTS.md` (repo map, commands, pitfalls), and the Start panel/welcome so people find it.
 
-One PR per phase; each must pass the AGENTS.md "Verification checklist": `bash -n` + shellcheck on
-touched scripts (add new scripts to `.gitlab-ci.yml`, `.github/workflows/ci.yml` and the AGENTS.md
-command lists), `python3 -m py_compile` for the app, the unit tests, a deploy of the touched modules
-to the local KVM VM (`iso/local-vm.sh`, see how earlier sessions did it in `docs/release-runbook.md`),
-a second run to prove idempotency, and screenshots of the result.
+One PR per phase; each must pass the whole AGENTS.md "Verification checklist", with the local KVM
+VM (`iso/local-vm.sh`, see how earlier sessions did it in `docs/release-runbook.md`) standing in for
+VM 114, which may be gone:
+
+- `bash -n` + shellcheck on touched scripts (add new scripts to `.gitlab-ci.yml`,
+  `.github/workflows/ci.yml` and the AGENTS.md command lists), `python3 -m py_compile` for the app,
+  `python3 -m unittest discover -s tests`, `python3 scripts/render-theme.py --check`.
+- A **fresh-clone audit** of the pushed branch: clone from GitHub and confirm the new files exist.
+- A **full `install.sh` run** on a freshly provisioned local VM (the appliance ISO flow, or a clean
+  snapshot), not only the touched modules, and an **idempotent second run**. Deploying just the
+  touched modules is fine for fast iteration inside a phase, but does not count as the check.
+- A reboot and **screenshots** of the result whenever menus, theme or the Start panel changed.
 
 ## 7. Pitfalls that will bite (all in AGENTS.md; repeated because they are costly)
 
