@@ -136,7 +136,7 @@ iso/build-local.sh          build the release (and appliance) ISO on a fast work
 iso/local-vm.sh             local KVM test VM: start/stop, console screenshot, absolute clicks, keys,
                             ssh/scp. No root, no host changes
 iso/pve-console-shot.py     console frames from a Proxmox VM via the API (boot-testing without a shell)
-docs/                       objectives (source of truth), onboarding, desktop-layout, theme-design,
+docs/                       objectives (source of truth), onboarding, desktop-layout, control-panel (+ -plan), theme-design,
                             omarchy-parity, release-runbook
 docs/release-runbook.md     ORDERED HANDOFF for shipping 0.3.0: rebuild, test, VM disk, upload, tag
 iso/vm-sysprep.sh           run inside a fully provisioned VM before exporting its disk as a
@@ -540,6 +540,13 @@ tail -f /root/noctraos-build.log
 5. If ISO-relevant: rebuild ISO on the node, boot-test to the installer
    screen (live session gets DHCP = squashfs valid), then restore VM 114.
 6. Push, then verify the remote SHA server-side.
+
+## Control Panel (built 2026-10-06, PRs #40 to #48)
+
+The zenity `noc-menu` is gone; `noctraos-control` is the GUI for `noc` (docs/control-panel.md). Pages:
+Overview, Updates, AI models, Hardware, Health, Privacy, About. Root work goes through
+`noc-privileged` only. Merge the stacked PRs in order and release them together: between the phases
+update and GPU setup had no GUI.
 
 ## Current state (2026-10-05)
 

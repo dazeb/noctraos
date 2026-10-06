@@ -197,6 +197,12 @@ export default class NoctraStart extends Extension {
                 y_align: Clutter.ActorAlign.CENTER}));
         }
         bar.add_child(this._weather());
+        const control = new St.Button({style_class: 'noctra-start-icon-button', reactive: true,
+            can_focus: true, accessible_name: 'NoctraOS Control Panel',
+            child: new St.Icon({icon_name: 'noctraos-control', icon_size: 16,
+                style_class: 'noctra-start-control-icon'})});
+        control.connect('clicked', () => this._launchApp('noctraos-control.desktop'));
+        bar.add_child(control);
         const settings = new St.Button({style_class: 'noctra-start-icon-button', reactive: true,
             can_focus: true, accessible_name: 'Settings',
             child: new St.Icon({icon_name: 'emblem-system-symbolic', icon_size: 16})});

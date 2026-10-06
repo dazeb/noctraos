@@ -25,6 +25,8 @@ in, and the desktop is dark with a little amber along the way.
   the web. Browser history is available if you opt in.
 - **AI on your computer.** Ollama runs local models; VS Code and Continue are
   set up to use them.
+- **A Control Panel.** Updates, AI models, your graphics card, a health check,
+  and your privacy choices in one window, with no terminal needed.
 - **Assistants within reach.** Hermes Desktop, Codex, Claude Code, OpenCode,
   Grok, Gemini CLI, and Qwen Code have a place in the Start panel.
 - **The everyday tools, too.** A browser, office apps, media tools, a task
@@ -33,6 +35,10 @@ in, and the desktop is dark with a little amber along the way.
 | The Start panel | Windows + Space search |
 | :---: | :---: |
 | [<img src="site/img/shots/start-panel.webp" alt="NoctraOS Start panel with AI assistants and recent files" width="400">](site/img/shots/full/start-panel.webp) | [<img src="site/img/shots/search-files.webp" alt="NoctraOS search finding a planning document in the home folder" width="400">](site/img/shots/full/search-files.webp) |
+
+| The Control Panel | Privacy choices |
+| :---: | :---: |
+| [<img src="site/img/shots/control-overview.webp" alt="NoctraOS Control Panel overview: version, updates, local AI, graphics, disk and Hermes" width="400">](site/img/shots/full/control-overview.webp) | [<img src="site/img/shots/control-privacy.webp" alt="NoctraOS Control Panel privacy page: Hermes local only or the Nous cloud free tier" width="400">](site/img/shots/full/control-privacy.webp) |
 
 *Real screenshots from a running NoctraOS VM. Click any image for the full view.*
 
@@ -84,6 +90,7 @@ Questions, press, or a security report: **[admin@noctraos.dev](mailto:admin@noct
 | Setup, configuration, GPU support, maintenance, or troubleshooting | [Setup guide](docs/setup.md) |
 | The project's direction and principles | [Objectives](docs/objectives.md) |
 | The welcome, dock, Start panel, and search experience | [Onboarding](docs/onboarding.md) · [Desktop layout](docs/desktop-layout.md) |
+| The Control Panel: updates, models, hardware, health, privacy | [Control Panel](docs/control-panel.md) |
 | Themes and the included app set | [Theme design](docs/theme-design.md) · [App comparison](docs/omarchy-parity.md) |
 | Testing and your first change | [Contributing](CONTRIBUTING.md) |
 | Release progress and remaining validation | [Release runbook](docs/release-runbook.md) |

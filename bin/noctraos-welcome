@@ -199,6 +199,7 @@ class Welcome(Gtk.ApplicationWindow):
             ('Start button', 'The Noctra logo at the bottom-left. Apps, search, power.'),
             ('Task Manager', 'Mission Center, pinned in the taskbar.'),
             ('File Explorer', 'Files, pinned in the taskbar.'),
+            ('Control Panel', 'Updates, models, hardware, health and privacy. Search for it.'),
             ('Screenshots', 'The Print key opens the screenshot tool.'),
             ('System tray', 'Network, sound and power, top right.'),
         ]
@@ -237,8 +238,8 @@ class Welcome(Gtk.ApplicationWindow):
         buttons.pack_start(self.hermes_local, False, False, 0)
         box.pack_start(buttons, False, False, 4)
         box.pack_start(label('Hermes will ask who you are and how you want it to behave, then '
-                             'offer a short tour. Local only is saved; you can switch back in '
-                             'Hermes settings.', 'muted'), False, False, 0)
+                             'offer a short tour. Local only is saved; you can switch any time in '
+                             'the Control Panel, under Privacy.', 'muted'), False, False, 0)
         return box
 
     # -- navigation --------------------------------------------------------------------
