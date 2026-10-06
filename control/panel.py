@@ -5,7 +5,10 @@ number on screen comes from `noc status --json` and friends, so this module only
 Kept free of PyGObject so the unit tests (and CI) can import it.
 """
 import json
+import os
+import re
 import subprocess
+import urllib.request
 from dataclasses import dataclass
 
 NOC = '/usr/local/bin/noc'
@@ -152,3 +155,139 @@ def noc_json(*args, timeout=90):
         return json.loads(out.stdout)
     except (OSError, subprocess.SubprocessError, ValueError):
         return None
+
+
+# ---- Health ----------------------------------------------------------------------------------
+
+HERMES = '/usr/local/bin/noctraos-hermes'
+SEVERITY = {'fail': 0, 'warn': 1, 'info': 2, 'ok': 3}
+
+# Fixes the panel can run without root. "module:<name>" needs the privileged helper (phase 4), so
+# it has no entry here and its row simply shows no button: never fall back to `sudo` in a GUI.
+FIXES = {'hermes:install': [HERMES, 'install']}
+
+
+def sort_rows(rows):
+    """Problems first, in the order `noc doctor` found them within each severity."""
+    return sorted(rows, key=lambda r: SEVERITY.get(r.get('status'), 2))
+
+
+def health_headline(rows):
+    """(text, level) for the top of the Health page."""
+    bad = sum(1 for r in rows if r.get('status') == 'fail')
+    warn = sum(1 for r in rows if r.get('status') == 'warn')
+    if bad:
+        return (f'{bad} problem needs attention' if bad == 1 else f'{bad} problems need attention'), 'fail'
+    if warn:
+        return (f'{warn} thing could be better' if warn == 1 else f'{warn} things could be better'), 'warn'
+    return 'Everything checks out', 'ok'
+
+
+def fix_command(fix):
+    """The argv for a doctor row's `fix`, or None when the panel cannot run it."""
+    return FIXES.get(fix)
+
+
+def report_text(rows, kernel=''):
+    """Plain text of the whole check for a bug report: one line per row, no secrets."""
+    marks = {'ok': 'OK  ', 'warn': 'WARN', 'fail': 'FAIL', 'info': 'INFO'}
+    lines = ['NoctraOS health report', f'kernel: {kernel or "unknown"}']
+    for r in rows:
+        detail = f': {r["detail"]}' if r.get('detail') else ''
+        lines.append(f'[{marks.get(r.get("status"), "INFO")}] {r.get("label")}{detail}')
+    return '\n'.join(lines) + '\n'
+
+
+# ---- AI models -------------------------------------------------------------------------------
+
+OLLAMA_URL = os.environ.get('NOC_OLLAMA_URL', 'http://127.0.0.1:11434')
+# Same rule as `noc models default`: letters, digits and . _ : / - only.
+_MODEL_NAME = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._:/-]*$')
+
+FIT_TEXT = {'gpu': 'Runs on your GPU', 'cpu': 'Runs on the CPU (slower)', 'no': 'May not fit in memory'}
+
+
+def valid_model_name(name):
+    return bool(_MODEL_NAME.match(name or ''))
+
+
+def same_model(a, b):
+    """Ollama lists "name:latest" for a model pulled as "name"."""
+    strip = lambda n: n[:-7] if n.endswith(':latest') else n  # noqa: E731
+    return strip(a) == strip(b)
+
+
+def installed_rows(listing):
+    """Rows for the installed list from `noc models list --json`: name, size text, default flag."""
+    if not listing or not listing.get('ollama'):
+        return []
+    rows = [{'name': m['name'], 'size': fmt_bytes(m['size']), 'default': bool(m.get('is_default'))}
+            for m in listing.get('models', [])]
+    return sorted(rows, key=lambda r: (not r['default'], r['name']))
+
+
+def suggestion_rows(presets, installed):
+    """Presets not yet installed, recommended first, then by what fits best."""
+    if not presets:
+        return []
+    order = {'gpu': 0, 'cpu': 1, 'no': 2}
+    rows = [{'name': p['name'], 'note': p['note'], 'fit': FIT_TEXT.get(p['fit'], ''),
+             'recommended': bool(p.get('recommended')), 'fit_key': p['fit']}
+            for p in presets.get('presets', []) if not any(same_model(p['name'], i) for i in installed)]
+    return sorted(rows, key=lambda r: (not r['recommended'], order.get(r['fit_key'], 3)))
+
+
+_PULL_STAGES = {'pulling manifest': 'Fetching the model list', 'verifying sha256 digest': 'Verifying the download',
+                'writing manifest': 'Finishing up', 'removing any unused layers': 'Cleaning up'}
+
+
+class PullTracker:
+    """Folds Ollama's /api/pull event stream into one overall (fraction, text).
+
+    A pull has several layers, each with its own total, so the bar adds them up instead of
+    jumping back to zero for every layer."""
+
+    def __init__(self):
+        self.layers = {}
+
+    def feed(self, event):
+        if event.get('error'):
+            return None, f'Failed: {event["error"]}'
+        status = event.get('status', '')
+        if status == 'success':
+            return 1.0, 'Done'
+        if event.get('total') and status.startswith('pulling '):
+            self.layers[status] = (event.get('completed', 0), event['total'])
+            done = sum(c for c, _ in self.layers.values())
+            total = sum(t for _, t in self.layers.values())
+            return done / total, f'Downloading: {fmt_bytes(done)} of {fmt_bytes(total)}'
+        return None, _PULL_STAGES.get(status, status.capitalize() or 'Working')
+
+
+def iter_pull(name, base_url=None, cancelled=lambda: False, timeout=60):
+    """Yield the JSON events of `POST /api/pull` for `name` until it finishes or is cancelled.
+
+    Raises OSError when Ollama cannot be reached. Closing the connection (cancel) stops the pull."""
+    request = urllib.request.Request(f'{base_url or OLLAMA_URL}/api/pull', method='POST',
+                                     data=json.dumps({'model': name, 'stream': True}).encode(),
+                                     headers={'Content-Type': 'application/json'})
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        for line in response:
+            if cancelled():
+                return
+            line = line.strip()
+            if line:
+                try:
+                    yield json.loads(line)
+                except ValueError:
+                    continue
+
+
+def noc_run(*args, timeout=120):
+    """Run `noc <args>`; returns (ok, last line of output) so a page can show what went wrong."""
+    try:
+        out = subprocess.run([NOC, *args], capture_output=True, text=True, timeout=timeout)
+    except (OSError, subprocess.SubprocessError) as error:
+        return False, str(error)
+    text = (out.stdout + out.stderr).strip().splitlines()
+    return out.returncode == 0, (text[-1] if text else '')
