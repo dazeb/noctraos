@@ -59,6 +59,47 @@ def copy_to_clipboard(text):
     Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD).set_text(text, -1)
 
 
+class RunLog(Gtk.Box):
+    """A progress bar, a status line and an expandable log for a long job (updates, GPU setup)."""
+    LINES = 2000
+
+    def __init__(self, reminder='Keep the computer on until this finishes.'):
+        super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=6, no_show_all=True)
+        self.label = label('', 'card-detail')
+        self.bar = Gtk.ProgressBar()
+        self.add(self.label)
+        self.add(self.bar)
+        self.add(label(reminder, 'muted'))
+        expander = Gtk.Expander(label='Show details')
+        view = Gtk.ScrolledWindow(min_content_height=150, hscrollbar_policy=Gtk.PolicyType.AUTOMATIC)
+        self.view = Gtk.TextView(editable=False, cursor_visible=False, monospace=True)
+        view.add(self.view)
+        expander.add(view)
+        self.add(expander)
+
+    def begin(self, text='Starting…'):
+        self.view.get_buffer().set_text('')
+        self.set_status(text, 0)
+        self.set_no_show_all(False)
+        self.show_all()
+        self.set_no_show_all(True)
+
+    def set_status(self, text, fraction=None):
+        """fraction None pulses the bar (work of unknown length)."""
+        self.label.set_text(text)
+        if fraction is None:
+            self.bar.pulse()
+        else:
+            self.bar.set_fraction(fraction)
+
+    def append(self, line):
+        buffer = self.view.get_buffer()
+        buffer.insert(buffer.get_end_iter(), line + '\n')
+        if buffer.get_line_count() > self.LINES:
+            buffer.delete(buffer.get_start_iter(), buffer.get_iter_at_line(buffer.get_line_count() - self.LINES))
+        self.view.scroll_to_mark(buffer.get_insert(), 0, False, 0, 0)
+
+
 class Page(Gtk.Box):
     """A sidebar page. on_show() is called each time it becomes the visible one."""
 
@@ -240,8 +281,6 @@ class HealthPage(Page):
 # ---- Updates ---------------------------------------------------------------------------------
 
 class UpdatesPage(Page):
-    LOG_LINES = 2000
-
     def __init__(self, window):
         super().__init__(window)
         self.running = False
@@ -257,19 +296,8 @@ class UpdatesPage(Page):
         self.update_button.set_halign(Gtk.Align.START)
         self.pack_start(self.update_button, False, False, 0)
         self.note = self.make_note()
-        self.progress_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6, no_show_all=True)
-        self.progress_label = label('', 'card-detail')
-        self.bar = Gtk.ProgressBar()
-        self.progress_box.add(self.progress_label)
-        self.progress_box.add(self.bar)
-        self.progress_box.add(label('Keep the computer on until this finishes.', 'muted'))
-        expander = Gtk.Expander(label='Show details')
-        view = Gtk.ScrolledWindow(min_content_height=150, hscrollbar_policy=Gtk.PolicyType.AUTOMATIC)
-        self.log = Gtk.TextView(editable=False, cursor_visible=False, monospace=True)
-        view.add(self.log)
-        expander.add(view)
-        self.progress_box.add(expander)
-        self.pack_start(self.progress_box, False, False, 0)
+        self.run = RunLog()
+        self.pack_start(self.run, False, False, 0)
 
     def on_show(self):
         if not self.running:
@@ -325,10 +353,8 @@ class UpdatesPage(Page):
         for check in self.checks.values():
             check.set_sensitive(False)
         self.say(self.note, '')
-        self.log.get_buffer().set_text('')
-        self.reveal(self.progress_box)
+        self.run.begin()
         progress = panel.UpdateProgress(selected)
-        self._show_progress(progress)
 
         def work():
             code_message = ''
@@ -345,24 +371,16 @@ class UpdatesPage(Page):
 
         background(work, self._finished)
 
-    def _show_progress(self, progress):
-        self.progress_label.set_text(progress.text)
-        self.bar.set_fraction(progress.display_fraction)
-
     def _tick(self, progress, line):
-        self._show_progress(progress)
+        self.run.set_status(progress.text, progress.display_fraction)
         if line:
-            buffer = self.log.get_buffer()
-            buffer.insert(buffer.get_end_iter(), line + '\n')
-            if buffer.get_line_count() > self.LOG_LINES:
-                buffer.delete(buffer.get_start_iter(), buffer.get_iter_at_line(buffer.get_line_count() - self.LOG_LINES))
-            self.log.scroll_to_mark(buffer.get_insert(), 0, False, 0, 0)
+            self.run.append(line)
         return False
 
     def _finished(self, result):
         progress, problem = result
         self.running = False
-        self.progress_box.hide()
+        self.run.hide()
         if problem:
             message = problem
         elif progress.failed:
@@ -563,6 +581,227 @@ class ModelsPage(Page):
             item.set_sensitive(not busy)
 
 
+# ---- Hardware --------------------------------------------------------------------------------
+
+class HardwarePage(Page):
+    def __init__(self, window):
+        super().__init__(window)
+        self.running = False
+        self.detect = None
+        self.free_bytes = None
+        self.spinner = Gtk.Spinner()
+        self.pack_start(header('Hardware', self.spinner, button('Refresh', on_click=lambda *_: self.refresh())),
+                        False, False, 0)
+        self.headline = label('', 'lede')
+        self.pack_start(self.headline, False, False, 0)
+        self.holder = self.scroller()
+        self.setup = button('Set up GPU for local AI…', 'suggested', on_click=lambda *_: self._confirm())
+        self.setup.set_halign(Gtk.Align.START)
+        self.setup.set_no_show_all(True)
+        self.pack_start(self.setup, False, False, 0)
+        self.note = self.make_note()
+        self.run = RunLog()
+        self.pack_start(self.run, False, False, 0)
+
+    def on_show(self):
+        if not self.running:
+            self.refresh()
+
+    def refresh(self):
+        if self.running:
+            return
+        self.spinner.start()
+
+        def work():
+            return panel.gpu_json('detect', '--json'), panel.gpu_json('status', '--json'), panel.noc_json('status')
+        background(work, self._loaded)
+
+    def _loaded(self, result):
+        self.spinner.stop()
+        detect, gstatus, status = result
+        self.detect = detect
+        self.free_bytes = ((status or {}).get('disk') or {}).get('root_free_bytes')
+        state = panel.hardware_state(detect, gstatus)
+        self.headline.set_text(state['headline'])
+        body = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8, margin_end=8)
+        body.add(label('Graphics', 'section'))
+        for gpu in state['gpus']:
+            body.add(label(gpu['name'], 'row-title'))
+            body.add(label(gpu['verdict'], 'card-detail', chars=80))
+        if not state['gpus']:
+            body.add(label('No NVIDIA or AMD GPU was found.', 'muted'))
+        if state['rows']:
+            body.add(label('Status', 'section'))
+            for row in state['rows']:
+                line = Gtk.Box(spacing=10)
+                mark = {'ok': 'ok', 'fail': 'fail'}.get(row['status'], 'info')
+                line.pack_start(label('●', 'mark', f'status-{mark}', wrap=False), False, False, 0)
+                line.pack_start(label(row['text'], 'card-detail', chars=80), True, True, 0)
+                body.add(line)
+        body.add(label('Memory and disk', 'section'))
+        if status:
+            body.add(label(f'{status.get("ram_gb")} GB of RAM', 'card-detail'))
+            disk = status.get('disk') or {}
+            if disk:
+                body.add(label(f'{panel.fmt_bytes(disk["root_free_bytes"])} free of '
+                               f'{panel.fmt_bytes(disk["root_total_bytes"])} on the system disk', 'card-detail'))
+        self.swap(self.holder, body)
+        self.setup.set_visible(state['can_install'])
+
+    # -- install: always an explicit summary and a yes -------------------------------------
+    def _confirm(self):
+        if self.running or self.detect is None:
+            return
+        blocker = panel.install_blocker(self.detect, self.free_bytes)
+        dialog = Gtk.MessageDialog(transient_for=self.window, modal=True, message_type=Gtk.MessageType.QUESTION,
+                                   buttons=Gtk.ButtonsType.NONE, text='Set up your GPU for local AI?')
+        dialog.format_secondary_text('\n'.join(panel.install_summary(self.detect)) + (f'\n\n{blocker}' if blocker else ''))
+        dialog.add_button('Cancel', Gtk.ResponseType.CANCEL)
+        if not blocker:
+            dialog.add_button('Install', Gtk.ResponseType.OK)
+        answer = dialog.run()
+        dialog.destroy()
+        if answer == Gtk.ResponseType.OK:
+            self._install()
+
+    def _install(self):
+        argv = panel.gpu_install_argv(self.detect)
+        if not argv:
+            return
+        self.running = True
+        self.setup.set_sensitive(False)
+        self.say(self.note, '')
+        self.run.begin('Setting up the GPU…')
+
+        def work():
+            problem = ''
+            for event in panel.run_events(argv):
+                if event['event'] == 'exit':
+                    return event['code'], panel.exit_message(event['code'])
+                GLib.idle_add(self._tick, event.get('line') or '')
+            return 1, problem
+
+        background(work, self._finished)
+
+    def _tick(self, line):
+        if line:
+            self.run.append(line)
+        self.run.set_status('Setting up the GPU…', None)
+        return False
+
+    def _finished(self, result):
+        code, problem = result
+        self.running = False
+        self.run.hide()
+        self.setup.set_sensitive(True)
+        if code == 0:
+            self.say(self.note, 'Done. Check the status above; a restart may be needed to finish.')
+        else:
+            self.say(self.note, problem or 'The setup did not finish. Open Show details next time for the reason.')
+        self.refresh()
+
+
+# ---- Privacy ---------------------------------------------------------------------------------
+
+class PrivacyPage(Page):
+    def __init__(self, window):
+        super().__init__(window)
+        self.mode = None
+        self.syncing = False
+        self.spinner = Gtk.Spinner()
+        self.pack_start(header('Privacy', self.spinner, button('Refresh', on_click=lambda *_: self.refresh())),
+                        False, False, 0)
+        self.pack_start(label('Where what you type can go, and the settings that decide it.', 'lede'),
+                        False, False, 0)
+        scroller = self.scroller()
+        self.note = self.make_note()
+        body = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8, margin_end=8)
+        body.add(label('Hermes', 'section'))
+        self.hermes_head = label('', 'row-title')
+        self.hermes_text = label('', 'card-detail', chars=80)
+        body.add(self.hermes_head)
+        body.add(self.hermes_text)
+        self.local = Gtk.RadioButton.new_with_label_from_widget(None, 'Local only: nothing leaves this computer')
+        self.cloud = Gtk.RadioButton.new_with_label_from_widget(self.local, 'Nous free tier (cloud): what you type leaves this computer')
+        for radio, target in ((self.local, 'local'), (self.cloud, 'cloud')):
+            radio.connect('toggled', lambda r, target=target: self._toggled(r, target))
+            body.add(radio)
+        body.add(label('A change applies the next time Hermes starts: close it and open it again.', 'muted'))
+        body.add(label('Search', 'section'))
+        body.add(label('Super+Space searches apps, files in your home folder, clipboard history, the web and '
+                       'browser history. Each of those can be switched off, and the folders chosen.',
+                       'card-detail', chars=80))
+        body.add(self._launch_button('Search settings…', panel.SEARCH_SETTINGS))
+        body.add(label('Weather', 'section'))
+        body.add(label('Off until you pick a city. Only the city name you type is sent, to Open-Meteo, '
+                       'to look up the weather.', 'card-detail', chars=80))
+        body.add(self._launch_button('Weather settings…', panel.WEATHER_SETUP))
+        scroller.add(body)
+        self.sync_controls(None)
+
+    def _launch_button(self, text, argv):
+        item = button(text, on_click=lambda *_: self._launch(argv))
+        item.set_halign(Gtk.Align.START)
+        return item
+
+    def _launch(self, argv):
+        try:
+            subprocess.Popen(argv, start_new_session=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except OSError:
+            self.say(self.note, 'That settings window could not be opened.')
+
+    def on_show(self):
+        self.say(self.note, '')
+        self.refresh()
+
+    def refresh(self):
+        self.spinner.start()
+        background(panel.hermes_mode, self._loaded)
+
+    def _loaded(self, mode):
+        self.spinner.stop()
+        self.sync_controls(mode)
+
+    def sync_controls(self, mode):
+        self.mode = mode
+        info = panel.hermes_privacy(mode)
+        self.hermes_head.set_text(info['headline'])
+        self.hermes_text.set_text(info['text'])
+        self.syncing = True
+        self.local.set_active(mode == 'local')
+        self.cloud.set_active(mode == 'cloud')
+        self.syncing = False
+        for radio in (self.local, self.cloud):
+            radio.set_sensitive(info['can_switch'])
+
+    def _toggled(self, radio, target):
+        if self.syncing or not radio.get_active():
+            return
+        argv = panel.switch_command(target, self.mode)
+        if not argv:
+            return
+        if target == 'cloud' and not self._confirm_cloud():
+            self.sync_controls(self.mode)
+            return
+        self.say(self.note, 'Switching…')
+
+        def done(result):
+            ok, message = result
+            self.say(self.note, 'Done. It applies the next time Hermes starts.' if ok else f'Could not switch: {message}')
+            self.refresh()
+        background(lambda: panel.run_ok(argv), done)
+
+    def _confirm_cloud(self):
+        dialog = Gtk.MessageDialog(transient_for=self.window, modal=True, message_type=Gtk.MessageType.QUESTION,
+                                   buttons=Gtk.ButtonsType.NONE, text='Send what you type to Hermes to the cloud?')
+        dialog.format_secondary_text("The Nous free tier is Nous Research's cloud service. What you type to "
+                                     'Hermes will leave this computer. You can switch back any time.')
+        dialog.add_buttons('Keep it local', Gtk.ResponseType.CANCEL, 'Use the cloud', Gtk.ResponseType.OK)
+        answer = dialog.run()
+        dialog.destroy()
+        return answer == Gtk.ResponseType.OK
+
+
 # ---- About -----------------------------------------------------------------------------------
 
 class AboutPage(Page):
@@ -606,5 +845,5 @@ class AboutPage(Page):
 
 
 PAGES = [('overview', 'Overview', OverviewPage), ('updates', 'Updates', UpdatesPage),
-         ('models', 'AI models', ModelsPage),
-         ('health', 'Health', HealthPage), ('about', 'About', AboutPage)]
+         ('models', 'AI models', ModelsPage), ('hardware', 'Hardware', HardwarePage),
+         ('health', 'Health', HealthPage), ('privacy', 'Privacy', PrivacyPage), ('about', 'About', AboutPage)]

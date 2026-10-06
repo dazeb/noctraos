@@ -768,7 +768,28 @@ status_amd() {
   return "$rc"
 }
 
+# status --json: the same checks as the text output, as rows for the Control Panel.
+#   {gpus:[name..], ready, reboot_pending, rows:[{status: ok|fail|note, text}]}
+# ready = at least one GPU and every check passed. Text markers are parsed back out of the normal
+# output so the two cannot disagree.
+status_json() {
+  have jq || { bad "--json needs jq"; return 1; }
+  local out rc
+  out="$(cmd_status "$@" 2>&1 | sed -u 's/\x1b\[[?0-9;]*[a-zA-Z]//g')"; rc="${PIPESTATUS[0]}"
+  scan_gpus >/dev/null 2>&1 || true
+  local names=("${GPU_NAME[@]}") reboot=false
+  [ -f /var/run/reboot-required ] && grep -q 'noctraos-gpu' /var/run/reboot-required.pkgs 2>/dev/null && reboot=true
+  printf '%s\n' "$out" | jq -R -s --argjson rc "$rc" --argjson reboot "$reboot" \
+    '[ split("\n")[] | select(test("^ *(OK|!!|\\.\\.) ")) |
+       { status: (if test("^ *OK ") then "ok" elif test("^ *!! ") then "fail" else "note" end),
+         text: sub("^ *(OK|!!|\\.\\.) +"; "") } ] as $rows
+     | ($ARGS.positional | map(select(. != ""))) as $gpus
+     | { gpus: $gpus, ready: (($gpus | length) > 0 and $rc == 0), reboot_pending: $reboot, rows: $rows }' \
+    --args "${names[@]:-}"
+}
+
 cmd_status() {
+  if [ "${1:-}" = "--json" ]; then shift; status_json "$@"; return; fi
   local smoke=""
   [ "${1:-}" = "--smoke" ] && smoke="smoke"
   scan_gpus || return 1
@@ -786,7 +807,9 @@ cmd_status() {
   esac
   case "$AMD_TIER" in
     rocm|override) status_amd || rc=1 ;;
-    vulkan)        have vulkaninfo && note "AMD GPU uses Vulkan only (no ROCm)" || note "AMD GPU: Vulkan tools not installed" ;;
+    # Without the Vulkan tools the card is not usable for local AI: that is "not set up", not a note.
+    vulkan)        if have vulkaninfo; then note "AMD GPU uses Vulkan only (no ROCm)"
+                   else bad "AMD GPU: Vulkan tools not installed — run: noc gpu install"; rc=1; fi ;;
   esac
   [ -f /var/run/reboot-required ] && grep -q 'noctraos-gpu' /var/run/reboot-required.pkgs 2>/dev/null \
     && { bad "reboot pending for the GPU driver"; rc=1; }
@@ -801,7 +824,7 @@ noc-gpu $VERSION — NVIDIA CUDA / AMD ROCm setup for local LLMs
 
   noc gpu detect [--json]     show detected GPUs and the install plan
   noc gpu install [--dry-run] [--runtime-only] [--vendor nvidia|amd|all]
-  noc gpu status [--smoke]    verify the stack (--smoke compiles + runs a CUDA probe)
+  noc gpu status [--smoke] [--json]   verify the stack (--smoke compiles + runs a CUDA probe)
 EOF
 }
 
