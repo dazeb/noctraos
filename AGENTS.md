@@ -425,6 +425,17 @@ tail -f /root/noctraos-build.log
   keys of `doctor --json`, `status --json`, `models list --json`, `models presets --json` and the
   `update --json` event stream stable (tests/test_noc_cli.py pins them). In JSON mode `noc update`
   uses `sudo -n`, so a missing credential fails with a message instead of hanging with no TTY.
+- **A real AMD GPU test VM exists on TrueNAS** (`192.168.8.111`, VM id 1 `noctraosgputest`, created
+  2026-10-06; manage it with `midclt call vm.start|vm.stop 1` over `ssh root@192.168.8.111`). It has the
+  Radeon RX 580 (Polaris, `0a:00.0`, already on vfio-pci with its audio function and a clean IOMMU
+  group) passed through, 4 vCPU / 8 GiB, a 64 GiB zvol `ssdpool0/noctraos-gpu-test` holding a
+  provisioned NoctraOS disk, and a macvlan NIC (the NAS itself cannot reach it; other LAN hosts can;
+  DHCP, find it by MAC `00:a0:98:71:01:df`). User `noctraos`/`noctraos`. Verified there: `noc gpu detect`
+  picks the Vulkan tier, `noc gpu install --vendor amd` installs Mesa Vulkan and is a no-op the second
+  time, `vulkaninfo` shows RADV POLARIS10, and Ollama with `OLLAMA_VULKAN=1` runs qwen2.5-coder:7b 100%
+  on the GPU (29/29 layers). Not covered: ROCm (Polaris has none) and NVIDIA. Do not start it
+  while the NAS is under memory pressure (it takes 8 GiB); stop it when done. The dev workstation's
+  RTX 3080 Ti drives the desktop, so it cannot be passed through without ending the session.
 - **Hermes' free tier is a cloud service: prompts leave the machine.** Everything the welcome app
   and README say about "local AI" is about the Ollama model; Hermes resolves to the Nous cloud
   unless it is local-only. Never describe Hermes as local without that qualification. The welcome
