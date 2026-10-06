@@ -5,8 +5,7 @@ changing anything; the pitfalls section saves real debugging time.
 
 ## What this repo is
 
-NoctraOS (`noctraos`) is an AI-ready desktop OS for **people moving from
-Windows**, on an Ubuntu base (Zorin OS 18.x today) — Omarchy's idea without
+NoctraOS (`noctraos`) is an **AI development workstation OS**, on an Ubuntu base (Zorin OS 18.x today) — Omarchy's idea without
 the tiling-WM learning curve. It is delivered as a bootable **ISO**; the
 Omakub-style provisioner (`install.sh`) is the engine baked into it. Contents:
 local Ollama stack, a six-agent start menu, mise-managed runtimes, a dark +
@@ -148,7 +147,8 @@ iso/vm-sysprep.sh           run inside a fully provisioned VM before exporting i
 
 1. **Never run `install.sh`/`boot.sh` on the local dev workstation.** This box
    (Ubuntu 26.04, `dazeb-ubuntubox`) is for editing and static checks only.
-   All runtime testing happens on the Proxmox test VM.
+   All runtime testing happens in a test VM: the local KVM VM (`iso/local-vm.sh`,
+   the fast test bed) or the Proxmox test VM.
 2. **Every module must be idempotent.** Guard every mutation (`command -v`,
    file existence, `dpkg-query`, `gsettings get`). Re-running install.sh must
    be a no-op. There is a live test VM precisely to prove this.
@@ -539,7 +539,8 @@ tail -f /root/noctraos-build.log
 
 1. `bash -n` + shellcheck (docker) clean on touched scripts.
 2. Fresh-clone audit: clone from GitHub, confirm new files exist.
-3. Deploy to VM 114, full installer run, confirm green + idempotent second run.
+3. Deploy to a test VM (the local KVM VM, or VM 114 if it still exists), full installer run,
+   confirm green + idempotent second run.
 4. If menus/theme changed: reboot the VM and check the session visuals.
 5. If ISO-relevant: rebuild ISO on the node, boot-test to the installer
    screen (live session gets DHCP = squashfs valid), then restore VM 114.

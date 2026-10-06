@@ -19,7 +19,7 @@ retiring itself. The AI screen separates the local model from Hermes and states 
 free tier runs on Nous Research's servers, with a local-only button
 (`noctraos-hermes local`); both Hermes buttons stay disabled until the Hermes build
 (module 11) has finished. Goals come from [objectives.md](objectives.md): put **Super+Space**
-front and center for people moving from Windows, without a terminal, without a lecture.
+front and center, without a terminal, without a lecture.
 
 ## Why this matters now
 

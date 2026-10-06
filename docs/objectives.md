@@ -5,19 +5,19 @@ summarise it; if they disagree with this file, this file wins.
 
 ## What we are building
 
-An AI-ready desktop OS for **people moving from Windows**, on an Ubuntu base
-(Zorin OS 18.x today). It does what [Omarchy](https://omarchy.org) does for
-developers who live in a tiling window manager — a complete, opinionated,
-AI-first workstation out of the box — but without the learning curve.
-Omarchy's window manager and keyboard-driven workflow shut out beginners; we
-keep a conventional desktop and make it powerful instead.
+An **AI development workstation OS**, on an Ubuntu base (Zorin OS 18.x today).
+It does what [Omarchy](https://omarchy.org) does for developers who live in a
+tiling window manager — a complete, opinionated, AI-first workstation out of the
+box — but without the learning curve. Omarchy's window manager and
+keyboard-driven workflow have a steep entry; we keep a conventional desktop and
+make it powerful instead.
 
 ## Principles
 
-1. **Muscle memory first.** Everything sits where someone switching from
-   Windows expects it: taskbar and start button, window buttons, a task
-   manager (Mission Center), Files, a system tray. We follow users' habits;
-   we do not clone Windows' look.
+1. **Muscle memory first.** Everything sits where someone used to a
+   conventional desktop expects it: taskbar and start button, window buttons, a
+   task manager (Mission Center), Files, a system tray. We follow users' habits;
+   we do not clone another OS's look.
 2. **No terminal required.** The terminal is there for those who want it
    (the agents live in it), but nothing day-to-day depends on it.
 3. **AI is built in, not bolted on.** Local models (Ollama), a curated agents
@@ -62,7 +62,7 @@ restart). Not yet verified on a fresh ISO install.
 
 First login must put Super+Space front and center: show the shortcut, let the
 user try it right there, and show what it can find (apps, files, clipboard,
-web). Then a short tour of the other things a switcher needs to know (start
+web). Then a short tour of the other things a new user needs to know (start
 button, Mission Center as the task manager, the agents menu, local AI
 models). The flow is in [onboarding.md](onboarding.md) and a first version is built:
 `noctraos-welcome` replaces Zorin's tour, shows once per account, and the ISO first boot
@@ -121,5 +121,5 @@ some stock icons) are tracked in the coverage table in `theme-design.md`.
 ## Non-goals
 
 - A tiling window manager or keyboard-only workflow (that is Omarchy's lane).
-- Imitating Windows' appearance.
+- Imitating another OS's appearance.
 - Supporting non-Ubuntu bases.

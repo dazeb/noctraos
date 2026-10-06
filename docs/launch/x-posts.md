@@ -14,7 +14,7 @@ Handles are not filled in: add the project's X handle where it says `@handle` if
 ```
 NoctraOS 0.3.0 is out.
 
-A Linux desktop for people moving from Windows. Start button, dock, Windows + Space search, and local AI with coding assistants one click away.
+An AI development workstation OS. Start button, dock, Super + Space search, and local AI with coding assistants one click away.
 
 Early release, tested in VMs. ISO, VM disks and a Proxmox script:
 https://noctraos.dev
@@ -25,12 +25,12 @@ Alt text: *NoctraOS 0.3.0 is out. A dark desktop with an amber sun over low-poly
 **2. Search** (image: `x-search.png`)
 
 ```
-Windows + Space opens one search box: apps, files, clipboard history and the web.
+Super + Space opens one search box: apps, files, clipboard history and the web.
 
 It's the one shortcut the desktop is built around, so you don't hunt through menus.
 ```
 
-Alt text: *The Windows key plus Space, with two search windows: one finding apps for "code", one finding a file called "planning".*
+Alt text: *Super plus Space, with two search windows: one finding apps for "code", one finding a file called "planning".*
 
 **3. AI** (image: `x-ai.png`)
 
@@ -75,10 +75,10 @@ The source is on GitHub. Tell us what broke.
 
 For later days, one idea each.
 
-**Coming from Windows** (image: `x-search.png`)
+**A conventional desktop** (image: `x-search.png`)
 
 ```
-Curious about Linux but not about a new set of habits? NoctraOS has a Start button, a dock and Windows + Space search. The AI tools are there when you want them.
+A workstation without a new set of habits to learn: NoctraOS has a Start button, a dock and Super + Space search. The AI tools are there when you want them.
 
 Free download: https://noctraos.dev
 ```

@@ -7,7 +7,7 @@
   noctraos-welcome --force         show again (the start-menu entry)
   noctraos-welcome --provisioning  started by the first-boot runner while setup still runs
 
-Four short screens, always skippable: what NoctraOS is, press Windows+Space (the screen
+Four short screens, always skippable: what NoctraOS is, press Super+Space (the screen
 moves on when you do), where familiar things are, and your AI: the local model, and Hermes,
 which says plainly that its free tier is a cloud service and offers a local-only mode.
 System Python + PyGObject, like the Search settings window; no new runtime.
@@ -24,7 +24,7 @@ import gi
 
 gi.require_version('Gtk', '3.0')
 gi.require_version('Gdk', '3.0')
-from gi.repository import Gdk, Gio, GLib, Gtk  # noqa: E402
+from gi.repository import Gdk, GdkPixbuf, Gio, GLib, Gtk  # noqa: E402
 
 APP_ID = 'local.noctraos.Welcome'
 SEARCH_SCHEMA = 'org.gnome.shell.extensions.noctraos-search'
@@ -56,6 +56,8 @@ window, .welcome { background: #121212; color: #bebebe; }
 .keycap { background: #1e1e1e; border: 1px solid #333333; border-bottom: 3px solid #e68e0d;
           border-radius: 2px; padding: 16px 28px; color: #eaeaea; font-size: 22px;
           font-family: 'JetBrainsMono Nerd Font', monospace; }
+.keycap-icon { background: #1e1e1e; border: 1px solid #333333; border-bottom: 3px solid #e68e0d;
+               border-radius: 2px; padding: 12px 20px; }
 .plus { font-size: 22px; color: #8a8a8d; }
 .row { border-bottom: 1px solid #333333; padding: 10px 4px; }
 .row-name { color: #e68e0d; font-weight: bold; }
@@ -69,6 +71,31 @@ button.suggested-action:disabled { background: #3a2a10; color: #7a6a50; border-c
 button.link { background: none; border: none; color: #8a8a8d; padding: 8px 4px; }
 button.link:hover { color: #eaeaea; }
 """
+
+
+# The Super key, drawn the way people know it: the Windows logo on a PC keyboard, Command on a Mac.
+# (Same shapes as the installer slide, assets/boot/installer/welcome.html.)
+KEY_ICONS = {
+    'windows': '<path fill="#eaeaea" d="M3 4.6 10.2 3.6v7.2H3zM11.2 3.5 21 2v8.8h-9.8zM3 12.2h7.2v7.2L3 '
+               '18.4zM11.2 12.2H21V22l-9.8-1.4z"/>',
+    'command': '<path fill="none" stroke="#eaeaea" stroke-width="1.8" stroke-linecap="round" '
+               'stroke-linejoin="round" d="M15 6v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 '
+               '3 0 1 0-3-3"/>',
+}
+
+
+def key_icon(name, accessible):
+    svg = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="40" height="40">'
+           f'{KEY_ICONS[name]}</svg>')
+    loader = GdkPixbuf.PixbufLoader()
+    loader.write(svg.encode())
+    loader.close()
+    image = Gtk.Image.new_from_pixbuf(loader.get_pixbuf())
+    image.get_accessible().set_name(accessible)
+    cap = Gtk.Box(halign=Gtk.Align.CENTER)
+    cap.get_style_context().add_class('keycap-icon')
+    cap.pack_start(image, False, False, 0)
+    return cap
 
 
 def label(text, *classes, xalign=0.5, wrap=True):
@@ -87,7 +114,7 @@ def page_box():
 
 
 def search_ready():
-    """Windows+Space can actually be tried: the schema has `first-used` AND the extension is
+    """Super+Space can actually be tried: the schema has `first-used` AND the extension is
     running in this session. A freshly installed extension is not loaded until the next login on
     Wayland, so during first-boot provisioning this is False even though the files exist."""
     source = Gio.SettingsSchemaSource.get_default()
@@ -161,7 +188,7 @@ class Welcome(Gtk.ApplicationWindow):
     def _page_welcome(self):
         box = page_box()
         box.pack_start(label('Welcome to NoctraOS', 'title'), False, False, 0)
-        box.pack_start(label('An AI-first desktop for people moving from Windows. It runs a '
+        box.pack_start(label('An AI development workstation OS. It runs a '
                              'language model on this computer, and it tells you plainly when '
                              'something does not.', 'lede'), False, False, 0)
         box.pack_start(label('This takes about two minutes. You can skip any time.', 'muted'),
@@ -170,14 +197,17 @@ class Welcome(Gtk.ApplicationWindow):
 
     def _page_keys(self):
         box = page_box()
-        box.pack_start(label('Press Windows + Space', 'title'), False, False, 0)
+        box.pack_start(label('Press Super + Space', 'title'), False, False, 0)
         keys = Gtk.Box(spacing=14, halign=Gtk.Align.CENTER)
-        keys.pack_start(label('Windows', 'keycap', wrap=False), False, False, 0)
+        keys.pack_start(key_icon('windows', 'Windows key'), False, False, 0)
+        keys.pack_start(label('or', 'plus', wrap=False), False, False, 0)
+        keys.pack_start(key_icon('command', 'Command key'), False, False, 0)
         keys.pack_start(label('+', 'plus', wrap=False), False, False, 0)
         keys.pack_start(label('Space', 'keycap', wrap=False), False, False, 0)
         box.pack_start(keys, False, False, 8)
         box.pack_start(label('Search everything from one place: apps, files, clipboard history '
-                             'and the web. Searching your files happens on this computer.', 'lede'),
+                             'and the web. Super is the key with the logo (Command on a Mac). Searching '
+                             'your files happens on this computer.', 'lede'),
                        False, False, 0)
         self.key_hint = label('', 'hint')
         box.pack_start(self.key_hint, False, False, 0)
@@ -286,7 +316,7 @@ class Welcome(Gtk.ApplicationWindow):
                 pass
         self.get_application().quit()
 
-    # -- the Windows+Space step ----------------------------------------------------------
+    # -- the Super+Space step ----------------------------------------------------------
     def _bind_search(self):
         """Subscribe to `first-used` as soon as search is really available (retried by the
         poll: during first-boot provisioning it is not there when this window opens)."""
