@@ -188,6 +188,12 @@ class DoctorStatusTests(unittest.TestCase):
         self.assertEqual(by_id["ollama"]["status"], "ok")
         self.assertIn(by_id["appmanager"]["fix"], (None, "module:04d_appmanager.sh"))
 
+    def test_doctor_json_gpu_detail_has_no_status_markers(self):
+        e = Env(self)
+        e.stub("noc-gpu", "printf '  \\033[32mOK\\033[0m  GPU: Test Card\\n  \\033[33m..\\033[0m  AMD GPU uses Vulkan only (no ROCm)\\n'")
+        row = {r["id"]: r for r in json.loads(e.noc("doctor", "--json").stdout)}["gpu"]
+        self.assertEqual((row["status"], row["detail"]), ("ok", "GPU: Test Card; AMD GPU uses Vulkan only (no ROCm)"))
+
     def test_doctor_json_ollama_down(self):
         rows = json.loads(Env(self, ollama=False).noc("doctor", "--json").stdout)
         self.assertEqual({r["id"]: r["status"] for r in rows}["ollama"], "fail")

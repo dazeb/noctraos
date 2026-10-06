@@ -466,7 +466,7 @@ cmd_doctor() {
     if [ "$JSON" = 1 ]; then
       local out rc
       out="$(noc-gpu status 2>&1 | strip_ansi)"; rc="${PIPESTATUS[0]}"
-      out="$(printf '%s\n' "$out" | sed 's/^ *\(OK\|!!\|--\) *//' | paste -sd ';' | sed 's/;/; /g')"
+      out="$(printf '%s\n' "$out" | sed 's/^ *\(OK\|!!\|--\|\.\.\) *//' | paste -sd ';' | sed 's/;/; /g')"
       if [ "$rc" -ne 0 ]; then chk fail gpu "GPU" "$out"
       elif printf '%s' "$out" | grep 'none detected' >/dev/null; then chk info gpu "GPU" "$out"
       else chk ok gpu "GPU" "$out"; fi
