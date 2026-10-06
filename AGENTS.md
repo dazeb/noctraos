@@ -302,8 +302,12 @@ tail -f /root/noctraos-build.log
   `event.get_source()` is null for clicks on the root and a stage-level
   `captured-event` handler never fires under a grab. Both were tried and failed.
 - **CopyQ's tray icon ignores the icon theme.** It is drawn from CopyQ's own resources, so the white
-  override in `assets/icons/overrides` only reaches its window/app icon. The tray colour is the session
-  `iconColor`, which is not saved: `bin/noctraos-copyq` sets it white after every start (verified on VM).
+  override in `assets/icons/overrides` only reaches its window/app icon. The AppIndicator `custom-icons`
+  setting does not help either (the original image still shows through under the custom one). Instead
+  `noctraos-branding` tints that one tray icon (indicator id `CopyQ_copyq`, `MONO_TRAY_IDS`) with a
+  `Clutter.ColorizeEffect` in the colour of the neighbouring status icons, read from the theme, so it follows
+  theme changes (verified on the VM by recolouring the status icons: CopyQ followed). `bin/noctraos-copyq`
+  also sets the session `iconColor` white (not saved) so the rings tint at full strength.
 - **CopyQ must run with `QT_QPA_PLATFORM=xcb`.** As a native-Wayland client it
   logs "Failed to activate Wayland clipboard" and records nothing on GNOME
   (no wlr-data-control). The autostart entry sets it; keep it that way.

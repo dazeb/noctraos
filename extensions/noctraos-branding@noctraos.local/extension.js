@@ -1,3 +1,4 @@
+import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Meta from 'gi://Meta';
@@ -9,10 +10,17 @@ const MENU_UUID = 'zorin-menu@zorinos.com';
 // The Start button shows the Noctra OS logo (same mark as the website). The N
 // (noctraos-start.svg) stays on the Welcome app and in the boot art.
 const ICON = '/usr/local/share/icons/hicolor/scalable/apps/noctraos-logo.svg';
+// Tray icons that are not symbolic are tinted to the panel's foreground colour. CopyQ draws its own
+// two-tone green icon from built-in resources: no theme icon, setting or custom-icons entry replaces
+// it (the AppIndicator custom icon is drawn on top of the original, which still shows through).
+// Matched by the indicator id the app reports.
+const MONO_TRAY_IDS = ['CopyQ_copyq'];
+const TINT_EFFECT = 'noctra-mono';
 
 export default class NoctraStart extends Extension {
     enable() {
         this._enableTopBar();
+        this._enableTray();
         this._records = new Map();
         const file = Gio.File.new_for_path(ICON);
         const schema = Gio.SettingsSchemaSource.get_default()?.lookup('org.gnome.shell.extensions.zorin-menu', true);
@@ -47,6 +55,79 @@ export default class NoctraStart extends Extension {
         this._desktopButton.connect('clicked', () => this._toggleDesktop());
         Main.panel._leftBox.insert_child_at_index(this._desktopButton, 0);
         this._minimized = [];
+    }
+
+    // The tint is read from the theme (the colour of the status icons beside it), so it follows a theme change. New tray items
+    // (an app starting or restarting) are picked up when they are added to the panel.
+    _enableTray() {
+        this._themeContext = St.ThemeContext.get_for_stage(global.stage);
+        this._themeId = this._themeContext.connect('changed', () => this._queueTint());
+        this._trayId = Main.panel._rightBox.connect('child-added', () => this._queueTint());
+        this._queueTint();
+    }
+
+    _queueTint() {
+        if (this._tintIdle)
+            return;
+        // Let the theme node settle after a stylesheet reload, and the indicator finish initialising.
+        this._tintIdle = GLib.timeout_add(GLib.PRIORITY_DEFAULT_IDLE, 300, () => {
+            this._tintIdle = 0;
+            this._tintTray();
+            return GLib.SOURCE_REMOVE;
+        });
+    }
+
+    // Guarded: these are the AppIndicator extension's private fields; if they change, icons stay as they are.
+    _trayIcons() {
+        return Object.values(Main.panel.statusArea)
+            .filter(item => MONO_TRAY_IDS.includes(item?._indicator?.id) && item._icon)
+            .map(item => item._icon);
+    }
+
+    _firstStatusIcon(actor) {
+        for (const child of actor?.get_children() ?? []) {
+            if (child instanceof St.Icon && child.has_style_class_name('system-status-icon'))
+                return child;
+            const found = this._firstStatusIcon(child);
+            if (found)
+                return found;
+        }
+        return null;
+    }
+
+    _tintTray() {
+        // The colour of the neighbouring symbolic icons: read from one of those icons, so it is whatever
+        // the theme really draws them in (not the #panel container, which a theme may style differently).
+        let color;
+        try {
+            const button = Main.panel.statusArea.quickSettings ?? Main.panel.statusArea.aggregateMenu;
+            const reference = this._firstStatusIcon(button) ?? button ?? Main.panel;
+            color = reference.get_theme_node().get_foreground_color();
+        } catch (error) {
+            return;
+        }
+        for (const icon of this._trayIcons()) {
+            let effect = icon.get_effect(TINT_EFFECT);
+            if (!effect) {
+                effect = new Clutter.ColorizeEffect();
+                icon.add_effect_with_name(TINT_EFFECT, effect);
+            }
+            effect.set_tint(color);
+        }
+    }
+
+    _disableTray() {
+        if (this._tintIdle)
+            GLib.source_remove(this._tintIdle);
+        this._tintIdle = 0;
+        this._themeContext?.disconnect(this._themeId);
+        Main.panel._rightBox.disconnect(this._trayId);
+        for (const icon of this._trayIcons()) {
+            const effect = icon.get_effect(TINT_EFFECT);
+            if (effect)
+                icon.remove_effect(effect);
+        }
+        this._themeContext = null;
     }
 
     _toggleDesktop() {
@@ -121,6 +202,7 @@ export default class NoctraStart extends Extension {
     }
 
     disable() {
+        this._disableTray();
         this._disableTopBar();
         if (!this._settings)
             return;
