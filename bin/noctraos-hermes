@@ -4,6 +4,8 @@
 #   noctraos-hermes install    idempotent: runtime + desktop app + model defaults
 #   noctraos-hermes local      local-only: Ollama is the primary and the Nous free tier stays off,
 #                              so nothing typed to Hermes leaves this computer (persistent)
+#   noctraos-hermes cloud     back to the Nous free tier (undoes `local`; never touches your own provider)
+#   noctraos-hermes mode       print cloud | local | other
 #   noctraos-hermes ready      exit 0 when the runtime and the desktop app are both built
 #   noctraos-hermes status     print what is installed / configured
 #
@@ -26,7 +28,9 @@ HERMES_HOME="${HERMES_HOME:-$HOME/.hermes}"
 RUNTIME="$HERMES_HOME/hermes-agent"
 HERMES_BIN="$HOME/.local/bin/hermes"
 OLLAMA_API="http://127.0.0.1:11434"
-OLLAMA_MODEL="${NOCTRAOS_MODEL:-qwen2.5-coder:7b}"
+# Default model: NOCTRAOS_MODEL, then the file `noc models default` writes, then the shipped model.
+OLLAMA_MODEL="${NOCTRAOS_MODEL:-$(head -n 1 "${XDG_CONFIG_HOME:-$HOME/.config}/noctraos/model" 2>/dev/null)}"
+OLLAMA_MODEL="${OLLAMA_MODEL:-qwen2.5-coder:7b}"
 INSTALLER_URL="https://hermes-agent.nousresearch.com/install.sh"
 NOUS_URL="https://portal.nousresearch.com"
 ONBOARD_FILE="${NOCTRAOS_HERMES_ONBOARDING:-/usr/local/share/noctraos/hermes/onboarding.md}"
@@ -181,7 +185,25 @@ cmd_install() {
   hide_hermes_own_launcher
 }
 
+# Where prompts go: "cloud" (Nous free tier, they leave this computer), "local" (this machine's
+# Ollama only, set by `local`) or "other" (the user's own provider). Read by `noc status --json`.
+hermes_mode() {
+  explicit_provider || { echo cloud; return; }
+  if [ "$(config_get model.base_url)" = "$OLLAMA_API/v1" ]; then echo local; else echo other; fi
+}
+
+# Value of "section.key" one level down in config.yaml (empty when unset).
+config_get() {
+  local f="$HERMES_HOME/config.yaml"
+  [ -f "$f" ] || return 0
+  awk -v sec="${1%%.*}" -v k="${1#*.}" '
+    $0 ~ "^"sec":" {m=1; next}
+    /^[^ #\t]/ {m=0}
+    m && $1 == k":" {sub("^[ \t]*"k":[ \t]*", ""); sub(/[ \t]*#.*$/, ""); gsub(/["\x27]/, ""); print; exit}' "$f"
+}
+
 cmd_status() {
+  echo "mode:    $(hermes_mode)"
   runtime_ready && echo "runtime: ok ($RUNTIME)" || echo "runtime: missing"
   app_ready && echo "app:     ok" || echo "app:     not built"
   if explicit_provider; then echo "primary: explicit model.provider in config.yaml"
@@ -194,7 +216,7 @@ cmd_status() {
 
 # The free tier is Nous Research's cloud: prompts typed to Hermes leave this computer. This is
 # the one-click way to keep them here. It is persistent (config.yaml); to go back to the free
-# tier run `hermes config set model.provider auto`.
+# tier run `noctraos-hermes cloud`.
 cmd_local() {
   if ! ollama_ready; then
     say "ERROR: the local model $OLLAMA_MODEL is not ready yet — try again in a few minutes"
@@ -205,6 +227,22 @@ cmd_local() {
   hermes_set model.base_url "$OLLAMA_API/v1"
   say "OK: Hermes will use the local model only (Nous free tier off)"
   LOCAL_ONLY=1 cmd_launch
+}
+
+# The inverse of `local`: back to Hermes' stock provider (auto), which brings the Nous free tier
+# back. Undoes the three keys `local` wrote, and only when they point at this machine's Ollama,
+# so a provider the user configured themselves is never touched.
+cmd_cloud() {
+  if [ "$(hermes_mode)" = other ]; then
+    say "ERROR: model.provider is set to your own provider — leaving it alone"
+    return 1
+  fi
+  if [ "$(hermes_mode)" = local ]; then
+    "$HERMES_BIN" config unset model.base_url >/dev/null 2>&1 || true
+    "$HERMES_BIN" config unset model.default >/dev/null 2>&1 || true
+  fi
+  hermes_set model.provider auto
+  say "OK: Hermes is back on the Nous free tier (prompts leave this computer)"
 }
 
 cmd_launch() {
@@ -233,8 +271,10 @@ cmd_launch() {
 case "${1:-launch}" in
   launch)  cmd_launch ;;
   local)   cmd_local ;;
+  cloud)   cmd_cloud ;;
+  mode)    hermes_mode ;;
   install) cmd_install ;;
   ready)   runtime_ready && app_ready ;;
   status)  cmd_status ;;
-  *) echo "usage: noctraos-hermes [launch|local|install|ready|status]" >&2; exit 1 ;;
+  *) echo "usage: noctraos-hermes [launch|local|cloud|mode|install|ready|status]" >&2; exit 1 ;;
 esac
