@@ -713,8 +713,8 @@ class PrivacyPage(Page):
                         False, False, 0)
         self.pack_start(label('Where what you type can go, and the settings that decide it.', 'lede'),
                         False, False, 0)
-        self.note = self.make_note()
         scroller = self.scroller()
+        self.note = self.make_note()
         body = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8, margin_end=8)
         body.add(label('Hermes', 'section'))
         self.hermes_head = label('', 'row-title')
@@ -751,6 +751,7 @@ class PrivacyPage(Page):
             self.say(self.note, 'That settings window could not be opened.')
 
     def on_show(self):
+        self.say(self.note, '')
         self.refresh()
 
     def refresh(self):

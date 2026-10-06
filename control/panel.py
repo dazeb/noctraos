@@ -479,6 +479,9 @@ _VERDICTS = {
 }
 
 
+_GPU_HINT = re.compile(r'\s*[—-]+\s*run: noc gpu install\s*$')
+
+
 def gpu_json(*args, timeout=60):
     """`noc-gpu <args>` as parsed JSON, None when it is missing or fails."""
     try:
@@ -555,7 +558,8 @@ def hardware_state(detect, gstatus):
     Returns {headline, level, gpus: [{name, verdict}], rows: [{status, text}], can_install, reboot}.
     `can_install` is true only when there is something to install and the stack is not ready."""
     gpus = [{'name': g.get('name', 'GPU'), 'verdict': gpu_verdict(g)} for g in (detect or {}).get('gpus', [])]
-    rows = list((gstatus or {}).get('rows', []))
+    # noc-gpu's rows end with a "run: noc gpu install" hint for people at a terminal; the page has a button.
+    rows = [{**r, 'text': _GPU_HINT.sub('', r.get('text', ''))} for r in (gstatus or {}).get('rows', [])]
     reboot = bool((gstatus or {}).get('reboot_pending'))
     ready = bool((gstatus or {}).get('ready'))
     vendors = install_vendors(detect)

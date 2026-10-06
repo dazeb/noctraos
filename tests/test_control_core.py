@@ -469,6 +469,13 @@ class HardwareTests(unittest.TestCase):
         self.assertEqual(panel.install_blocker(d, None), "")
         self.assertEqual(panel.install_blocker(det(), 1), "")
 
+    def test_terminal_hint_is_dropped_from_status_rows(self):
+        status = {**NOT_READY, "rows": [{"status": "fail", "text": "NVIDIA GPU present but no driver installed — run: noc gpu install"},
+                                        {"status": "ok", "text": "GPU: x"}]}
+        rows = panel.hardware_state(det("modern", gpus=[NV]), status)["rows"]
+        self.assertEqual(rows[0]["text"], "NVIDIA GPU present but no driver installed")
+        self.assertEqual(rows[1]["text"], "GPU: x")
+
     def test_state(self):
         s = panel.hardware_state(det("modern", gpus=[NV]), READY)
         self.assertEqual((s["level"], s["can_install"]), ("ok", False))
