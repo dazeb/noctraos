@@ -1,7 +1,7 @@
 {
   "name": "Noctra OS",
   "short_name": "Noctra OS",
-  "description": "A Linux desktop for people moving from Windows, with AI ready when you are.",
+  "description": "An AI development workstation OS, with local AI and coding assistants ready when you are.",
   "start_url": "/",
   "display": "browser",
   "background_color": "#0b0a09",

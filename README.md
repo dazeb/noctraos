@@ -4,7 +4,7 @@
 
 <h1 align="center">NoctraOS</h1>
 
-<p align="center"><strong>A familiar Linux desktop, with AI ready when you are.</strong></p>
+<p align="center"><strong>An AI development workstation OS.</strong></p>
 
 <p align="center">
   <a href="https://noctraos.dev/download">Download</a> ·
@@ -13,10 +13,9 @@
   <a href="CONTRIBUTING.md">Contribute</a>
 </p>
 
-NoctraOS is an Ubuntu-based desktop for people moving from Windows. A Start
-button, a dock, familiar window controls, and a short welcome help you settle in.
-Local AI and coding assistants are there when you want them, with a dark desktop
-and a little amber along the way.
+NoctraOS is an Ubuntu-based AI development workstation OS. Local AI and coding
+assistants are one click from the Start button, a short welcome helps you settle
+in, and the desktop is dark with a little amber along the way.
 
 [![The NoctraOS desktop, with a charcoal landscape, amber sun, and centred dock](site/img/shots/desktop.webp)](site/img/shots/full/desktop.webp)
 
