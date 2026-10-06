@@ -3,7 +3,7 @@
 #   noc update        apt + Flatpak + mise runtimes + AI models  [--json] [--only apt,flatpak,mise,models]
 #   noc doctor        health check of the whole stack  [--json]
 #   noc status        Overview data as JSON (versions, updates, Ollama, GPU, disk, Hermes)
-#   noc models        list [--json] | default [name] | presets [--json] | pull <model> | rm <model> | gui
+#   noc models        list [--json] | default [name] | presets [--json] | pull <model> | rm <model>
 #   noc gpu           detect | install | status  (NVIDIA CUDA / AMD ROCm for local LLMs)
 set -uo pipefail
 
@@ -228,22 +228,8 @@ cmd_models() {
       [ -z "$m" ] && { echo "usage: noc models rm <model>"; return 1; }
       ollama rm "$m"
       ;;
-    gui)
-      have zenity || { bad "zenity not available"; return 1; }
-      local choice row args=() name note
-      for row in "${MODEL_PRESET_TABLE[@]}"; do
-        IFS='|' read -r name _ note <<<"$row"
-        args+=("$name" "$note")
-      done
-      choice="$(zenity --list \
-        --title="NoctraOS — download a model" \
-        --text="Pick a model to pull from the Ollama library" \
-        --column="Model" --column="Note" "${args[@]}" \
-        --width=520 --height=400 2>/dev/null)" || return 0
-      [ -n "$choice" ] && ollama pull "$choice"
-      ;;
     *)
-      echo "usage: noc models [list [--json] | default [name] | presets [--json] | pull <model> | rm <model> | gui]"
+      echo "usage: noc models [list [--json] | default [name] | presets [--json] | pull <model> | rm <model>]"
       ;;
   esac
 }
@@ -566,7 +552,7 @@ main() {
       echo "  noc update      update apt, Flatpak apps, mise runtimes, AI models (--json, --only <steps>)"
       echo "  noc doctor      health check of the whole stack (--json)"
       echo "  noc status      versions, pending updates, Ollama, GPU, disk as JSON"
-      echo "  noc models      manage local AI models (list | default | presets | pull | rm | gui)"
+      echo "  noc models      manage local AI models (list | default | presets | pull | rm)"
       echo "  noc bg          cycle or set the wallpaper (list | next | set)"
       echo "  noc gpu         GPU setup for local LLMs (detect | install | status)"
       echo "  noctraos-control  the NoctraOS Control Panel (GUI)"

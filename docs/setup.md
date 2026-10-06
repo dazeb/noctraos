@@ -45,7 +45,7 @@ noc doctor        # health check: OS, Ollama + models, mise runtimes, VS Code, s
 noc models list   # local models
 noc models pull <model>   # e.g. noc models pull llama3.2:3b
 noc models rm <model>
-noc models gui    # pick from a curated list (zenity)
+noctraos-control --page models   # pick, download and remove models with a progress bar
 noc bg list|next|set <name>   # the wallpaper set
 noc gpu detect    # what GPU you have and what would be installed
 noc gpu install   # (re)run GPU driver + CUDA/ROCm setup — safe to repeat

@@ -1,6 +1,9 @@
 """The Control Panel's formatting logic: `noc status` JSON in, cards out. No GTK needed."""
+from http.server import BaseHTTPRequestHandler, HTTPServer
+import json
 from pathlib import Path
 import sys
+import threading
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "control"))
@@ -119,6 +122,159 @@ class NocJsonTests(unittest.TestCase):
         panel.NOC = "/nonexistent/noc"
         self.addCleanup(setattr, panel, "NOC", original)
         self.assertIsNone(panel.noc_json("status"))
+
+
+ROWS = [
+    {"id": "os", "label": "OS", "status": "ok", "detail": "NoctraOS", "fix": None},
+    {"id": "appmanager", "label": "AppManager", "status": "warn", "detail": "missing", "fix": "module:04d_appmanager.sh"},
+    {"id": "ollama", "label": "Ollama", "status": "fail", "detail": "not responding", "fix": None},
+    {"id": "hermes", "label": "Hermes Desktop", "status": "warn", "detail": "not installed", "fix": "hermes:install"},
+    {"id": "gpu", "label": "GPU", "status": "info", "detail": "none", "fix": None},
+]
+
+
+class HealthTests(unittest.TestCase):
+    def test_sort_puts_problems_first_and_is_stable(self):
+        self.assertEqual([r["id"] for r in panel.sort_rows(ROWS)], ["ollama", "appmanager", "hermes", "gpu", "os"])
+
+    def test_headline(self):
+        self.assertEqual(panel.health_headline(ROWS), ("1 problem needs attention", "fail"))
+        self.assertEqual(panel.health_headline([r for r in ROWS if r["status"] != "fail"]),
+                         ("2 things could be better", "warn"))
+        self.assertEqual(panel.health_headline([ROWS[0], ROWS[4]]), ("Everything checks out", "ok"))
+        self.assertEqual(panel.health_headline([]), ("Everything checks out", "ok"))
+
+    def test_fix_buttons_only_for_fixes_that_need_no_root(self):
+        self.assertEqual(panel.fix_command("hermes:install"), [panel.HERMES, "install"])
+        self.assertIsNone(panel.fix_command("module:04d_appmanager.sh"))  # needs the privileged helper
+        self.assertIsNone(panel.fix_command(None))
+
+    def test_report(self):
+        text = panel.report_text(ROWS, "6.8.0")
+        self.assertIn("kernel: 6.8.0", text)
+        self.assertIn("[FAIL] Ollama: not responding", text)
+        self.assertIn("[OK  ] OS: NoctraOS", text)
+        self.assertEqual(len(text.splitlines()), 2 + len(ROWS))
+
+
+LISTING = {"ollama": True, "default": "qwen2.5-coder:7b", "models": [
+    {"name": "qwen2.5-coder:7b", "size": 4_700_000_000, "modified": "x", "is_default": True},
+    {"name": "nomic-embed-text:latest", "size": 274_000_000, "modified": "x", "is_default": False}]}
+PRESETS = {"ram_gb": 16, "vram_gb": 0, "presets": [
+    {"name": "qwen2.5-coder:7b", "need_gb": 6, "note": "Default", "fit": "cpu", "recommended": True},
+    {"name": "qwen2.5-coder:14b", "need_gb": 12, "note": "Bigger", "fit": "no", "recommended": False},
+    {"name": "llama3.2:3b", "need_gb": 3, "note": "Small", "fit": "cpu", "recommended": False},
+    {"name": "nomic-embed-text", "need_gb": 1, "note": "Embeddings", "fit": "gpu", "recommended": False}]}
+
+
+class ModelListTests(unittest.TestCase):
+    def test_names(self):
+        for name in ("llama3.2:3b", "hf.co/user/model:Q4_K_M", "phi4-mini"):
+            self.assertTrue(panel.valid_model_name(name), name)
+        for name in ("", " x", "a b", "a;b", "../x", "-rf", "a|b", None):
+            self.assertFalse(panel.valid_model_name(name), name)
+
+    def test_same_model_ignores_latest(self):
+        self.assertTrue(panel.same_model("nomic-embed-text:latest", "nomic-embed-text"))
+        self.assertFalse(panel.same_model("llama3.2:3b", "llama3.2:1b"))
+
+    def test_installed_rows(self):
+        rows = panel.installed_rows(LISTING)
+        self.assertEqual([(r["name"], r["size"], r["default"]) for r in rows],
+                         [("qwen2.5-coder:7b", "4.4 GB", True), ("nomic-embed-text:latest", "261.3 MB", False)])
+        self.assertEqual(panel.installed_rows({"ollama": False, "models": []}), [])
+        self.assertEqual(panel.installed_rows(None), [])
+
+    def test_suggestions_skip_installed_and_rank_fit(self):
+        rows = panel.suggestion_rows(PRESETS, [r["name"] for r in panel.installed_rows(LISTING)])
+        self.assertEqual([r["name"] for r in rows], ["llama3.2:3b", "qwen2.5-coder:14b"])
+        self.assertEqual(rows[0]["fit"], "Runs on the CPU (slower)")
+        self.assertEqual(panel.suggestion_rows(None, []), [])
+
+    def test_recommended_comes_first(self):
+        rows = panel.suggestion_rows(PRESETS, [])
+        self.assertEqual(rows[0]["name"], "qwen2.5-coder:7b")
+
+
+class PullTrackerTests(unittest.TestCase):
+    def test_layers_add_up_instead_of_resetting(self):
+        t = panel.PullTracker()
+        self.assertEqual(t.feed({"status": "pulling manifest"}), (None, "Fetching the model list"))
+        self.assertEqual(t.feed({"status": "pulling aaa", "total": 900, "completed": 900})[0], 1.0)
+        fraction, text = t.feed({"status": "pulling bbb", "total": 100, "completed": 0})
+        self.assertAlmostEqual(fraction, 0.9)
+        fraction, text = t.feed({"status": "pulling bbb", "total": 100, "completed": 50})
+        self.assertAlmostEqual(fraction, 0.95)
+        self.assertEqual(text, "Downloading: 950 B of 1000 B")
+
+    def test_stages_and_end(self):
+        t = panel.PullTracker()
+        self.assertEqual(t.feed({"status": "verifying sha256 digest"})[1], "Verifying the download")
+        self.assertEqual(t.feed({"status": "success"}), (1.0, "Done"))
+        self.assertEqual(t.feed({"status": "something new"})[1], "Something new")
+
+    def test_error(self):
+        self.assertEqual(panel.PullTracker().feed({"error": "pull model manifest: file does not exist"}),
+                         (None, "Failed: pull model manifest: file does not exist"))
+
+
+class PullHandler(BaseHTTPRequestHandler):
+    EVENTS = [{"status": "pulling manifest"}, {"status": "pulling aaa", "total": 10, "completed": 5},
+              {"status": "pulling aaa", "total": 10, "completed": 10}, {"status": "success"}]
+    seen = []
+
+    def do_POST(self):  # noqa: N802
+        PullHandler.seen.append(json.loads(self.rfile.read(int(self.headers["Content-Length"]))))
+        self.send_response(200)
+        self.send_header("Content-Type", "application/x-ndjson")
+        self.end_headers()
+        for event in self.EVENTS:
+            self.wfile.write(json.dumps(event).encode() + b"\n\n")  # blank lines must be ignored
+            self.wfile.flush()
+
+    def log_message(self, *args):
+        pass
+
+
+class PullStreamTests(unittest.TestCase):
+    def server(self):
+        server = HTTPServer(("127.0.0.1", 0), PullHandler)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        return f"http://127.0.0.1:{server.server_address[1]}"
+
+    def test_streams_every_event(self):
+        events = list(panel.iter_pull("llama3.2:3b", self.server()))
+        self.assertEqual([e["status"] for e in events], ["pulling manifest", "pulling aaa", "pulling aaa", "success"])
+        self.assertEqual(PullHandler.seen[-1], {"model": "llama3.2:3b", "stream": True})
+
+    def test_cancel_stops_the_stream(self):
+        got = []
+        for event in panel.iter_pull("x", self.server(), cancelled=lambda: len(got) >= 2):
+            got.append(event)
+        self.assertEqual(len(got), 2)
+
+    def test_unreachable_raises_oserror(self):
+        with self.assertRaises(OSError):
+            list(panel.iter_pull("x", "http://127.0.0.1:9", timeout=2))
+
+
+class NocRunTests(unittest.TestCase):
+    def test_missing_noc(self):
+        original = panel.NOC
+        panel.NOC = "/nonexistent/noc"
+        self.addCleanup(setattr, panel, "NOC", original)
+        ok, message = panel.noc_run("models", "rm", "x")
+        self.assertFalse(ok)
+        self.assertTrue(message)
+
+    def test_reports_last_line(self):
+        original = panel.NOC
+        panel.NOC = "/bin/sh"
+        self.addCleanup(setattr, panel, "NOC", original)
+        self.assertEqual(panel.noc_run("-c", "echo one; echo two; exit 3"), (False, "two"))
+        self.assertEqual(panel.noc_run("-c", "echo fine"), (True, "fine"))
 
 
 if __name__ == "__main__":
