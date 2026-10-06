@@ -61,6 +61,13 @@ for i in "$REPO_ROOT"/assets/icons/noctraos-*.svg; do
   [ -f "$i" ] && sudo install -m 644 "$i" /usr/local/share/icons/hicolor/scalable/apps/
 done
 sudo update-desktop-database >/dev/null 2>&1 || true
+# Hermes ships its own icon; install the upstream artwork system-wide (see assets/icons/hermes/NOTICE.md).
+for i in "$REPO_ROOT"/assets/icons/hermes/hicolor/*/apps/hermes.png; do
+  [ -f "$i" ] || continue
+  size="$(basename "$(dirname "$(dirname "$i")")")"
+  cmp -s "$i" "/usr/local/share/icons/hicolor/$size/apps/hermes.png" 2>/dev/null \
+    || sudo install -D -m 644 "$i" "/usr/local/share/icons/hicolor/$size/apps/hermes.png"
+done
 sudo gtk-update-icon-cache -q -t -f /usr/local/share/icons/hicolor 2>/dev/null || true
 log "OK: Agents section — Hermes, Codex, Claude Code, OpenCode, Grok, Gemini CLI, Qwen Code (Hermes preinstalled by module 11, the rest install-on-first-use)"
 
