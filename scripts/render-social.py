@@ -27,6 +27,9 @@ LOGO_MARK = ('<svg viewBox="1 4 30 24" aria-hidden="true"><polygon points="2,26 
              '<polygon points="13,26 22,10 30,26" fill="#ff6a13" opacity="0.55"/></svg>')
 WIN_LOGO = ('<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 5.2 10.4 4v7.2H3zM11.6 3.8 21 '
             '2.4v8.8h-9.4zM3 12.4h7.4v7.2L3 18.4zM11.6 12.4H21v9.2l-9.4-1.4z"/></svg>')
+CMD_LOGO = ('<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" '
+            'stroke-linecap="round" stroke-linejoin="round" d="M15 6v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 '
+            '3h12a3 3 0 1 0-3-3"/></svg>')
 ONE_LINER = "bash <(curl -sSfL https://raw.githubusercontent.com/dazeb/noctraos/main/proxmox-install.sh)"
 
 FONTS = ROOT / "assets/social/fonts"
@@ -127,12 +130,12 @@ def og_term():
 CARDS = {
     "og-home": (1200, 630, "site/img/social", lambda: og(
         "An <em>AI</em> development workstation OS.",
-        "Local models and AI coding assistants, one click from Start. Windows + Space finds anything.",
+        "Local models and AI coding assistants, one click from Start. Super + Space finds anything.",
         og_shot("desktop", "64% 78%"), ["Free download", "Based on Ubuntu 24.04", "0.3.0"])),
     "og-features": (1200, 630, "site/img/social", lambda: og(
         "Search, assistants and local AI, <em>set up</em> for you.",
         "A calm dark desktop with Hermes, Codex, Claude Code, OpenCode, Grok, Gemini CLI and Qwen Code in the Start panel.",
-        og_shot("start-panel", "50% 50%", 310), ["Windows + Space", "Local models", "Dark + amber"])),
+        og_shot("start-panel", "50% 50%", 310), ["Super + Space", "Local models", "Dark + amber"])),
     "og-download": (1200, 630, "site/img/social", lambda: og(
         "Get <em>NoctraOS</em> 0.3.0",
         "The installer ISO, VM disks for KVM, VMware and VirtualBox, and a one-command Proxmox installer.",
@@ -153,7 +156,7 @@ def x_launch():
     return x_card(f"""
 <div style="position:absolute;left:84px;top:70px"><div class="brand" style="font-size:34px">{LOGO_MARK}<span>Noctra <small>OS</small></span></div></div>
 <h1 style="position:absolute;left:84px;top:180px;width:680px;font-size:92px">NoctraOS <em>0.3.0</em><br>is out.</h1>
-<p class="sub" style="position:absolute;left:84px;top:470px;width:600px;font-size:33px">A Linux desktop for people moving from Windows. Local AI and coding assistants, ready when you are.</p>
+<p class="sub" style="position:absolute;left:84px;top:470px;width:600px;font-size:33px">An AI development workstation OS. Local AI and coding assistants, ready when you are.</p>
 <div style="position:absolute;left:84px;bottom:76px">{chips(["ISO", "VM disks", "Proxmox script"])}</div>
 <div class="win" style="left:730px;top:140px;width:790px;height:444px"><img src="{shot('desktop')}"></div>
 <div class="url" style="position:absolute;right:84px;bottom:76px;font-size:24px"><b>noctraos.dev</b></div>""", 20)
@@ -162,7 +165,7 @@ def x_launch():
 def x_search():
     return x_card(f"""
 <div style="position:absolute;left:84px;top:70px"><div class="brand" style="font-size:34px">{LOGO_MARK}<span>Noctra <small>OS</small></span></div></div>
-<div class="keys" style="position:absolute;left:84px;top:200px;--u:20px"><span class="key">{WIN_LOGO}</span><span class="plus">+</span><span class="key" style="min-width:170px">Space</span></div>
+<div class="keys" style="position:absolute;left:84px;top:200px;--u:20px"><span class="key">{WIN_LOGO}</span><span class="plus">or</span><span class="key">{CMD_LOGO}</span><span class="plus">+</span><span class="key" style="min-width:170px">Space</span></div>
 <h1 style="position:absolute;left:84px;top:350px;width:640px;font-size:84px">Find <em>anything</em> from one box.</h1>
 <p class="sub" style="position:absolute;left:84px;top:640px;width:600px;font-size:32px">Apps, files, clipboard history and the web. No hunting through menus.</p>
 <div class="win" style="left:800px;top:100px;width:720px;height:450px"><img src="{crop('search-apps')}"></div>

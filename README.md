@@ -21,7 +21,7 @@ in, and the desktop is dark with a little amber along the way.
 
 ## What you get
 
-- **One shortcut: Windows + Space.** Find apps, files, clipboard history, and
+- **One shortcut: Super + Space.** Find apps, files, clipboard history, and
   the web. Browser history is available if you opt in.
 - **AI on your computer.** Ollama runs local models; VS Code and Continue are
   set up to use them.
@@ -30,7 +30,7 @@ in, and the desktop is dark with a little amber along the way.
 - **The everyday tools, too.** A browser, office apps, media tools, a task
   manager, and support for Flatpaks and AppImages.
 
-| The Start panel | Windows + Space search |
+| The Start panel | Super + Space search |
 | :---: | :---: |
 | [<img src="site/img/shots/start-panel.webp" alt="NoctraOS Start panel with AI assistants and recent files" width="400">](site/img/shots/full/start-panel.webp) | [<img src="site/img/shots/search-files.webp" alt="NoctraOS search finding a planning document in the home folder" width="400">](site/img/shots/full/search-files.webp) |
 

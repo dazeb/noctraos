@@ -10,9 +10,7 @@ It does what [Omarchy](https://omarchy.org) does for developers who live in a
 tiling window manager — a complete, opinionated, AI-first workstation out of the
 box — but without the learning curve. Omarchy's window manager and
 keyboard-driven workflow have a steep entry; we keep a conventional desktop and
-make it powerful instead. (Positioning changed 2026-10-06: the earlier framing
-as a desktop for people moving from Windows is retired on the website, the README
-and the GitHub description; this file now matches.)
+make it powerful instead.
 
 ## Principles
 
@@ -123,5 +121,5 @@ some stock icons) are tracked in the coverage table in `theme-design.md`.
 ## Non-goals
 
 - A tiling window manager or keyboard-only workflow (that is Omarchy's lane).
-- Imitating Windows' appearance.
+- Imitating another OS's appearance.
 - Supporting non-Ubuntu bases.
