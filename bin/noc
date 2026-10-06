@@ -1,14 +1,17 @@
 #!/usr/bin/env bash
 # noc — noctraos workstation management CLI.
-#   noc update        apt + Flatpak + mise runtimes + AI models
-#   noc doctor        health check of the whole stack
-#   noc models        list | pull <model> | rm <model> | gui
+#   noc update        apt + Flatpak + mise runtimes + AI models  [--json] [--only apt,flatpak,mise,models]
+#   noc doctor        health check of the whole stack  [--json]
+#   noc status        Overview data as JSON (versions, updates, Ollama, GPU, disk, Hermes)
+#   noc updates       what an update would do, as JSON (counts, apt download size, online)
+#   noc models        list [--json] | default [name] | presets [--json] | pull <model> | rm <model>
 #   noc gpu           detect | install | status  (NVIDIA CUDA / AMD ROCm for local LLMs)
 set -uo pipefail
 
 VERSION="0.3.1"
-OLLAMA_URL="http://127.0.0.1:11434"
-MODEL_PRESETS=("qwen2.5-coder:7b" "qwen2.5-coder:14b" "llama3.2:3b" "gemma2:2b" "deepseek-coder:6.7b" "phi4-mini")
+OLLAMA_URL="${NOC_OLLAMA_URL:-http://127.0.0.1:11434}"
+DEFAULT_MODEL="qwen2.5-coder:7b"
+MODEL_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/noctraos/model"
 
 ok()   { printf '  \033[32mOK\033[0m  %s\n' "$*"; }
 bad()  { printf '  \033[31m!!\033[0m  %s\n' "$*"; }
@@ -76,27 +79,200 @@ cmd_bg() {
   esac
 }
 
-cmd_update() {
-  info "1/4  apt packages"
-  sudo apt-get update
-  sudo DEBIAN_FRONTEND=noninteractive apt-get upgrade -y
+have() { command -v "$1" >/dev/null 2>&1; }
 
-  info "2/4  Flatpak applications"
-  if command -v flatpak >/dev/null 2>&1; then
-    flatpak update -y --noninteractive 2>/dev/null \
-      || sudo flatpak update -y --noninteractive || true
-  fi
+# Strip terminal colour/cursor escapes (noc-gpu and ollama print them even into a pipe).
+strip_ansi() { sed -u 's/\x1b\[[?0-9;]*[a-zA-Z]//g'; }
 
-  info "3/4  mise runtimes"
-  if command -v mise >/dev/null 2>&1; then
+# ---- the default model ---------------------------------------------------------------------
+# One choice, read by the Welcome app, Hermes, "Ask AI to Explain" and Continue:
+# NOCTRAOS_MODEL, then the file `noc models default <name>` writes, then the shipped model.
+
+effective_model() {
+  local m="${NOCTRAOS_MODEL:-}"
+  [ -n "$m" ] || m="$(head -n 1 "$MODEL_FILE" 2>/dev/null | tr -d '[:space:]')"
+  printf '%s\n' "${m:-$DEFAULT_MODEL}"
+}
+
+# Model names are letters, digits and . _ : / - only (a path or shell character is never one).
+valid_model_name() { [[ "${1:-}" =~ ^[A-Za-z0-9][A-Za-z0-9._:/-]*$ ]]; }
+
+# Continue's config is seeded once and then belongs to the user, so only touch the model lines
+# we wrote ("    model: <name>" under provider: ollama), never anything else.
+rewrite_continue_model() {
+  local f="$HOME/.continue/config.yaml"
+  [ -f "$f" ] && grep 'provider: ollama' "$f" >/dev/null || return 0
+  sed -i "s|^\(    model: \).*|\1$1|" "$f"
+}
+
+# Is $1 installed in Ollama? Succeeds when it is, fails when it is not, returns 2 when Ollama is down.
+model_installed() {
+  local tags
+  tags="$(curl -fsS --max-time 5 "$OLLAMA_URL/api/tags" 2>/dev/null)" || return 2
+  # jq -e exits 4 on empty output; fold every "not found" into 1 so 2 stays "Ollama down".
+  printf '%s' "$tags" | jq -e --arg m "$1" '.models[]? | select(.name == $m or .name == ($m + ":latest"))' >/dev/null \
+    && return 0 || return 1
+}
+
+# ---- model presets and the RAM/VRAM suggestion ---------------------------------------------
+# name|memory needed in GB (weights plus headroom)|note
+MODEL_PRESET_TABLE=(
+  "qwen2.5-coder:7b|6|Default: fast local coding model"
+  "qwen2.5-coder:14b|12|Bigger, smarter (needs ~16 GB RAM)"
+  "llama3.2:3b|3|Small general chat"
+  "gemma2:2b|3|Tiny general chat"
+  "deepseek-coder:6.7b|6|Alternative coding model"
+  "phi4-mini|4|Small, fast model"
+)
+
+# preset_fit <need_gb> <ram_gb> <vram_gb>  ->  gpu | cpu | no
+# A model runs on the GPU when it fits in VRAM, on the CPU when it fits in half the RAM (the rest
+# stays for the system), and otherwise does not fit.
+preset_fit() {
+  local need="$1" ram="$2" vram="$3"
+  if [ "$vram" -ge "$need" ]; then echo gpu
+  elif [ "$ram" -ge $((need * 2)) ]; then echo cpu
+  else echo no; fi
+}
+
+# recommend <ram_gb> <vram_gb> -> the preset to suggest: the biggest that fits the GPU; else the
+# biggest 7B-class (need <= 6) that fits the CPU, since larger ones crawl without a GPU; else the
+# smallest preset.
+recommend() {
+  local ram="$1" vram="$2" row name need best="" best_need=0 fit smallest="" smallest_need=999
+  for row in "${MODEL_PRESET_TABLE[@]}"; do
+    IFS='|' read -r name need _ <<<"$row"
+    fit="$(preset_fit "$need" "$ram" "$vram")"
+    if { [ "$fit" = gpu ] || { [ "$fit" = cpu ] && [ "$need" -le 6 ]; }; } && [ "$need" -gt "$best_need" ]; then
+      # a GPU fit always beats a CPU fit of equal or larger size
+      best="$name"; best_need="$need"
+    fi
+    if [ "$need" -lt "$smallest_need" ]; then smallest="$name"; smallest_need="$need"; fi
+  done
+  echo "${best:-$smallest}"
+}
+
+ram_gb() {
+  awk '/^MemTotal:/ {printf "%d\n", $2 / 1048576}' /proc/meminfo 2>/dev/null || echo 0
+}
+
+# Total VRAM in whole GB across NVIDIA GPUs; 0 when there is none (AMD is not measured).
+vram_gb() {
+  have nvidia-smi || { echo 0; return; }
+  nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits 2>/dev/null \
+    | awk '{s += $1} END {printf "%d\n", s / 1024}'
+}
+
+cmd_presets() {
+  local json=0 ram vram rec row name need note fit objs=()
+  [ "${1:-}" = "--json" ] && json=1
+  ram="${NOC_RAM_GB:-$(ram_gb)}"; vram="${NOC_VRAM_GB:-$(vram_gb)}"
+  rec="$(recommend "$ram" "$vram")"
+  for row in "${MODEL_PRESET_TABLE[@]}"; do
+    IFS='|' read -r name need note <<<"$row"
+    fit="$(preset_fit "$need" "$ram" "$vram")"
+    if [ "$json" = 1 ]; then
+      objs+=("$(jq -nc --arg n "$name" --argjson need "$need" --arg note "$note" --arg fit "$fit" --arg rec "$rec" \
+        '{name:$n, need_gb:$need, note:$note, fit:$fit, recommended:($n==$rec)}')")
+    else
+      printf '%s%-22s %-4s %s\n' "$([ "$name" = "$rec" ] && echo '* ' || echo '  ')" "$name" "$fit" "$note"
+    fi
+  done
+  [ "$json" = 1 ] && printf '%s\n' "${objs[@]}" | jq -s --argjson ram "$ram" --argjson vram "$vram" \
+    '{ram_gb:$ram, vram_gb:$vram, presets:.}'
+  return 0
+}
+
+cmd_models() {
+  local action="${1:-list}"
+  case "$action" in
+    list)
+      if [ "${2:-}" = "--json" ]; then
+        # Ollama being down is a state the panel shows, not an error.
+        local tags def
+        def="$(effective_model)"
+        if tags="$(curl -fsS --max-time 5 "$OLLAMA_URL/api/tags" 2>/dev/null)" && printf '%s' "$tags" | jq -e . >/dev/null 2>&1; then
+          printf '%s' "$tags" | jq --arg d "$def" \
+            '{ollama:true, default:$d, models:[.models[]? | {name, size, modified:.modified_at,
+              is_default:(.name == $d or .name == ($d + ":latest"))}]}'
+        else
+          jq -n --arg d "$def" '{ollama:false, default:$d, models:[]}'
+        fi
+      else
+        ollama list
+      fi
+      ;;
+    default)
+      local m="${2:-}"
+      if [ -z "$m" ]; then effective_model; return 0; fi
+      valid_model_name "$m" || { bad "not a model name: $m"; return 1; }
+      model_installed "$m"
+      case $? in
+        0) ;;
+        1) bad "$m is not installed — pull it first (noc models pull $m)"; return 1 ;;
+        *) info "Ollama is not responding — saving $m without checking it is installed" ;;
+      esac
+      mkdir -p "$(dirname "$MODEL_FILE")" && printf '%s\n' "$m" > "$MODEL_FILE" \
+        || { bad "cannot write $MODEL_FILE"; return 1; }
+      rewrite_continue_model "$m"
+      info "default model: $m"
+      [ -z "${NOCTRAOS_MODEL:-}" ] || info "NOCTRAOS_MODEL is set in this shell and overrides the saved default here"
+      ;;
+    presets) shift; cmd_presets "$@" ;;
+    pull)
+      local m="${2:-}"
+      [ -z "$m" ] && { echo "usage: noc models pull <model>"; return 1; }
+      ollama pull "$m"
+      ;;
+    rm|remove|delete)
+      local m="${2:-}"
+      [ -z "$m" ] && { echo "usage: noc models rm <model>"; return 1; }
+      ollama rm "$m"
+      ;;
+    *)
+      echo "usage: noc models [list [--json] | default [name] | presets [--json] | pull <model> | rm <model>]"
+      ;;
+  esac
+}
+
+# ---- update --------------------------------------------------------------------------------
+
+UPDATE_STEPS=(apt flatpak mise models)
+update_label() {
+  case "$1" in
+    apt)     echo "apt packages" ;;
+    flatpak) echo "Flatpak applications" ;;
+    mise)    echo "mise runtimes" ;;
+    models)  echo "Ollama models (refresh every installed model)" ;;
+  esac
+}
+
+step_apt() {
+  # Bounded waits: with no network apt fails in seconds with a clear error instead of hanging.
+  # --error-on=any: a failed fetch is a failed step (apt otherwise exits 0 with only warnings, so an
+  # offline run would read "0 upgraded" and look like success).
+  $SUDO apt-get -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 -o Acquire::Retries=1 \
+    update --error-on=any || { echo "apt could not refresh its package lists (is the network up?)" >&2; return 1; }
+  $SUDO env DEBIAN_FRONTEND=noninteractive apt-get upgrade -y
+}
+
+step_flatpak() {
+  have flatpak || return 0
+  flatpak update -y --noninteractive 2>/dev/null \
+    || $SUDO flatpak update -y --noninteractive || true
+}
+
+step_mise() {
+  if have mise; then
     mise up -y 2>/dev/null || mise install || true
   else
     bad "mise not found"
   fi
+}
 
-  info "4/4  Ollama models (refresh every installed model)"
-  if command -v ollama >/dev/null 2>&1 \
-     && curl -fsS --max-time 5 "$OLLAMA_URL/api/tags" >/dev/null 2>&1; then
+step_models() {
+  if have ollama && curl -fsS --max-time 5 "$OLLAMA_URL/api/tags" >/dev/null 2>&1; then
+    local m
     while IFS= read -r m; do
       [ -z "$m" ] && continue
       info "     pulling $m"
@@ -105,158 +281,334 @@ cmd_update() {
   else
     bad "Ollama not responding — skipped model refresh"
   fi
+}
 
-  info "Update complete."
+# noc update [--json] [--only apt,flatpak,mise,models]
+# --json prints one JSON object per line: step (id, label, index, total, percent), log (line),
+# step_done (id, ok) and a final done (ok, reboot_required), so a GUI can draw progress.
+cmd_update() {
+  local json=0 only="" arg steps=() id n=0 total rc failed=0
+  while [ $# -gt 0 ]; do
+    arg="$1"; shift
+    case "$arg" in
+      --json) json=1 ;;
+      --only) only="${1:-}"; [ $# -gt 0 ] && shift ;;
+      --only=*) only="${arg#--only=}" ;;
+      *) echo "usage: noc update [--json] [--only apt,flatpak,mise,models]" >&2; return 2 ;;
+    esac
+  done
+  if [ -n "$only" ]; then
+    local want
+    IFS=',' read -ra want <<<"$only"
+    for id in "${want[@]}"; do
+      case " ${UPDATE_STEPS[*]} " in
+        *" $id "*) steps+=("$id") ;;
+        *) echo "noc update: unknown step '$id' (steps: ${UPDATE_STEPS[*]})" >&2; return 2 ;;
+      esac
+    done
+  else
+    steps=("${UPDATE_STEPS[@]}")
+  fi
+  total="${#steps[@]}"
+
+  # No terminal in a GUI run: a sudo that would prompt must fail with a message, not hang.
+  SUDO="sudo"
+  [ "$(id -u)" -eq 0 ] && SUDO=""
+  [ "$json" = 1 ] && [ -n "$SUDO" ] && SUDO="sudo -n"
+
+  for id in "${steps[@]}"; do
+    n=$((n + 1))
+    if [ "$json" = 1 ]; then
+      jq -nc --arg id "$id" --arg l "$(update_label "$id")" --argjson i "$n" --argjson t "$total" \
+        '{event:"step", id:$id, label:$l, index:$i, total:$t, percent:(($i - 1) * 100 / $t | floor)}'
+      "step_$id" 2>&1 | tr '\r' '\n' | strip_ansi | jq -R --unbuffered -c 'select(length > 0) | {event:"log", line:.}'
+      rc="${PIPESTATUS[0]}"
+      jq -nc --arg id "$id" --argjson ok "$([ "$rc" -eq 0 ] && echo true || echo false)" '{event:"step_done", id:$id, ok:$ok}'
+    else
+      info "$n/$total  $(update_label "$id")"
+      "step_$id"; rc=$?
+    fi
+    [ "$rc" -eq 0 ] || failed=1
+  done
+
+  if [ "$json" = 1 ]; then
+    jq -nc --argjson ok "$([ "$failed" -eq 0 ] && echo true || echo false)" \
+      --argjson reboot "$([ -f /var/run/reboot-required ] && echo true || echo false)" \
+      '{event:"done", ok:$ok, reboot_required:$reboot}'
+  elif [ "$failed" -eq 0 ]; then
+    info "Update complete."
+  else
+    bad "Update finished with errors."
+  fi
+  return "$failed"
+}
+
+# ---- doctor --------------------------------------------------------------------------------
+
+JSON=0
+CHECKS=()
+
+# chk <ok|warn|fail|info> <id> <label> [detail] [fix]
+# Text mode prints the classic OK / !! line; --json collects a row for the panel. `fix` names a
+# repair the panel may offer ("module:<name>" runs an install module through the privileged
+# helper, "hermes:install" runs noctraos-hermes install); empty means there is none.
+chk() {
+  local st="$1" id="$2" label="$3" detail="${4:-}" fix="${5:-}"
+  if [ "$JSON" = 1 ]; then
+    CHECKS+=("$(jq -nc --arg s "$st" --arg i "$id" --arg l "$label" --arg d "$detail" --arg f "$fix" \
+      '{id:$i, label:$l, status:$s, detail:$d, fix:(if $f == "" then null else $f end)}')")
+    return 0
+  fi
+  case "$st" in
+    ok)   ok "$label${detail:+: $detail}" ;;
+    info) info "$label${detail:+: $detail}" ;;
+    *)    bad "$label${detail:+: $detail}" ;;
+  esac
 }
 
 cmd_doctor() {
-  echo "NoctraOS doctor"
-  echo "----------------"
+  [ "${1:-}" = "--json" ] && JSON=1
+  if [ "$JSON" != 1 ]; then
+    echo "NoctraOS doctor"
+    echo "----------------"
+  fi
 
   if [ -r /etc/os-release ]; then
     # shellcheck source=/dev/null
     . /etc/os-release
-    ok "OS: ${PRETTY_NAME:-$ID}"
+    chk ok os "OS" "${PRETTY_NAME:-$ID}"
   else
-    bad "OS: unknown"
+    chk fail os "OS" "unknown"
   fi
 
   if curl -fsS --max-time 5 "$OLLAMA_URL/api/version" >/dev/null 2>&1; then
-    ok "Ollama: running ($(curl -fsS "$OLLAMA_URL/api/version" | jq -r .version 2>/dev/null))"
+    chk ok ollama "Ollama" "running ($(curl -fsS "$OLLAMA_URL/api/version" | jq -r .version 2>/dev/null))"
+    local model_count
     model_count="$(curl -fsS "$OLLAMA_URL/api/tags" | jq '.models | length' 2>/dev/null || echo 0)"
-    ok "Ollama: $model_count local model(s)"
+    chk ok ollama-models "Ollama models" "$model_count local model(s)"
   else
-    bad "Ollama: not responding on $OLLAMA_URL (try: systemctl status ollama)"
+    chk fail ollama "Ollama" "not responding on $OLLAMA_URL (try: systemctl status ollama)"
   fi
 
-  if command -v mise >/dev/null 2>&1; then
-    ok "mise: $(mise --version 2>/dev/null | head -n 1)"
-    mise ls 2>/dev/null | sed 's/^/       /' || true
+  if have mise; then
+    chk ok mise "mise" "$(mise --version 2>/dev/null | head -n 1)"
+    [ "$JSON" = 1 ] || { mise ls 2>/dev/null | sed 's/^/       /' || true; }
+    local node_v py_v go_v herdr_v starship_v tool
     node_v="$(mise exec -- node --version 2>/dev/null || true)"
     py_v="$(mise exec -- python --version 2>/dev/null || true)"
     go_v="$(mise exec -- go version 2>/dev/null | awk '{print $3}' || true)"
-    [ -n "$node_v" ] && ok "node $node_v (mise)"   || bad "node: not resolving via mise"
-    [ -n "$py_v" ]   && ok "$py_v (mise)"          || bad "python: not resolving via mise"
-    [ -n "$go_v" ]   && ok "go $go_v (mise)"       || bad "go: not resolving via mise"
+    [ -n "$node_v" ] && chk ok node "Node.js" "$node_v (mise)"   || chk fail node "Node.js" "not resolving via mise"
+    [ -n "$py_v" ]   && chk ok python "Python" "$py_v (mise)"    || chk fail python "Python" "not resolving via mise"
+    [ -n "$go_v" ]   && chk ok go "Go" "$go_v (mise)"            || chk fail go "Go" "not resolving via mise"
     herdr_v="$(mise where herdr >/dev/null 2>&1 && mise exec herdr -- herdr --version 2>/dev/null | head -n 1 || true)"
-    [ -n "$herdr_v" ] && ok "Herdr: $herdr_v" || bad "Herdr: missing from mise"
+    [ -n "$herdr_v" ] && chk ok herdr "Herdr" "$herdr_v" || chk warn herdr "Herdr" "missing from mise"
     starship_v="$(mise where starship >/dev/null 2>&1 && mise exec starship -- starship --version 2>/dev/null | head -n 1 || true)"
-    [ -n "$starship_v" ] && ok "Starship: $starship_v" || bad "Starship: missing from mise"
+    [ -n "$starship_v" ] && chk ok starship "Starship" "$starship_v" || chk warn starship "Starship" "missing from mise"
     for tool in lazygit lazydocker; do
       mise where "$tool" >/dev/null 2>&1 \
-        && ok "$tool: installed via mise" || bad "$tool: missing from mise"
+        && chk ok "$tool" "$tool" "installed via mise" || chk warn "$tool" "$tool" "missing from mise"
     done
   else
-    bad "mise: not installed"
+    chk fail mise "mise" "not installed"
   fi
 
-  if command -v code >/dev/null 2>&1; then
-    ok "VS Code: $(code --version 2>/dev/null | head -n 1)"
+  if have code; then
+    chk ok vscode "VS Code" "$(code --version 2>/dev/null | head -n 1)"
   else
-    bad "VS Code: missing"
+    chk fail vscode "VS Code" "missing"
   fi
 
-  if command -v noctraos-search >/dev/null 2>&1 \
+  if have noctraos-search \
      && [ -d /usr/share/gnome-shell/extensions/noctraos-search@noctraos.local ]; then
-    ok "Super+Space search: installed"
+    chk ok search "Super+Space search" "installed"
   else
-    bad "Super+Space search: missing (re-run the installer)"
+    chk fail search "Super+Space search" "missing (re-run the installer)"
   fi
 
-  if command -v noctraos-hermes >/dev/null 2>&1; then
+  if have noctraos-hermes; then
+    local hs
     hs="$(noctraos-hermes status 2>/dev/null || true)"
-    if printf '%s\n' "$hs" | grep -q '^runtime: ok' && printf '%s\n' "$hs" | grep -q '^app:     ok'; then
-      ok "Hermes Desktop: installed ($(printf '%s\n' "$hs" | sed -n 's/^primary: //p'))"
+    if printf '%s\n' "$hs" | grep '^runtime: ok' >/dev/null && printf '%s\n' "$hs" | grep '^app:     ok' >/dev/null; then
+      chk ok hermes "Hermes Desktop" "installed ($(printf '%s\n' "$hs" | sed -n 's/^primary: //p'))"
     else
-      bad "Hermes Desktop: not fully installed (run: noctraos-hermes install)"
+      chk warn hermes "Hermes Desktop" "not fully installed (run: noctraos-hermes install)" "hermes:install"
     fi
   else
-    bad "Hermes Desktop: launcher missing (re-run the installer)"
+    chk warn hermes "Hermes Desktop" "launcher missing (re-run the installer)"
   fi
 
-  if command -v flatpak >/dev/null 2>&1; then
-    flatpak list --app 2>/dev/null | grep -q MissionCenter \
-      && ok "Mission Center: installed" || bad "Mission Center: missing"
+  if have flatpak; then
+    flatpak list --app 2>/dev/null | grep MissionCenter >/dev/null \
+      && chk ok mission-center "Mission Center" "installed" || chk warn mission-center "Mission Center" "missing"
   fi
 
   if [ -x /usr/local/bin/app-manager ]; then
-    ok "AppManager: $(cat /opt/appmanager/VERSION 2>/dev/null || echo installed)"
+    chk ok appmanager "AppManager" "$(cat /opt/appmanager/VERSION 2>/dev/null || echo installed)"
   else
-    bad "AppManager: missing (run: bash ~/.local/share/noctraos/install.sh --only 04d_appmanager.sh)"
+    chk warn appmanager "AppManager" "missing (run: bash ~/.local/share/noctraos/install.sh --only 04d_appmanager.sh)" "module:04d_appmanager.sh"
   fi
   if dpkg-query -W libfuse2t64 >/dev/null 2>&1 || dpkg-query -W libfuse2 >/dev/null 2>&1; then
-    ok "FUSE 2: installed (AppImages can mount)"
+    chk ok fuse "FUSE 2" "installed (AppImages can mount)"
   else
-    bad "FUSE 2: libfuse2 missing — most AppImages will not start"
+    chk warn fuse "FUSE 2" "libfuse2 missing — most AppImages will not start"
   fi
 
-  if command -v noc-gpu >/dev/null 2>&1; then
-    noc-gpu status || true
-  elif command -v nvidia-smi >/dev/null 2>&1; then
-    ok "GPU: NVIDIA $(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -n 1)"
+  if have noc-gpu; then
+    if [ "$JSON" = 1 ]; then
+      local out rc
+      out="$(noc-gpu status 2>&1 | strip_ansi)"; rc="${PIPESTATUS[0]}"
+      out="$(printf '%s\n' "$out" | sed 's/^ *\(OK\|!!\|--\|\.\.\) *//' | paste -sd ';' | sed 's/;/; /g')"
+      if [ "$rc" -ne 0 ]; then chk fail gpu "GPU" "$out"
+      elif printf '%s' "$out" | grep 'none detected' >/dev/null; then chk info gpu "GPU" "$out"
+      else chk ok gpu "GPU" "$out"; fi
+    else
+      noc-gpu status || true
+    fi
+  elif have nvidia-smi; then
+    chk ok gpu "GPU" "NVIDIA $(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -n 1)"
   else
-    info "GPU: noc-gpu not installed and no NVIDIA driver detected — Ollama will run on CPU"
+    chk info gpu "GPU" "noc-gpu not installed and no NVIDIA driver detected — Ollama will run on CPU"
   fi
 
-  ok "Disk free on /: $(df -h / | awk 'NR==2 {print $4}')"
-  echo "----------------"
-  echo "done."
+  [ -f /var/run/reboot-required ] && chk warn reboot "Reboot" "needed to finish an update"
+  chk ok disk "Disk free on /" "$(df -h / | awk 'NR==2 {print $4}')"
+
+  if [ "$JSON" = 1 ]; then
+    printf '%s\n' "${CHECKS[@]}" | jq -s .
+  else
+    echo "----------------"
+    echo "done."
+  fi
 }
 
-cmd_models() {
-  local action="${1:-list}"
-  case "$action" in
-    list)
-      ollama list
-      ;;
-    pull)
-      local m="${2:-}"
-      [ -z "$m" ] && { echo "usage: noc models pull <model>"; exit 1; }
-      ollama pull "$m"
-      ;;
-    rm|remove|delete)
-      local m="${2:-}"
-      [ -z "$m" ] && { echo "usage: noc models rm <model>"; exit 1; }
-      ollama rm "$m"
-      ;;
-    gui)
-      command -v zenity >/dev/null 2>&1 || { bad "zenity not available"; exit 1; }
-      local choice
-      choice="$(zenity --list \
-        --title="NoctraOS — download a model" \
-        --text="Pick a model to pull from the Ollama library" \
-        --column="Model" --column="Note" \
-        "${MODEL_PRESETS[0]}" "Default: fast local coding model" \
-        "${MODEL_PRESETS[1]}" "Bigger, smarter (needs ~16 GB RAM)" \
-        "${MODEL_PRESETS[2]}" "Small general chat" \
-        "${MODEL_PRESETS[3]}" "Tiny general chat" \
-        "${MODEL_PRESETS[4]}" "Alternative coding model" \
-        "${MODEL_PRESETS[5]}" "Small, fast model" \
-        --width=520 --height=400 2>/dev/null)" || exit 0
-      [ -n "$choice" ] && ollama pull "$choice"
-      ;;
+# ---- status (the Overview cards) -------------------------------------------------------------
+
+apt_pending() {
+  have apt-get || { echo null; return; }
+  local out
+  out="$(timeout 20 apt-get -s upgrade 2>/dev/null)" || { echo null; return; }
+  printf '%s\n' "$out" | grep -c '^Inst ' || true
+}
+
+# Needs the network: null (unknown) when the remote cannot be reached, never a false 0.
+flatpak_pending() {
+  have flatpak || { echo null; return; }
+  local out
+  out="$(timeout 20 flatpak remote-ls --updates --columns=application 2>/dev/null)" || { echo null; return; }
+  printf '%s\n' "$out" | grep -c . || true
+}
+
+# Bytes apt would download: the size column of `apt-get --print-uris`, one line per package still to
+# fetch ('uri' name size MD5Sum:..). A simulated run (-s) does not print a total, and this lists only
+# what is not already in the cache. Prints 0 when there is nothing.
+apt_download_bytes() {
+  awk '/^\047/ { s += $(NF - 1) } END { printf "%d\n", s }'
+}
+
+# Outdated mise tools as a count; null when mise is absent or cannot tell.
+mise_pending() {
+  have mise || { echo null; return; }
+  local out
+  out="$(timeout 30 mise outdated --json 2>/dev/null)" || { echo null; return; }
+  printf '%s' "$out" | jq 'length' 2>/dev/null || echo null
+}
+
+# Is there a network? Either of two unrelated hosts answering counts, so one site being down does
+# not read as "offline". NOC_ONLINE_URLS overrides the list (space separated; tests use it).
+online() {
+  local u
+  for u in ${NOC_ONLINE_URLS:-https://archive.ubuntu.com/ubuntu/ https://noctraos.dev/}; do
+    curl -fsSI --max-time 4 -o /dev/null "$u" 2>/dev/null && return 0
+  done
+  return 1
+}
+
+# noc updates [--json]: what `noc update` would do, for the Control Panel's Updates page.
+cmd_updates() {
+  local on=false apt_n=null apt_bytes=null models=0 sim
+  online && on=true
+  if have apt-get && sim="$(LC_ALL=C timeout 30 apt-get -s upgrade 2>/dev/null)"; then
+    apt_n="$(printf '%s\n' "$sim" | grep -c '^Inst ' || true)"
+    apt_bytes="$(LC_ALL=C timeout 30 apt-get -qq --print-uris upgrade 2>/dev/null | apt_download_bytes)"
+  fi
+  if have ollama; then
+    models="$(curl -fsS --max-time 5 "$OLLAMA_URL/api/tags" 2>/dev/null | jq '.models | length' 2>/dev/null || echo 0)"
+  fi
+  jq -n --argjson online "$on" --argjson apt "$apt_n" --argjson bytes "$apt_bytes" \
+    --argjson flatpak "$(flatpak_pending)" --argjson mise "$(mise_pending)" --argjson models "${models:-0}" \
+    --argjson reboot "$([ -f /var/run/reboot-required ] && echo true || echo false)" \
+    '{online:$online, apt:{count:$apt, download_bytes:$bytes}, flatpak:{count:$flatpak}, mise:{count:$mise},
+      models:{installed:$models}, reboot_required:$reboot}'
+}
+
+cmd_status() {
+  local os="" ollama=false oversion="" nmodels=0 tags gpu hmode="" hready=false
+  local idx="${XDG_CACHE_HOME:-$HOME/.cache}/noctraos-search/index.sqlite" idx_age=null
+  [ -r /etc/os-release ] && os="$(. /etc/os-release; echo "${PRETTY_NAME:-$ID}")"
+
+  if oversion="$(curl -fsS --max-time 5 "$OLLAMA_URL/api/version" 2>/dev/null | jq -r .version 2>/dev/null)" && [ -n "$oversion" ]; then
+    ollama=true
+    tags="$(curl -fsS --max-time 5 "$OLLAMA_URL/api/tags" 2>/dev/null || true)"
+    nmodels="$(printf '%s' "$tags" | jq '.models | length' 2>/dev/null || echo 0)"
+  fi
+
+  gpu=null
+  if have noc-gpu; then
+    gpu="$(noc-gpu detect --json 2>/dev/null | jq -c . 2>/dev/null)" || gpu=null
+    [ -n "$gpu" ] || gpu=null
+  fi
+
+  if have noctraos-hermes; then
+    hmode="$(noctraos-hermes mode 2>/dev/null || true)"
+    noctraos-hermes ready >/dev/null 2>&1 && hready=true
+  fi
+
+  [ -f "$idx" ] && idx_age=$(( $(date +%s) - $(stat -c %Y "$idx") ))
+
+  jq -n \
+    --arg version "$VERSION" --arg os "$os" \
+    --argjson apt "$(apt_pending)" --argjson flatpak "$(flatpak_pending)" \
+    --argjson reboot "$([ -f /var/run/reboot-required ] && echo true || echo false)" \
+    --argjson ollama "$ollama" --arg oversion "$oversion" --argjson nmodels "${nmodels:-0}" \
+    --arg model "$(effective_model)" --argjson gpu "$gpu" \
+    --argjson free "$(df -B1 --output=avail / | awk 'NR==2 {print $1}')" \
+    --argjson total "$(df -B1 --output=size / | awk 'NR==2 {print $1}')" \
+    --argjson ram "$(ram_gb)" --arg hmode "$hmode" --argjson hready "$hready" --argjson idx "$idx_age" \
+    '{version:$version, os:$os,
+      updates:{apt:$apt, flatpak:$flatpak, reboot_required:$reboot},
+      ollama:{running:$ollama, version:(if $oversion=="" then null else $oversion end), models:$nmodels, default_model:$model},
+      gpu:$gpu,
+      disk:{root_free_bytes:$free, root_total_bytes:$total},
+      ram_gb:$ram,
+      hermes:{installed:$hready, mode:(if $hmode=="" then null else $hmode end)},
+      search_index_age_seconds:$idx}'
+}
+
+main() {
+  case "${1:-help}" in
+    update) shift; cmd_update "$@" ;;
+    doctor) shift; cmd_doctor "$@" ;;
+    status) shift; cmd_status "$@" ;;
+    updates) shift; cmd_updates "$@" ;;
+    models) shift; cmd_models "$@" ;;
+    bg)     shift; cmd_bg "$@" ;;
+    gpu)    shift; have noc-gpu && exec noc-gpu "$@" \
+              || { bad "noc-gpu not installed (re-run the installer)"; exit 1; } ;;
+    --version|-v) echo "noc $VERSION" ;;
     *)
-      echo "usage: noc models [list | pull <model> | rm <model> | gui]"
+      echo "noc $VERSION — NoctraOS workstation manager"
+      echo ""
+      echo "  noc update      update apt, Flatpak apps, mise runtimes, AI models (--json, --only <steps>)"
+      echo "  noc doctor      health check of the whole stack (--json)"
+      echo "  noc status      versions, pending updates, Ollama, GPU, disk as JSON"
+      echo "  noc updates     what an update would do: counts, download size, online (JSON)"
+      echo "  noc models      manage local AI models (list | default | presets | pull | rm)"
+      echo "  noc bg          cycle or set the wallpaper (list | next | set)"
+      echo "  noc gpu         GPU setup for local LLMs (detect | install | status)"
+      echo "  noctraos-control  the NoctraOS Control Panel (GUI)"
       ;;
   esac
 }
 
-case "${1:-help}" in
-  update) cmd_update ;;
-  doctor) cmd_doctor ;;
-  models) shift; cmd_models "$@" ;;
-  bg)     shift; cmd_bg "$@" ;;
-  gpu)    shift; command -v noc-gpu >/dev/null 2>&1 && exec noc-gpu "$@" \
-            || { bad "noc-gpu not installed (re-run the installer)"; exit 1; } ;;
-  --version|-v) echo "noc $VERSION" ;;
-  *)
-    echo "noc $VERSION — NoctraOS workstation manager"
-    echo ""
-    echo "  noc update      update apt, Flatpak apps, mise runtimes, AI models"
-    echo "  noc doctor      health check of the whole stack"
-    echo "  noc models      manage local AI models (list | pull | rm | gui)"
-    echo "  noc bg          cycle or set the wallpaper (list | next | set)"
-    echo "  noc gpu         GPU setup for local LLMs (detect | install | status)"
-    echo "  noc-menu        the same maintenance tasks from a GUI panel"
-    ;;
-esac
+# Sourced by tests: define functions only.
+if [ "${BASH_SOURCE[0]}" = "$0" ]; then main "$@"; fi

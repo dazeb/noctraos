@@ -32,7 +32,18 @@ SEARCH_UUID = 'noctraos-search@noctraos.local'
 MARKER = Path(GLib.get_user_config_dir()) / 'noctraos' / 'welcome-done'
 PROVISIONED = Path.home() / '.local/share/noctraos/.provisioned'
 HERMES = '/usr/local/bin/noctraos-hermes'
-MODEL = os.environ.get('NOCTRAOS_MODEL', 'qwen2.5-coder:7b')
+def _default_model():
+    """NOCTRAOS_MODEL, then the file `noc models default` writes, then the shipped model."""
+    if os.environ.get('NOCTRAOS_MODEL'):
+        return os.environ['NOCTRAOS_MODEL']
+    try:
+        name = (Path(GLib.get_user_config_dir()) / 'noctraos' / 'model').read_text().split('\n')[0].strip()
+    except OSError:
+        name = ''
+    return name or 'qwen2.5-coder:7b'
+
+
+MODEL = _default_model()
 OLLAMA_TAGS = 'http://127.0.0.1:11434/api/tags'
 
 CSS = b"""
@@ -218,6 +229,7 @@ class Welcome(Gtk.ApplicationWindow):
             ('Start button', 'The Noctra logo at the bottom-left. Apps, search, power.'),
             ('Task Manager', 'Mission Center, pinned in the taskbar.'),
             ('File Explorer', 'Files, pinned in the taskbar.'),
+            ('Control Panel', 'Updates, models, hardware, health and privacy. Search for it.'),
             ('Screenshots', 'The Print key opens the screenshot tool.'),
             ('System tray', 'Network, sound and power, top right.'),
         ]
@@ -256,8 +268,8 @@ class Welcome(Gtk.ApplicationWindow):
         buttons.pack_start(self.hermes_local, False, False, 0)
         box.pack_start(buttons, False, False, 4)
         box.pack_start(label('Hermes will ask who you are and how you want it to behave, then '
-                             'offer a short tour. Local only is saved; you can switch back in '
-                             'Hermes settings.', 'muted'), False, False, 0)
+                             'offer a short tour. Local only is saved; you can switch any time in '
+                             'the Control Panel, under Privacy.', 'muted'), False, False, 0)
         return box
 
     # -- navigation --------------------------------------------------------------------

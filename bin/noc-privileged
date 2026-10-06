@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+# noc-privileged — the root side of the Control Panel, run through pkexec (one polkit prompt).
+#
+#   noc-privileged update <apt|flatpak>[,<...>]   noc update --json for the system-level steps
+#   noc-privileged module <module-file>           re-run one install module (allowlist below)
+#   noc-privileged gpu-install <nvidia|amd|all>   noc-gpu install for one vendor (drivers + CUDA/ROCm/Vulkan)
+#
+# This is an allowlist, never a shell: each operation is a fixed verb with validated arguments, it
+# only runs root-owned code (/usr/local/bin/noc and the root-owned snapshot of the repo written by
+# install/07_persistence.sh), and anything else is refused. Installed at
+# /usr/local/libexec/noctraos/noc-privileged; the polkit action pins that path.
+set -uo pipefail
+
+SNAPSHOT=/usr/local/share/noctraos/repo
+NOC=/usr/local/bin/noc
+# Modules the panel may re-run. Add a name here only if it is idempotent and safe to run unattended.
+MODULES=(04d_appmanager.sh)
+UPDATE_STEPS=(apt flatpak)
+GPU=/usr/local/bin/noc-gpu
+GPU_VENDORS=(nvidia amd all)
+
+refuse() { echo "noc-privileged: $*" >&2; exit 2; }
+
+in_list() { local x="$1"; shift; local i; for i in "$@"; do [ "$i" = "$x" ] && return 0; done; return 1; }
+
+# validate_update <steps> : every comma-separated step must be on the allowlist.
+validate_update() {
+  local steps="$1" s
+  [[ "$steps" =~ ^[a-z]+(,[a-z]+)*$ ]] || return 1   # no empty items, no stray characters
+  IFS=',' read -ra want <<<"$steps"
+  for s in "${want[@]}"; do in_list "$s" "${UPDATE_STEPS[@]}" || return 1; done
+}
+
+validate_vendor() { in_list "${1:-}" "${GPU_VENDORS[@]}"; }
+
+validate_module() { in_list "$1" "${MODULES[@]}" && [ -f "$SNAPSHOT/install/$1" ]; }
+
+# The desktop user that asked: install.sh needs it (it refuses to run as bare root).
+invoking_user() {
+  local uid="${PKEXEC_UID:-}" name
+  [[ "$uid" =~ ^[0-9]+$ ]] && [ "$uid" -ne 0 ] || return 1
+  name="$(getent passwd "$uid" | cut -d: -f1)"
+  [ -n "$name" ] && printf '%s\n' "$name"
+}
+
+clean_env() { env -i PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin HOME=/root LANG=C.UTF-8 "$@"; }
+
+main() {
+  [ "$(id -u)" -eq 0 ] || refuse "must run as root (through pkexec)"
+  case "${1:-}" in
+    update)
+      validate_update "${2:-}" || refuse "update: steps must be a comma list of: ${UPDATE_STEPS[*]}"
+      [ $# -eq 2 ] || refuse "update: unexpected arguments"
+      clean_env "$NOC" update --json --only "$2" ;;
+    module)
+      [ $# -eq 2 ] || refuse "module: expected one module name"
+      validate_module "$2" || refuse "module: '$2' is not an allowed module"
+      local user
+      user="$(invoking_user)" || refuse "module: cannot tell which user asked (run it through pkexec)"
+      mkdir -p /var/log/noctraos && chmod 755 /var/log/noctraos
+      clean_env SUDO_USER="$user" NOCTRAOS_LOG="/var/log/noctraos/module-$(date +%Y%m%d-%H%M%S).log" \
+        bash "$SNAPSHOT/install.sh" --only "$2" ;;
+    gpu-install)
+      [ $# -eq 2 ] || refuse "gpu-install: expected one vendor"
+      validate_vendor "$2" || refuse "gpu-install: vendor must be one of: ${GPU_VENDORS[*]}"
+      local gpu_user
+      gpu_user="$(invoking_user)" || refuse "gpu-install: cannot tell which user asked (run it through pkexec)"
+      # noc-gpu adds this user to the render/video groups; it is also what `sudo noc gpu install` uses.
+      clean_env SUDO_USER="$gpu_user" TARGET_USER="$gpu_user" "$GPU" install --vendor "$2" ;;
+    *) refuse "usage: noc-privileged update <apt|flatpak>[,...] | module <name> | gpu-install <vendor>" ;;
+  esac
+}
+
+# Sourced by tests: define the validators only.
+if [ "${BASH_SOURCE[0]}" = "$0" ]; then main "$@"; fi

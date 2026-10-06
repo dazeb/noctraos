@@ -95,7 +95,8 @@ patching of Zorin code.
 ## Start menu spec (owner, 2026-10-04)
 
 **v1 is built** (`extensions/noctraos-start@noctraos.local`): a 560 px panel above the
-dock with a header bar (title and a **settings gear on the right** that opens
+dock with a header bar (title, a **Control Panel button** that opens the
+[Control Panel](control-panel.md), and a **settings gear on the right** that opens
 Settings), the **pinned Agents row** (Hermes, Claude Code, Codex, OpenCode, Grok,
 Gemini CLI, Qwen Code), **recent files** (8, from the desktop's recent list; scratch and
 hidden paths skipped; each opens in its default app), and a footer with *All apps*

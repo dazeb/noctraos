@@ -33,7 +33,7 @@ shell:
   script:
     - |
       fail=0
-      for f in boot.sh install.sh install/*.sh bin/noc bin/noc-menu bin/noc-gpu bin/noctraos-hermes \
+      for f in boot.sh install.sh install/*.sh bin/noc bin/noc-gpu bin/noc-privileged bin/noctraos-hermes bin/noctraos-control \
                bin/noctraos-agent bin/noctraos-copyq bin/noctraos-search configs/nautilus-scripts/* iso/*.sh; do
         [ -f "$f" ] || continue
         bash -n "$f" || fail=1
@@ -58,7 +58,7 @@ tests:
   image: ubuntu:24.04
   before_script:
     - apt-get update -qq
-    - apt-get install -y -qq python3 jq >/dev/null   # jq: noc-gpu detect --json, used by the GPU tests
+    - apt-get install -y -qq python3 jq curl >/dev/null   # jq: JSON modes of noc/noc-gpu; curl: noc talks to a fake Ollama in tests
   script:
     - python3 -B -m unittest discover -s tests -v
     - python3 -B scripts/render-theme.py --check

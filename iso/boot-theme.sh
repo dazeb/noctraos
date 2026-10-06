@@ -10,6 +10,7 @@
 #                                     dark live session, installer slideshow
 
 BOOT_ASSETS="${BOOT_ASSETS:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../assets/boot" && pwd)}"
+BOOT_CONFIGS="$(cd "$(dirname "${BASH_SOURCE[0]}")/../configs" && pwd)"
 
 boot_theme_iso_tree() {
   local tree="$1" cfg="$1/boot/grub/grub.cfg" theme_dir="$1/boot/grub/themes/noctraos" f
@@ -103,5 +104,9 @@ theme = 'ZorinGrey-Dark'
 picture-uri = 'file:///usr/share/backgrounds/noctraos/ember-night.jpg'
 picture-uri-dark = 'file:///usr/share/backgrounds/noctraos/ember-night.jpg'
 OVR
-  chroot "$root" glib-compile-schemas /usr/share/glib-2.0/schemas
+  # The provisioner (module 09) installs this same file, but only after the first desktop login,
+  # by which time Software Updater has already read first-run=true and shown "Zorin OS ...".
+  install -m 644 "$BOOT_CONFIGS/gsettings/90_noctraos-updates.gschema.override" \
+    "$root/usr/share/glib-2.0/schemas/90_noctraos-updates.gschema.override"
+  chroot "$root" glib-compile-schemas --strict /usr/share/glib-2.0/schemas
 }

@@ -1,0 +1,5 @@
+# Zorin's patched update-manager hardcodes "Zorin OS" in its first-run sentence ("Updated software
+# has been issued since Zorin OS 18 was released"). With first-run off it shows the plain
+# "Updated software is available for this computer" instead, which names no distribution.
+[com.ubuntu.update-manager]
+first-run=false

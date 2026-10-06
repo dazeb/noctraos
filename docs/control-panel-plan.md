@@ -1,5 +1,7 @@
 # NoctraOS Control Panel: rebuild plan
 
+> **Status: built** (phases 0 to 6). This is the design record; how it works now is in [control-panel.md](control-panel.md).
+
 Written 2026-10-06 for a fresh session. The current panel (`bin/noc-menu`) is a zenity list and
 needs a proper rebuild. This file is the whole brief: read it, then `AGENTS.md` and
 `docs/objectives.md`, then start at phase 0.
@@ -183,3 +185,27 @@ VM 114, which may be gone:
 3. Should Updates auto-check in the background (a user timer + notification), or only on demand?
 4. Is a "Reset to defaults" (Start panel, search, Hermes mode) wanted on the Privacy page?
 5. Keep a `noc menu` CLI subcommand that opens the panel, or only the launcher?
+
+## 9. Progress and working defaults
+
+Phase 0 is done: the open questions above get these working defaults, so building can proceed.
+Each is cheap to change, so the owner can override any of them at review.
+
+1. Name: "NoctraOS Control Panel", launcher entry only for now (the Start-panel gear stays on GNOME
+   Settings until phase 6).
+2. Corners: match the Welcome and Appearance windows (2 px) first; moving all three to 0 px is a
+   separate follow-up.
+3. Updates: on demand only; no background timer or notification.
+4. No "Reset to defaults" button yet.
+5. No `noc menu` subcommand; the launcher is the only entry point.
+
+Model default (section 5): `~/.config/noctraos/model`; precedence `NOCTRAOS_MODEL`, file, shipped model.
+
+- [x] Phase 0: decisions, branch
+- [x] Phase 1: CLI JSON modes + tests (`doctor --json`, `status`, `update --json --only`,
+      `models list --json | default | presets`, `noctraos-hermes cloud | mode`)
+- [x] Phase 2: GTK shell, Overview and About, `noc-menu` removed (#42)
+- [x] Phase 3: Health and AI models pages (#43)
+- [x] Phase 4: Updates page and the pkexec/polkit privileged helper (#45)
+- [x] Phase 5: Hardware/GPU and Privacy pages
+- [x] Phase 6: keyboard, tooltips, screen-fit, headless smoke test, entry points (Start panel, welcome, help), docs, site and README screenshots

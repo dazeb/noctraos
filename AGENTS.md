@@ -48,7 +48,7 @@ install/
   05_mouse_ergonomics.sh    Nautilus right-click scripts
   06_desktop_theme.sh       gsettings ergonomics, wallpapers, Agents menu,
                             AI-first /etc/xdg/menus/gnome-applications.menu
-  07_persistence.sh         /etc/skel defaults, noc + noc-menu install
+  07_persistence.sh         /etc/skel defaults, noc + Control Panel install (retires the old noc-menu)
   08_shell_theme.sh         NoctraOS-Dark shell + GTK themes (derived, not
                             shipped), white menu icons, terminal/app palette
   09_super_search.sh        Super+Space search, Noctra start button and Start panel:
@@ -60,10 +60,13 @@ install/
                             free Nous tier primary, local Ollama fallback; runs LAST (25+ min, no sudo)
                             (module order in install.sh: 00 01 02 02b 03 04 04_workstation 04c 04d 05 06 08 09 10 07 11)
 bin/
-  noc                       CLI: update | doctor | models [list|pull|rm|gui] | bg [list|next|set] | gpu
-  noc-gpu                   GPU detect | install | status (NVIDIA driver+CUDA, AMD ROCm); VERSION must match noc
-  noc-menu                  zenity control panel
-  noctraos-hermes           Hermes Desktop launcher/installer: launch | local | install | ready | status.
+  noc                       CLI: update [--json] [--only ..] | updates | doctor [--json] | status | models [list [--json]|default|presets|pull|rm]
+                            | bg [list|next|set] | gpu. Sourceable (tests call its functions); NOC_OLLAMA_URL overrides the Ollama URL
+  noc-gpu                   GPU detect [--json] | install | status [--json] (NVIDIA driver+CUDA, AMD ROCm); VERSION must match noc
+  noctraos-control          wrapper that execs the system-Python Control Panel (control/)
+  noc-privileged            root side of the panel, run through pkexec: allowlisted `update apt,flatpak`, `module <name>`, `gpu-install <vendor>`
+                            (installed to /usr/local/libexec/noctraos; policy in configs/polkit/)
+  noctraos-hermes           Hermes Desktop launcher/installer: launch | local [--no-launch] | cloud | mode | install | ready | status.
                             Sets HERMES_GUEST_ONBOARDING=1 (free tier), seeds the Ollama fallback
   noctraos-welcome          first-run welcome (GTK; replaces Zorin's tour), --force/--provisioning
   noctraos-appearance       wallpaper + fonts panel (we fix theme/layout, so no theme switcher)
@@ -75,10 +78,13 @@ bin/
 branding/setup-branding.py  once-per-account dock + top-bar layout (marker desktop-layout-v1)
 extensions/                 GNOME Shell extensions: noctraos-search (Super+Space overlay),
                             noctraos-start (Start panel), noctraos-branding (flat top bar, Show Desktop)
+control/                    Control Panel (docs/control-panel-plan.md): panel.py = pure formatting of `noc ... --json`
+                            (unit-tested, no GTK), main.py = GTK3 window; installed to /usr/local/share/noctraos-control
 search/                     search app: file index (SQLite), CopyQ bridge, browser history, settings window
 help/index.html             "New users start here" page the Start panel opens
 scripts/                    render-theme.py, build-desktop-theme.py, seed-password-store.py
-tests/                      unittest: theme composition (test_desktop_theme), GPU detection (test_gpu_detect)
+tests/                      unittest: theme composition (test_desktop_theme), GPU detection (test_gpu_detect),
+                            noc/noctraos-hermes JSON modes (test_noc_cli), Control Panel cards (test_control_core)
 site/                       project website (static, deployed via wrangler.jsonc); keep claims in step with README
                             every page head carries canonical, Open Graph, Twitter and JSON-LD metadata; social cards live in
                             site/img/social/ (1200x630), favicons/manifest/robots.txt/sitemap.xml/.well-known/security.txt in site/
@@ -129,7 +135,7 @@ iso/build-local.sh          build the release (and appliance) ISO on a fast work
 iso/local-vm.sh             local KVM test VM: start/stop, console screenshot, absolute clicks, keys,
                             ssh/scp. No root, no host changes
 iso/pve-console-shot.py     console frames from a Proxmox VM via the API (boot-testing without a shell)
-docs/                       objectives (source of truth), onboarding, desktop-layout, theme-design,
+docs/                       objectives (source of truth), onboarding, desktop-layout, control-panel (+ -plan), theme-design,
                             omarchy-parity, release-runbook
 docs/release-runbook.md     ORDERED HANDOFF for shipping 0.3.0: rebuild, test, VM disk, upload, tag
 iso/vm-sysprep.sh           run inside a fully provisioned VM before exporting its disk as a
@@ -232,12 +238,12 @@ iso/vm-sysprep.sh           run inside a fully provisioned VM before exporting i
 
 ```bash
 # static checks (docker shellcheck — not installed on this host)
-bash -n boot.sh install.sh install/*.sh bin/noc bin/noc-gpu bin/noc-menu bin/noctraos-agent \
+bash -n boot.sh install.sh install/*.sh bin/noc bin/noc-gpu bin/noc-privileged bin/noctraos-control bin/noctraos-agent \
   bin/noctraos-copyq bin/noctraos-hermes bin/noctraos-search configs/nautilus-scripts/*     # other bin/ files are Python
 docker run --rm -v "$PWD:/mnt" koalaman/shellcheck:stable --severity=warning \
-  boot.sh install.sh install/*.sh bin/noc bin/noc-gpu bin/noc-menu bin/noctraos-agent \
+  boot.sh install.sh install/*.sh bin/noc bin/noc-gpu bin/noc-privileged bin/noctraos-control bin/noctraos-agent \
   bin/noctraos-copyq bin/noctraos-hermes configs/nautilus-scripts/*     # same list as CI
-python3 -m unittest discover -s tests                # 31 tests: theme composition, GPU detection
+python3 -m unittest discover -s tests                # 141 tests: theme, GPU detection, noc JSON modes, root helper, Control Panel
 python3 scripts/render-theme.py --check              # committed theme outputs match palette.json
 
 # wallpaper iteration (venv at ~/workspace/scratch/zorin-img-venv: pillow+numpy)
@@ -296,8 +302,12 @@ tail -f /root/noctraos-build.log
   `event.get_source()` is null for clicks on the root and a stage-level
   `captured-event` handler never fires under a grab. Both were tried and failed.
 - **CopyQ's tray icon ignores the icon theme.** It is drawn from CopyQ's own resources, so the white
-  override in `assets/icons/overrides` only reaches its window/app icon. The tray colour is the session
-  `iconColor`, which is not saved: `bin/noctraos-copyq` sets it white after every start (verified on VM).
+  override in `assets/icons/overrides` only reaches its window/app icon. The AppIndicator `custom-icons`
+  setting does not help either (the original image still shows through under the custom one). Instead
+  `noctraos-branding` tints that one tray icon (indicator id `CopyQ_copyq`, `MONO_TRAY_IDS`) with a
+  `Clutter.ColorizeEffect` in the colour of the neighbouring status icons, read from the theme, so it follows
+  theme changes (verified on the VM by recolouring the status icons: CopyQ followed). `bin/noctraos-copyq`
+  also sets the session `iconColor` white (not saved) so the rings tint at full strength.
 - **CopyQ must run with `QT_QPA_PLATFORM=xcb`.** As a native-Wayland client it
   logs "Failed to activate Wayland clipboard" and records nothing on GNOME
   (no wlr-data-control). The autostart entry sets it; keep it that way.
@@ -408,11 +418,56 @@ tail -f /root/noctraos-build.log
   hardware; on this dev box `noc gpu install --dry-run` is safe (it detects the
   active driver + manual CUDA 13.3 and touches nothing).
 
+- **Root work in the Control Panel goes through `bin/noc-privileged` and nothing else.** pkexec runs
+  `/usr/local/libexec/noctraos/noc-privileged` (polkit action `dev.noctraos.privileged`, `auth_admin_keep`:
+  one prompt for several calls). It is an allowlist of fixed verbs: `update apt,flatpak` execs the
+  root-owned `/usr/local/bin/noc update --json`, and `module <name>` re-runs only the modules in its
+  `MODULES` array. Modules are run from the **root-owned snapshot** `/usr/local/share/noctraos/repo`
+  that module 07 refreshes, NEVER from `~/.local/share/noctraos` (a user-writable clone would be a
+  root escalation). Add a module to `MODULES` only if it is idempotent and safe unattended; extend
+  `tests/test_noc_privileged.py` with it. Never add a verb that takes a path, a command line or a
+  package name from the caller. The Updates page runs root steps first (one prompt), then the user's
+  own steps through `noc update --json`; it never uses a bare `sudo` and has no cancel for apt (a
+  half-finished upgrade is worse than a slow one).
+- **GPU setup in the Control Panel is never automatic.** The Hardware page shows what `noc-gpu` found,
+  then a consent dialog (what gets installed, rough download size, restart/re-login needs, a free-disk
+  check) and only on "Install" runs `pkexec noc-privileged gpu-install <nvidia|amd|all>`, which execs the
+  root-owned `/usr/local/bin/noc-gpu install --vendor X` for the invoking user. It never offers an
+  install over a pending reboot or for a too-old NVIDIA card. `noc-gpu status --json` rows are parsed
+  back out of the normal text output, so keep the `OK`/`!!`/`..` markers. The sizes in
+  `panel.GPU_NEEDS` are estimates shown as "about".
+- **Privacy page rules**: the Nous free tier is a cloud service and the page must never say otherwise;
+  switching to cloud needs an explicit confirmation; a user's own Hermes provider (`mode: other`) is
+  never touched; `noctraos-hermes local --no-launch` switches without opening the app.
+- **The Control Panel is a GUI for `noc`, nothing more.** `control/main.py` calls `noc ... --json`
+  on a thread (`background()`), never blocks GTK, and every page needs a "not ready yet" state
+  (Ollama down, no network) rather than an exception. Put anything that can be tested without
+  GTK in `control/panel.py`. A card is only clickable when its sidebar page exists.
+- **One default model, one file.** `noc models default <name>` writes `~/.config/noctraos/model`;
+  precedence everywhere is `NOCTRAOS_MODEL`, then that file, then `qwen2.5-coder:7b`. The Welcome
+  app, `noctraos-hermes`, "Ask AI to Explain" and (by rewriting its `    model:` lines) the seeded
+  Continue config read it, each with the same few lines of inline lookup: change them together.
+  `install/03_ai_core.sh` still installs the shipped model (the file does not exist yet).
+- **`noc ... --json` is a contract for the Control Panel** (`docs/control-panel-plan.md`): keep the
+  keys of `doctor --json`, `status --json`, `models list --json`, `models presets --json` and the
+  `update --json` event stream stable (tests/test_noc_cli.py pins them). In JSON mode `noc update`
+  uses `sudo -n`, so a missing credential fails with a message instead of hanging with no TTY.
+- **A real AMD GPU test VM exists on TrueNAS** (`192.168.8.111`, VM id 1 `noctraosgputest`, created
+  2026-10-06; manage it with `midclt call vm.start|vm.stop 1` over `ssh root@192.168.8.111`). It has the
+  Radeon RX 580 (Polaris, `0a:00.0`, already on vfio-pci with its audio function and a clean IOMMU
+  group) passed through, 4 vCPU / 8 GiB, a 64 GiB zvol `ssdpool0/noctraos-gpu-test` holding a
+  provisioned NoctraOS disk, and a macvlan NIC (the NAS itself cannot reach it; other LAN hosts can;
+  DHCP, find it by MAC `00:a0:98:71:01:df`). User `noctraos`/`noctraos`. Verified there: `noc gpu detect`
+  picks the Vulkan tier, `noc gpu install --vendor amd` installs Mesa Vulkan and is a no-op the second
+  time, `vulkaninfo` shows RADV POLARIS10, and Ollama with `OLLAMA_VULKAN=1` runs qwen2.5-coder:7b 100%
+  on the GPU (29/29 layers). Not covered: ROCm (Polaris has none) and NVIDIA. Do not start it
+  while the NAS is under memory pressure (it takes 8 GiB); stop it when done. The dev workstation's
+  RTX 3080 Ti drives the desktop, so it cannot be passed through without ending the session.
 - **Hermes' free tier is a cloud service: prompts leave the machine.** Everything the welcome app
   and README say about "local AI" is about the Ollama model; Hermes resolves to the Nous cloud
   unless it is local-only. Never describe Hermes as local without that qualification. The welcome
   app discloses it and offers `noctraos-hermes local` (Ollama primary, free tier off, persistent;
-  undo with `hermes config set model.provider auto`). `noctraos-hermes ready` (runtime and app
+  undo with `noctraos-hermes cloud`, which refuses to touch a provider the user set). `noctraos-hermes ready` (runtime and app
   built) gates the Hermes buttons so they cannot start a second installer during provisioning.
 - **Hermes free tier is gated and pre-GA.** The Nous free tier only exists when
   `HERMES_GUEST_ONBOARDING=1` (or `--guest-onboarding`); `noctraos-hermes` exports it. Never
@@ -490,6 +545,13 @@ tail -f /root/noctraos-build.log
 5. If ISO-relevant: rebuild ISO on the node, boot-test to the installer
    screen (live session gets DHCP = squashfs valid), then restore VM 114.
 6. Push, then verify the remote SHA server-side.
+
+## Control Panel (built 2026-10-06, PRs #40 to #48)
+
+The zenity `noc-menu` is gone; `noctraos-control` is the GUI for `noc` (docs/control-panel.md). Pages:
+Overview, Updates, AI models, Hardware, Health, Privacy, About. Root work goes through
+`noc-privileged` only. Merge the stacked PRs in order and release them together: between the phases
+update and GPU setup had no GUI.
 
 ## Current state (2026-10-05)
 
