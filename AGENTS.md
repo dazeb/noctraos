@@ -553,26 +553,26 @@ Overview, Updates, AI models, Hardware, Health, Privacy, About. Root work goes t
 `noc-privileged` only. Merge the stacked PRs in order and release them together: between the phases
 update and GPU setup had no GUI.
 
-## Current state (2026-10-05)
+## Current state (2026-10-06)
 
-Version **0.3.0** (`VERSION`). The ordered list of what is left to ship it is
-**docs/release-runbook.md**; start there.
+Version **0.3.1** (`VERSION`), released. `docs/release-runbook.md` is the procedure (written for 0.3.0; the
+steps and scripts are the same for any version).
 
 - On `main`: provisioner modules 00 to 11 (Hermes Desktop last), the app policy
   (`04c_app_policy.sh`: Flatpak/AppImage first, unwanted apps removed, launchers hidden), the
-  NoctraOS welcome (replaces Zorin's tour), the appearance panel, the release/unattended ISO
-  split, `iso/build-local.sh`, `iso/local-vm.sh`, `iso/vm-sysprep.sh`. PR #17 (`audit/apps`) is
-  merged; first boot clones `main`, so an ISO must be built from a `main` that contains it.
-- Published (2026-10-05, replaced the same evening): the release ISO, the QCOW2 and VMDK VM disks and
-  `SHA256SUMS` at `https://dl.noctraos.dev/releases/v0.3.0/` (the same R2 bucket as files.dazeb.dev;
-  each file's SHA-256 was checked by streaming it back through the public hostname). The rebuild adds
-  the census removal (`iso/strip-census.sh`), the renamed user-facing Zorin labels
-  (`iso/rebrand-labels.sh`) and everything merged through #27; it was built from the PR #28 branch
-  (`REPO_URL=file:///host/branch-src iso/build-local.sh`), first boot cloned `main`. The ISO torrent in the
-  repo root is for this ISO (regenerated, with a web seed on dl.noctraos.dev): rebuild it whenever the ISO
-  changes. The contact address is admin@noctraos.dev.
-- Released: tag `v0.3.0` (the PR #28 merge commit, d6ef42b) and the GitHub release with links and checksums
-  only (GitHub caps assets at 2 GiB). Do not move the tag; later fixes go in 0.3.1.
+  NoctraOS welcome (replaces Zorin's tour), the Control Panel and its root helper (see the Control Panel
+  section above), the appearance panel, the release/unattended ISO split, `iso/build-local.sh`,
+  `iso/local-vm.sh`, `iso/vm-sysprep.sh`, and the `nightly` staging workflow (`docs/nightly.md`).
+- Published (2026-10-06): the release ISO, the QCOW2 and VMDK VM disks and `SHA256SUMS` at
+  `https://dl.noctraos.dev/releases/v0.3.1/` (the same R2 bucket as files.dazeb.dev; each file's SHA-256 was
+  checked by streaming it back through the public hostname). Built from `main` at 95c5097 with
+  `iso/build-local.sh <dir> both`; first boot clones `main`. The ISO torrent in the repo root
+  (`noctraos-0.3.1-amd64.iso.torrent`, web seed on dl.noctraos.dev) is for this ISO: rebuild it whenever the
+  ISO changes (torf in a throwaway venv; same trackers, 4 MiB pieces). `v0.3.0` stays published beside it.
+- Released: tag `v0.3.1` (the release merge commit: it adds the torrent and the download page to the
+  `main` the ISO was built from, 95c5097) and the GitHub release with links and checksums
+  only (GitHub caps assets at 2 GiB). Do not move the tag; later fixes go in the next version. Known nit
+  shipped in 0.3.1: the Control Panel's card tooltip reads "Open Ai Models" (should be "AI models").
 - Never published: the unattended/appliance ISO. The old unattended test ISO that was public at
   the bucket root was deleted.
 - Tested: `proxmox-install.sh` against the public files on a PVE 9.2 node, both modes (the image boots to the

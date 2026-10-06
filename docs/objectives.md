@@ -86,8 +86,8 @@ local-only choice.
 - `install.sh` / `boot.sh` remain as the engine the ISO bakes in and as a way
   to provision an existing Zorin OS machine. They are no longer the
   headline product.
-- Version 0.3.0 is **published**: the ISO, the VM disks and their checksums are on the download
-  page. The `v0.3.0` git tag and GitHub release exist; see
+- Version 0.3.1 is **published**: the ISO, the VM disks and their checksums are on the download
+  page. The `v0.3.1` git tag and GitHub release exist (so does `v0.3.0`); see
   [release-runbook.md](release-runbook.md).
 
 ## Visual direction
