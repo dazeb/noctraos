@@ -14,7 +14,7 @@
 # NOCTRAOS_SCRATCH_DIR is where the image is downloaded (default: the roomiest directory storage).
 set -Eeuo pipefail
 
-VERSION='0.3.0'
+VERSION='0.3.1'
 BASE_URL="${NOCTRAOS_BASE_URL:-https://dl.noctraos.dev/releases/v$VERSION}"
 IMAGE_FILE="noctraos-$VERSION.qcow2"
 ISO_FILE="noctraos-$VERSION-amd64.iso"
