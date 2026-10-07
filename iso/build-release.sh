@@ -76,7 +76,11 @@ log "3/6 exporting the disks"
 # Both conversions compress on one core each (about 15 minutes apiece): run them side by side.
 qemu-img convert -O qcow2 -c "$VM_DIR/disk.qcow2" "$OUT/noctraos-$VERSION.qcow2" & QCOW_PID=$!
 qemu-img convert -O vmdk -o subformat=streamOptimized "$VM_DIR/disk.qcow2" "$OUT/noctraos-$VERSION.vmdk" & VMDK_PID=$!
-wait "$QCOW_PID" && wait "$VMDK_PID" || { echo "exporting the disks failed" >&2; exit 1; }
+# Wait for BOTH before judging: bailing out while one is still writing would leave it running into $OUT.
+EXPORT_FAILED=0
+wait "$QCOW_PID" || EXPORT_FAILED=1
+wait "$VMDK_PID" || EXPORT_FAILED=1
+[ "$EXPORT_FAILED" = 0 ] || { echo "exporting the disks failed" >&2; exit 1; }
 [ "${NOCTRAOS_KEEP_VM:-0}" = 1 ] || rm -rf "$VM_DIR"
 cp --reflink=auto "$ISO" "$OUT/noctraos-$VERSION-amd64.iso"
 
