@@ -75,7 +75,8 @@ class PublishTests(unittest.TestCase):
 
     def test_resumes_after_a_partial_upload_without_reuploading(self):
         done = NAMES[:2]
-        result, log = run(listing_of(done))
+        same = {n: (lambda rel, n=n: (rel / n).read_bytes()) for n in done}
+        result, log = run(listing_of(done), remote_files=same)
         self.assertEqual(result.returncode, 0, result.stderr)
         uploads = [Path(line).name for line in log if not line.startswith("gh ")]
         self.assertEqual(uploads, [NAMES[2], "SHA256SUMS"])
@@ -86,8 +87,16 @@ class PublishTests(unittest.TestCase):
         self.assertIn("not overwriting", result.stderr)
         self.assertEqual(log, [])
 
+    def test_same_size_but_different_content_is_refused_before_anything_is_uploaded(self):
+        other = {NAMES[0]: lambda rel: b"x" * (rel / NAMES[0]).stat().st_size}   # same size, other bytes
+        result, log = run(listing_of(NAMES[:1]), remote_files=other)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("another build", result.stderr)
+        self.assertEqual(log, [])
+
     def test_different_checksums_are_refused(self):
-        result, log = run(listing_of(NAMES + ["SHA256SUMS"]), remote_files={"SHA256SUMS": b"other  file\n"})
+        result, log = run(listing_of(NAMES + ["SHA256SUMS"]), remote_files={**{n: (lambda rel, n=n: (rel / n).read_bytes()) for n in NAMES},
+                                                                  "SHA256SUMS": b"other  file\n"})
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("differs", result.stderr)
         self.assertEqual(log, [])

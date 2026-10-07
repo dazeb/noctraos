@@ -5,7 +5,7 @@
 #
 # Reads <build-dir>/release/v<VERSION>/ (written by iso/build-release.sh). This is the one step that
 # cannot be taken back: files on the public bucket get cached and mirrored. So it:
-#   - never overwrites: files already in the bucket must match this build (size, and the SHA256SUMS text), else it
+#   - never overwrites: files already in the bucket must match this build (SHA-256 of the content, and the SHA256SUMS text), else it
 #     stops; matching ones are skipped, so a publish that failed half-way can simply be retried,
 #   - uploads the three downloads first and SHA256SUMS last, so a half-uploaded release never has a
 #     checksum file that matches,
@@ -42,7 +42,8 @@ BUILT="$(sed -n 's/^commit: *//p' "$REL/BUILD-INFO.txt")"
 r2_env
 # Resume, never overwrite: what is already there must be exactly ours, and only what is missing is uploaded.
 # Anything that differs (another build of this version) stops the publish. The streamed-back SHA-256 check
-# below is what finally proves every file; the size and SHA256SUMS comparisons here catch a wrong version early.
+# below is what finally proves every file; the size, hash and SHA256SUMS comparisons here stop a mixed release before
+# anything more is uploaded.
 # A listing that FAILS must stop here: an empty answer from a broken connection would look like "nothing uploaded".
 # (A prefix that does not exist yet lists as empty with exit 0.)
 REMOTE="$(rclone lsf --format 'ps' --separator '|' "r2:$R2_BUCKET/releases/$TAG/")" \
@@ -59,6 +60,12 @@ for f in "${FILES[@]}" SHA256SUMS; do
     echo "releases/$TAG/$f in the bucket is $have bytes, this build's is $(stat -c %s "$REL/$f"): not overwriting a published release" >&2
     echo "Bump the version, or remove the old files by hand if you really mean to replace them." >&2
     exit 1
+  else
+    # Equal sizes prove little (ISOs of one layout are often the same size): compare content before trusting it,
+    # and before SHA256SUMS goes next to it.
+    want="$(awk -v n="$f" '$2 == n {print $1}' "$REL/SHA256SUMS")"
+    got="$(rclone cat "r2:$R2_BUCKET/releases/$TAG/$f" | sha256sum | cut -d' ' -f1)"
+    [ "$got" = "$want" ] || { echo "releases/$TAG/$f in the bucket hashes to $got, this build's is $want: another build of $TAG is already there, not overwriting" >&2; exit 1; }
   fi
   echo "already uploaded: $f"
 done
