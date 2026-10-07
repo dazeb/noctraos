@@ -12,7 +12,8 @@ A release is one tag. The homelab GitLab builds, tests and publishes everything 
 # 1. bump VERSION, bin/noc, bin/noc-gpu (the version job fails if they disagree); optionally write
 #    docs/release-notes/vX.Y.Z.md (known issues etc.: it becomes the top of the GitHub release notes)
 # 2. merge that to GitHub main  (the build clones main, and refuses a tag that is not main's head)
-git tag vX.Y.Z origin/main && git push gitlab vX.Y.Z
+git fetch origin && git tag vX.Y.Z origin/main
+git push gitlab origin/main:refs/heads/main vX.Y.Z    # GitLab must have the commit the tag points at
 ```
 
 | job | what it does | public? |
