@@ -24,6 +24,16 @@ GH_REPO="${GH_REPO:-dazeb/noctraos}"
 SITE_URL="${SITE_URL:-https://noctraos.dev}"
 BRANCH="release/$TAG-site"
 log() { printf '=== %s %s\n' "$(date +%H:%M)" "$*"; }
+wait_live() {  # the deploy is the point of this job: succeed only once the live page shows the version
+  log "waiting for $SITE_URL/download to show $VERSION (Cloudflare deploys after the merge)"
+  local end=$(( $(date +%s) + ${SITE_WAIT_MIN:-15} * 60 ))
+  # (not `curl | grep -q`: grep exits early, curl gets SIGPIPE and pipefail reports a failure on a good page)
+  until page="$(curl -sSf "$SITE_URL/download?v=$(date +%s)" || true)"; grep -q "\"softwareVersion\":\"$VERSION\"" <<<"$page"; do
+    [ "$(date +%s)" -lt "$end" ] || { echo "main has $VERSION, but $SITE_URL still does not show it after ${SITE_WAIT_MIN:-15} min: check the Cloudflare deployment" >&2; exit 1; }
+    sleep 20
+  done
+  log "live: $SITE_URL/download shows $VERSION"
+}
 
 [ -f "$REL/SHA256SUMS" ] || { echo "no built release at $REL" >&2; exit 1; }
 # The public files must really be there before the site links to them.
@@ -36,7 +46,8 @@ git clone -q --depth 1 "https://github.com/$GH_REPO.git" "$WORK/repo"
 cd "$WORK/repo"
 git remote set-url --push origin "git@github.com:$GH_REPO.git"
 if [ "$(sed -n 's/.*"softwareVersion":"\([0-9.]*\)".*/\1/p' site/download.html | head -1)" = "$VERSION" ]; then
-  echo "the site already shows $VERSION: nothing to do"; exit 0
+  echo "GitHub main already has the $VERSION site (a previous run merged it): only the live deployment is left to check"
+  wait_live; exit 0
 fi
 git checkout -q -B "$BRANCH"
 
@@ -75,10 +86,4 @@ if ! gh pr merge "$PR" --squash --delete-branch; then
   echo "could not merge $PR (branch protection or a conflict): it is open for a human to merge" >&2; exit 1
 fi
 
-log "waiting for $SITE_URL/download to show $VERSION (Cloudflare deploys after the merge)"
-end=$(( $(date +%s) + ${SITE_WAIT_MIN:-15} * 60 ))
-until curl -sSf "$SITE_URL/download?v=$(date +%s)" | grep -q "\"softwareVersion\":\"$VERSION\""; do
-  [ "$(date +%s)" -lt "$end" ] || { echo "merged, but $SITE_URL still does not show $VERSION after ${SITE_WAIT_MIN:-15} min: check the Cloudflare deployment" >&2; exit 1; }
-  sleep 20
-done
-log "live: $SITE_URL/download shows $VERSION"
+wait_live
