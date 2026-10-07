@@ -24,7 +24,7 @@ wait_for() {  # wait_for <minutes> <description> <command...>
 }
 
 vm_image_build() {
-  local dir="$1" iso="$2" branch="$3" sha="$4" label="$5" got sysprep_out
+  local dir="$1" iso="$2" branch="$3" sha="$4" label="$5"
   case "$VM_DIR" in /run/media/*|/mnt/c/*|*/ntfs*) echo "VM_DIR must be on ext4, not NTFS" >&2; return 1 ;; esac
 
   log "unattended install into a fresh VM ($VM_DIR)"
@@ -35,7 +35,13 @@ vm_image_build() {
 
   log "waiting for first-boot provisioning (up to 90 min)"
   wait_for 90 "provisioning to finish" vm_ssh 'test -f ~/.local/share/noctraos/.provisioned'
+  vm_image_finish "$dir" "$branch" "$sha" "$label"
+}
 
+# vm_image_finish <build-dir> <branch> <expected-sha> <label>: the checks and the sysprep, on a VM that is
+# running and provisioned. Split out so they can be tried on an existing provisioned disk in minutes.
+vm_image_finish() {
+  local dir="$1" branch="$2" sha="$3" label="$4" got sysprep_out
   # Provisioning upgrades packages, and doctor flags a pending reboot. Reboot the VM (which also proves the
   # provisioned system boots again) until the flag is gone, before judging it.
   if vm_ssh 'test -f /var/run/reboot-required'; then
