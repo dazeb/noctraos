@@ -61,6 +61,9 @@ vm_image_build() {
   log "sysprep"
   "$VM" scp "$HERE/vm-sysprep.sh"
   vm_ssh 'sudo NOCTRAOS_SYSPREP_YES=1 bash /tmp/vm-sysprep.sh noctraos' || true   # the disconnect ends the session
-  vm_ssh 'sudo poweroff' >/dev/null 2>&1 || true
+  # sysprep ends ssh for good (no host keys), so the clean shutdown is the ACPI power button, not ssh
+  vm_ssh 'sudo poweroff' >/dev/null 2>&1 || "$VM" powerdown >/dev/null 2>&1 || true
+  sleep 20
+  "$VM" status | grep -q '^running' && "$VM" powerdown >/dev/null 2>&1 || true
   wait_for 3 "the VM to power off" bash -c "! \"$VM\" status | grep -q '^running'"
 }

@@ -4,7 +4,8 @@
 #   iso/local-vm.sh start [iso|none]    boot the VM; with an ISO attached the disk boots first, so a
 #                                       blank disk falls through to the installer and an installed
 #                                       one boots the system. Creates the disk and UEFI vars if absent.
-#   iso/local-vm.sh stop | status       (stop = hard power off; prefer `ssh 'sudo poweroff'` first)
+#   iso/local-vm.sh stop | status       (stop = hard power off; prefer `powerdown`, or `ssh 'sudo poweroff'`, first)
+#   iso/local-vm.sh powerdown           ACPI power button: clean shutdown without ssh (a sysprepped VM has no sshd)
 #   iso/local-vm.sh shot out.png        console screenshot (1280x800)
 #   iso/local-vm.sh click X Y [double]  absolute left click at pixel X,Y of that screenshot
 #   iso/local-vm.sh key <qemu-key>...   e.g. key meta_l-spc ; key esc ; key n o c t r a o s ret
@@ -67,6 +68,7 @@ case "${1:-status}" in
     # shellcheck disable=SC2054
     [ "$ISO" != none ] && args+=(-drive file="$ISO",media=cdrom,if=none,id=c0,readonly=on -device ide-cd,drive=c0,bootindex=2)
     qemu-system-x86_64 "${args[@]}"; echo "started (pid $(cat "$PID"))" ;;
+  powerdown) monitor system_powerdown ;;   # ACPI power button: a clean shutdown that needs no working ssh
   stop)   [ -f "$PID" ] && kill "$(cat "$PID")" 2>/dev/null || true; sleep 2; rm -f "$PID" "$MON" "$QMP"; echo stopped ;;
   status) [ -f "$PID" ] && kill -0 "$(cat "$PID")" 2>/dev/null && echo "running (pid $(cat "$PID"))" || echo "not running" ;;
   shot)
