@@ -4,6 +4,45 @@ Written 2026-10-05 as a handoff. Read `AGENTS.md` first (rules, pitfalls). This 
 ordered list of what is left to ship 0.3.0 and exactly how. Everything below was done by hand
 once; the scripts named here exist so you do not have to repeat the discovery.
 
+## Releasing with the GitLab pipeline (the normal way)
+
+A release is one tag. The homelab GitLab builds, tests and publishes everything and updates the site.
+
+```bash
+# 1. bump VERSION, bin/noc, bin/noc-gpu (the version job fails if they disagree); optionally write
+#    docs/release-notes/vX.Y.Z.md (known issues etc.: it becomes the top of the GitHub release notes)
+# 2. merge that to GitHub main  (the build clones main, and refuses a tag that is not main's head)
+git tag vX.Y.Z origin/main && git push gitlab vX.Y.Z
+```
+
+| job | what it does | public? |
+|---|---|---|
+| `release-build` | release ISO + appliance ISO (`iso/build-local.sh both`), unattended install in a KVM VM, first-boot provisioning, `noc doctor` must be clean, sysprep, qcow2 + vmdk export, torrent, `SHA256SUMS`, then a boot test of the exported disk (ssh, autologin session, new host key). 45 to 90 minutes. | no |
+| `release-publish` | uploads to `dl.noctraos.dev/releases/vX.Y.Z/` (SHA256SUMS last), streams every file back through the public hostname and compares SHA-256, creates the GitHub release (links + checksums). Refuses a version already in the bucket. | **yes** |
+| `release-site` | PR to GitHub `main` that updates `site/download.html`, `site/index.html`, the sitemap, `proxmox-install.sh`, the social cards and the torrent, merges it (Cloudflare then deploys the site from `main`) and waits until `noctraos.dev/download` shows the version. | yes |
+
+Everything is in `.gitlab-ci.yml`; the work is done by `iso/build-release.sh`, `iso/publish-release.sh` and
+`scripts/release-site-pr.sh` (each also runs by hand: `iso/build-release.sh <build-dir>`). Outputs stay on the
+runner in `<build-dir>/release/vX.Y.Z/` (default `/run/media/dazeb/2tb/noctraos-release-ci`).
+
+- **A failed job:** fix the cause and use *Retry* on that job; earlier stages are not repeated. `release-publish`
+  and `release-site` are safe to retry (they stop if the release is already published or the site already shows it).
+  `release-build` throws the previous attempt away.
+- **Rehearse changes to the pipeline** without publishing anything:
+  `RELEASE_REHEARSAL=1 REHEARSAL_BRANCH=<branch on GitHub> iso/build-release.sh <build-dir>`; it writes
+  `release/vX.Y.Z-rehearsal/` and `publish-release.sh` refuses it.
+- **Review the site PR before it merges:** run the pipeline with `SITE_MERGE=pr` (a CI variable) and the job
+  stops after opening the PR. To gate the public upload as well, add `when: manual` to `release-publish` in
+  `.gitlab-ci.yml`.
+- **The runner:** `iso/setup-release-runner.sh doctor|install|status|remove`. It is a project runner on the
+  workstation (Docker, KVM, the R2 and GitHub credentials, the 2 TB drive are there), a systemd *user* service, tag
+  `noctraos-release`, ref-protected, locked to this project; `v*` tags are protected so only maintainers can start a
+  release. The checks (`shell`, `version`, `tests`) still run on the TrueNAS Docker runner.
+- Needs on the runner: Docker, KVM, qemu + OVMF, google-chrome, `gh` logged in, ssh push to GitHub,
+  `~/secrets/cloudflare-r2.env`, and `in/Zorin-OS-18.1-Core-64-bit.iso` in the build dir.
+
+The numbered sections below are the same steps by hand: still the way to recover from a half-finished release.
+
 ## Where things stand
 
 Done and on `main`: the Hermes Desktop module (`install/11_hermes.sh`, runs last), the onboarding

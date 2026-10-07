@@ -5,12 +5,29 @@
 #   check   shell syntax + shellcheck, the VERSION / bin/noc / bin/noc-gpu match, the unit
 #           tests, and the theme outputs matching configs/theme/palette.json.
 #
-# There is deliberately no deploy stage: Cloudflare builds and deploys the site by itself
-# whenever GitHub `main` is updated (wrangler.jsonc at the repo root). GitLab is only a mirror
-# plus the place the checks run; push to it with `git push gitlab <branch>`.
+# Pushing a tag vX.Y.Z (that is, `git push gitlab vX.Y.Z`) runs the release, on the release runner:
+#
+#   release-build    ISO + appliance ISO, an unattended install in a KVM VM, first-boot provisioning,
+#                    `noc doctor`, sysprep, qcow2/vmdk export, torrent, SHA256SUMS, a boot test of the
+#                    exported disk. 45 to 90 minutes. Nothing is public yet.
+#   release-publish  upload to dl.noctraos.dev/releases/vX.Y.Z/, verify every file through the public
+#                    hostname, create the GitHub release. Refuses a version that is already published.
+#   release-site     PR to GitHub main with the new download page, torrent, checksums and cards;
+#                    merging it is the deploy, because Cloudflare builds the site from GitHub main
+#                    (wrangler.jsonc). The job waits until noctraos.dev shows the version.
+#
+# The release jobs need a runner with the tag `noctraos-release` (iso/setup-release-runner.sh makes
+# one on the workstation: Docker, KVM and the secrets live there). It only takes protected refs and
+# only this project's jobs, and `v*` tags are protected, so a branch pipeline cannot reach it.
+# Everything else (the checks below) runs on the normal Docker runner. docs/release-runbook.md.
+#
+# Push to GitLab with `git push gitlab <branch>`.
 
 stages:
   - check
+  - release-build
+  - release-publish
+  - release-site
 
 variables:
   TZ: UTC
@@ -19,6 +36,9 @@ variables:
 # Run branch pipelines, and merge request pipelines, but not both for the same push.
 workflow:
   rules:
+    - if: $CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/
+    - if: $CI_COMMIT_TAG
+      when: never
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
     - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
       when: never
@@ -34,7 +54,7 @@ shell:
     - |
       fail=0
       for f in boot.sh install.sh install/*.sh bin/noc bin/noc-gpu bin/noc-privileged bin/noctraos-hermes bin/noctraos-control \
-               bin/noctraos-agent bin/noctraos-copyq bin/noctraos-search configs/nautilus-scripts/* iso/*.sh; do
+               bin/noctraos-agent bin/noctraos-copyq bin/noctraos-search configs/nautilus-scripts/* iso/*.sh scripts/*.sh; do
         [ -f "$f" ] || continue
         bash -n "$f" || fail=1
         shellcheck --severity=warning "$f" || fail=1
@@ -62,3 +82,41 @@ tests:
   script:
     - python3 -B -m unittest discover -s tests -v
     - python3 -B scripts/render-theme.py --check
+
+# ---- release (tags vX.Y.Z only) ---------------------------------------------------------------
+
+# Where the builds live on the release runner: an ext4 work image on the big drive, the base Zorin
+# ISO in in/. Not in the checkout, so a re-run reuses the downloaded torf venv and the work image.
+.release:
+  tags: [noctraos-release]
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/
+  variables:
+    RELEASE_BUILD_DIR: /run/media/dazeb/2tb/noctraos-release-ci
+    GIT_DEPTH: "0"          # release notes list the commits since the previous tag
+  # One release at a time: the VM, its ssh port and the work image are shared.
+  resource_group: noctraos-release
+
+release-build:
+  extends: .release
+  stage: release-build
+  needs: [shell, version, tests]
+  timeout: 3h
+  script:
+    - iso/build-release.sh "$RELEASE_BUILD_DIR"
+
+release-publish:
+  extends: .release
+  stage: release-publish
+  needs: [release-build]
+  timeout: 3h             # three uploads and three downloads of 3 to 17 GB each
+  script:
+    - iso/publish-release.sh "$RELEASE_BUILD_DIR"
+
+release-site:
+  extends: .release
+  stage: release-site
+  needs: [release-publish]
+  timeout: 45m
+  script:
+    - scripts/release-site-pr.sh "$RELEASE_BUILD_DIR"
