@@ -36,6 +36,17 @@ vm_image_build() {
   log "waiting for first-boot provisioning (up to 90 min)"
   wait_for 90 "provisioning to finish" vm_ssh 'test -f ~/.local/share/noctraos/.provisioned'
 
+  # Provisioning upgrades packages, and doctor flags a pending reboot. Reboot the VM (which also proves the
+  # provisioned system boots again) until the flag is gone, before judging it.
+  if vm_ssh 'test -f /var/run/reboot-required'; then
+    log "an update needs a reboot: rebooting the VM"
+    vm_ssh 'sudo systemctl reboot' >/dev/null 2>&1 || true
+    sleep 45   # ssh can still answer while the old system shuts down
+    wait_for 15 "ssh after the reboot" vm_ssh true
+    wait_for 5 "the reboot flag to clear" vm_ssh '! test -f /var/run/reboot-required'
+    wait_for 10 "the desktop session after the reboot" vm_ssh 'loginctl list-sessions --no-legend | grep noctraos >/dev/null'
+  fi
+
   log "checking the provisioned system"
   got="$(vm_ssh 'git -C ~/.local/share/noctraos rev-parse HEAD 2>/dev/null || true' | tr -d '[:space:]')"
   if [ -n "$got" ] && [ "$got" != "$sha" ]; then
