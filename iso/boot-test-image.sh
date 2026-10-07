@@ -5,13 +5,15 @@
 #
 # The disk is never modified: the VM runs on a throwaway overlay. Passes when the image reaches ssh,
 # autologs the user into a desktop session, and has made itself a new SSH host key (the sysprep
-# removes them). Uses its own VM directory and ssh port (VM_DIR, VM_SSH_PORT 2224), ext4 only.
+# removes them). Uses its own VM directory and ssh port (BOOT_TEST_VM_DIR, BOOT_TEST_SSH_PORT 2224), ext4 only.
 set -Eeuo pipefail
 
 DISK="$(readlink -f "${1:?usage: boot-test-image.sh <disk.qcow2>}")"
 [ -f "$DISK" ] || { echo "no such disk: $DISK" >&2; exit 1; }
 HERE="$(cd "$(dirname "$0")" && pwd)"
-export VM_DIR="${VM_DIR:-/mnt/nvme1/noctraos-boottest-vm}" VM_SSH_PORT="${VM_SSH_PORT:-2224}"
+# Its own variables: build-release.sh calls this with the build VM's VM_DIR/VM_SSH_PORT exported, and this
+# script deletes its VM directory.
+export VM_DIR="${BOOT_TEST_VM_DIR:-/mnt/nvme1/noctraos-boottest-vm}" VM_SSH_PORT="${BOOT_TEST_SSH_PORT:-2224}"
 VM="$HERE/local-vm.sh"
 # shellcheck source=iso/vm-image.sh
 source "$HERE/vm-image.sh"

@@ -24,7 +24,7 @@ wait_for() {  # wait_for <minutes> <description> <command...>
 }
 
 vm_image_build() {
-  local dir="$1" iso="$2" branch="$3" sha="$4" label="$5" got
+  local dir="$1" iso="$2" branch="$3" sha="$4" label="$5" got sysprep_out
   case "$VM_DIR" in /run/media/*|/mnt/c/*|*/ntfs*) echo "VM_DIR must be on ext4, not NTFS" >&2; return 1 ;; esac
 
   log "unattended install into a fresh VM ($VM_DIR)"
@@ -49,9 +49,13 @@ vm_image_build() {
 
   log "checking the provisioned system"
   got="$(vm_ssh 'git -C ~/.local/share/noctraos rev-parse HEAD 2>/dev/null || true' | tr -d '[:space:]')"
+  # The VM's first boot fetched $branch from GitHub. If that is not the commit the rest of the release (ISO,
+  # BUILD-INFO, tag) is about, the disk holds other code: stop, and build again once the branch is quiet.
   if [ -n "$got" ] && [ "$got" != "$sha" ]; then
-    echo "WARNING: provisioned ${got:0:7} but $branch is now ${sha:0:7} (pushed during the build?)" >&2
+    echo "FAIL: the VM provisioned ${got:0:7} but this build is ${sha:0:7} ($branch moved during the build?); no image written" >&2
+    return 1
   fi
+  [ -n "$got" ] || echo "WARNING: could not read the provisioned commit from the VM (no git clone there), so it is not verified" >&2
   # `noc doctor` always exits 0 and flags problems with "!!", so the log is what gets checked
   vm_ssh 'noc doctor' | tee "$dir/$label-doctor.log"
   if grep -q '!!' "$dir/$label-doctor.log"; then
@@ -60,7 +64,11 @@ vm_image_build() {
 
   log "sysprep"
   "$VM" scp "$HERE/vm-sysprep.sh"
-  vm_ssh 'sudo NOCTRAOS_SYSPREP_YES=1 bash /tmp/vm-sysprep.sh noctraos' || true   # the disconnect ends the session
+  # The disconnect at the end can make ssh exit nonzero, so the exit code proves nothing: sysprep prints its
+  # READY line only after its own hard checks (no leftover identity) have all passed. Require that line.
+  sysprep_out="$(vm_ssh 'sudo NOCTRAOS_SYSPREP_YES=1 bash /tmp/vm-sysprep.sh noctraos' 2>&1 || true)"
+  printf '%s\n' "$sysprep_out"
+  grep -q '^\[sysprep\] READY' <<<"$sysprep_out" || { echo "FAIL: sysprep did not finish cleanly; no image written" >&2; return 1; }
   # sysprep ends ssh for good (no host keys), so the clean shutdown is the ACPI power button, not ssh
   vm_ssh 'sudo poweroff' >/dev/null 2>&1 || "$VM" powerdown >/dev/null 2>&1 || true
   sleep 20

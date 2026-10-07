@@ -5,7 +5,8 @@
 #
 # Reads <build-dir>/release/v<VERSION>/ (written by iso/build-release.sh). This is the one step that
 # cannot be taken back: files on the public bucket get cached and mirrored. So it:
-#   - refuses to touch a version that is already in the bucket (never overwrites a published release),
+#   - never overwrites: files already in the bucket must match this build (size, and the SHA256SUMS text), else it
+#     stops; matching ones are skipped, so a publish that failed half-way can simply be retried,
 #   - uploads the three downloads first and SHA256SUMS last, so a half-uploaded release never has a
 #     checksum file that matches,
 #   - then streams every file back through the PUBLIC hostname and compares its SHA-256, which is
@@ -39,14 +40,31 @@ BUILT="$(sed -n 's/^commit: *//p' "$REL/BUILD-INFO.txt")"
 [ -z "$BUILT" ] || [ "$BUILT" = "$(git -C "$ROOT" rev-parse HEAD)" ] || { echo "the release was built from ${BUILT:0:7}, this checkout is $(git -C "$ROOT" rev-parse --short HEAD)" >&2; exit 1; }
 
 r2_env
-if [ -n "$(rclone lsf "r2:$R2_BUCKET/releases/$TAG/" 2>/dev/null | head -1)" ]; then
-  echo "releases/$TAG/ is already in the bucket: a published release is never overwritten." >&2
-  echo "Bump the version, or remove it by hand first if you really mean to replace it." >&2
-  exit 1
-fi
-
-log "uploading $TAG to the bucket"
+# Resume, never overwrite: what is already there must be exactly ours, and only what is missing is uploaded.
+# Anything that differs (another build of this version) stops the publish. The streamed-back SHA-256 check
+# below is what finally proves every file; the size and SHA256SUMS comparisons here catch a wrong version early.
+# A listing that FAILS must stop here: an empty answer from a broken connection would look like "nothing uploaded".
+# (A prefix that does not exist yet lists as empty with exit 0.)
+REMOTE="$(rclone lsf --format 'ps' --separator '|' "r2:$R2_BUCKET/releases/$TAG/")" \
+  || { echo "could not list r2:$R2_BUCKET/releases/$TAG/ (credentials or network): not publishing blind" >&2; exit 1; }
+remote_size() { awk -F'|' -v n="$1" '$1 == n {print $2}' <<<"$REMOTE"; }
+TODO=()
 for f in "${FILES[@]}" SHA256SUMS; do
+  have="$(remote_size "$f")"
+  if [ -z "$have" ]; then TODO+=("$f"); continue; fi
+  if [ "$f" = SHA256SUMS ]; then
+    rclone cat "r2:$R2_BUCKET/releases/$TAG/SHA256SUMS" | diff - "$REL/SHA256SUMS" >/dev/null \
+      || { echo "releases/$TAG/SHA256SUMS in the bucket differs from this build: not overwriting a published release" >&2; exit 1; }
+  elif [ "$have" != "$(stat -c %s "$REL/$f")" ]; then
+    echo "releases/$TAG/$f in the bucket is $have bytes, this build's is $(stat -c %s "$REL/$f"): not overwriting a published release" >&2
+    echo "Bump the version, or remove the old files by hand if you really mean to replace them." >&2
+    exit 1
+  fi
+  echo "already uploaded: $f"
+done
+
+log "uploading $TAG to the bucket (${#TODO[@]} file(s) missing)"
+for f in "${TODO[@]}"; do   # FILES come before SHA256SUMS, so a half-uploaded release never has matching checksums
   rclone copyto "$REL/$f" "r2:$R2_BUCKET/releases/$TAG/$f" --s3-no-check-bucket --progress --stats-one-line
 done
 
