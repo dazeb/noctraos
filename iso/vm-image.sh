@@ -54,14 +54,19 @@ vm_image_finish() {
   fi
 
   log "checking the provisioned system"
-  got="$(vm_ssh 'git -C ~/.local/share/noctraos rev-parse HEAD 2>/dev/null || true' | tr -d '[:space:]')"
+  # Either the fresh clone's HEAD, or, when first boot fell back to the snapshot baked into the ISO (no git or
+  # network then), the commit file the ISO build wrote next to it.
+  got="$(vm_ssh 'git -C ~/.local/share/noctraos rev-parse HEAD 2>/dev/null || cat ~/.local/share/noctraos/.noctraos-commit 2>/dev/null || true' | tr -d '[:space:]')"
   # The VM's first boot fetched $branch from GitHub. If that is not the commit the rest of the release (ISO,
   # BUILD-INFO, tag) is about, the disk holds other code: stop, and build again once the branch is quiet.
-  if [ -n "$got" ] && [ "$got" != "$sha" ]; then
+  if [ -z "$got" ]; then
+    echo "FAIL: cannot tell which commit the VM provisioned (no git clone and no .noctraos-commit); no image written" >&2
+    return 1
+  fi
+  if [ "$got" != "$sha" ]; then
     echo "FAIL: the VM provisioned ${got:0:7} but this build is ${sha:0:7} ($branch moved during the build?); no image written" >&2
     return 1
   fi
-  [ -n "$got" ] || echo "WARNING: could not read the provisioned commit from the VM (no git clone there), so it is not verified" >&2
   # `noc doctor` always exits 0 and flags problems with "!!", so the log is what gets checked
   vm_ssh 'noc doctor' | tee "$dir/$label-doctor.log"
   if grep -q '!!' "$dir/$label-doctor.log"; then

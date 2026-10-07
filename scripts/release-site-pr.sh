@@ -58,7 +58,9 @@ git -c user.name="noctraos release pipeline" -c user.email="admin@noctraos.dev" 
 Written by scripts/update-site-release.py from the published files' sizes and SHA-256 sums.
 
 Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>"
-git push -q --force-with-lease -u origin "$BRANCH"
+# A retry starts from a fresh clone with no remote-tracking ref for the branch, so state the tip we expect (empty
+# means "must not exist yet"): a bare --force-with-lease would be rejected as stale.
+git push -q --force-with-lease="$BRANCH:$(git ls-remote origin "refs/heads/$BRANCH" | cut -f1)" -u origin "$BRANCH"
 
 BODY="Points the site at the published $TAG: ISO, VM disks, torrent, checksums, Proxmox script version.
 

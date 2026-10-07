@@ -105,6 +105,9 @@ unsquashfs -no-progress -d "$SQ_ROOT" "$ISO_TREE/casper/filesystem.squashfs" >/d
 step "4/7 injecting provisioner"
 rm -rf "$SQ_ROOT/opt/noctraos"
 git clone --depth 1 --branch "$BRANCH" "$REPO" "$SQ_ROOT/opt/noctraos" >/dev/null 2>&1
+# The snapshot loses its .git, but first boot falls back to it when there is no git/network: keep the commit it
+# is, so a release build can still prove which commit the provisioned VM ran (iso/vm-image.sh reads this file).
+git -C "$SQ_ROOT/opt/noctraos" rev-parse HEAD > "$SQ_ROOT/opt/noctraos/.noctraos-commit"
 rm -rf "$SQ_ROOT/opt/noctraos/.git"
 
 # The release version comes from the provisioner snapshot (VERSION), never from the
