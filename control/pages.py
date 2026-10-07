@@ -476,7 +476,7 @@ class ModelsPage(Page):
         box = Gtk.Box(spacing=10, margin_top=4)
         text = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         text.add(label(item['name'] + ('   default' if item['default'] else ''), 'row-title'))
-        text.add(label(item['size'], 'card-detail'))
+        text.add(label(item['size'] + (f'  ·  {item["can"]}' if item['can'] else ''), 'card-detail'))
         box.pack_start(text, True, True, 0)
         remove = button('Remove', on_click=lambda *_: self._remove(item))
         box.pack_end(remove, False, False, 0)

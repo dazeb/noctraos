@@ -243,7 +243,7 @@ bash -n boot.sh install.sh install/*.sh bin/noc bin/noc-gpu bin/noc-privileged b
 docker run --rm -v "$PWD:/mnt" koalaman/shellcheck:stable --severity=warning \
   boot.sh install.sh install/*.sh bin/noc bin/noc-gpu bin/noc-privileged bin/noctraos-control bin/noctraos-agent \
   bin/noctraos-copyq bin/noctraos-hermes configs/nautilus-scripts/*     # same list as CI
-python3 -m unittest discover -s tests                # 141 tests: theme, GPU detection, noc JSON modes, root helper, Control Panel
+python3 -m unittest discover -s tests                # 151 tests: theme, GPU detection, noc JSON modes, root helper, Control Panel
 python3 scripts/render-theme.py --check              # committed theme outputs match palette.json
 
 # wallpaper iteration (venv at ~/workspace/scratch/zorin-img-venv: pillow+numpy)
@@ -588,3 +588,17 @@ steps and scripts are the same for any version).
 - Roadmap ideas: prefilled search examples in the welcome (D-Bus `Open(query)`), a provisioner
   log panel, Aider/Goose launchers, greeter-bug root cause, an AppImage build of Hermes Desktop
   hosted on files.dazeb.dev to replace the 25 to 40 minute first-boot Electron build.
+  From an outside suggestion list, checked against primary sources 2026-10-07. Done: `noc doctor` row
+  `flatpak-security` (Flatpak 1.18.4, 2026-09-28, fixed six CVEs, two of them root file overwrite/delete; Ubuntu
+  24.04 listed CVE-2026-97024 as "needs evaluation", so the row passes on version >= 1.18.4 OR the CVE named in
+  the package changelog, `NOC_FLATPAK_CHANGELOG` overrides the path in tests), and `capabilities` per model in
+  `noc models list --json`, shown in the Control Panel's installed list. Not done, needs design first:
+  push-to-talk dictation for Super+Space (Qwen3.8-Omni-Flash exists but only as a paid API, so wait for open
+  weights); a "pause and ask" step before an agent sends files off the device or installs something;
+  folder-scoped, revocable agent permissions plus a log of what left the device (PixelLeak, 2026-09-29:
+  coding agents pushed 13,000+ internal screenshots to public GitHub repos); the upgrade path from Zorin 18's
+  Ubuntu 24.04 base to the next LTS; shipping a newer Flatpak in the ISO if Ubuntu is slow to patch.
+  Rejected: bumping agent versions (agents install unpinned from npm, nothing is pinned), per-model disk cost
+  and removal (already in the AI models page), content search (already in Super+Space). Not confirmed by any
+  source: Ollama v0.35.1 (0.35.0 is the newest seen), a Windows 26H2 AI comparison, and a RemoveMacAI
+  "backlash" (the tool is real: macOS 27, about 12 GB of models).
