@@ -58,11 +58,12 @@ starts provisioning (25 to 40 minutes: Ollama model, Flatpaks, Hermes Electron b
 look at with `shot`/`click`, none verified yet:
 
 - The welcome opens during provisioning, shows the "Setting up your AI workstation in the
-  background" status line, and the Windows+Space screen says it works after setup and a new
-  sign-in (the search extension is not loaded in that session). Both Hermes buttons stay disabled
+  background" status line, and the Windows+Space screen can be tried at once (the ISO bakes the
+  Shell extensions in; if it says "after setup and a new sign-in", the bake did not work). Both Hermes buttons stay disabled
   until module 11 finishes. Skipping/finishing must NOT write `~/.config/noctraos/welcome-done`
   when the shortcut could not be tried.
-- After provisioning, log out and in: the welcome returns once, the shortcut works.
+- The first session already has Super+Space and the Start panel (`gnome-extensions info
+  noctraos-search@noctraos.local` says ACTIVE before provisioning ends), with no sign-out needed.
 - "Meet Hermes (free, uses the Nous cloud)" starts Hermes on the free tier; "Hermes, local only"
   starts it on the local model (this one was verified).
 - Provisioning finished: `iso/local-vm.sh ssh 'test -f ~/.local/share/noctraos/.provisioned && noc doctor'`.

@@ -69,6 +69,8 @@ source "$(cd "$(dirname "$0")" && pwd)/boot-theme.sh"
 source "$(cd "$(dirname "$0")" && pwd)/strip-census.sh"
 # shellcheck source=iso/rebrand-labels.sh
 source "$(cd "$(dirname "$0")" && pwd)/rebrand-labels.sh"
+# shellcheck source=iso/bake-shell.sh
+source "$(cd "$(dirname "$0")" && pwd)/bake-shell.sh"
 
 need() { command -v "$1" >/dev/null 2>&1 || { echo "missing dependency: $1" >&2; exit 1; }; }
 need xorriso; need unsquashfs; need mksquashfs; need git; need openssl
@@ -230,6 +232,7 @@ boot_theme_initrd "$ISO_TREE"
 boot_theme_squashfs "$SQ_ROOT"
 strip_census "$SQ_ROOT"
 rebrand_labels "$SQ_ROOT" "$RELEASE_VERSION"
+bake_shell "$SQ_ROOT" "$SQ_ROOT/opt/noctraos"
 
 if [ "$UNATTENDED" = 1 ]; then
 step "4/7 adding unattended boot entries (BIOS isolinux + UEFI grub)"

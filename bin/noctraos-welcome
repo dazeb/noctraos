@@ -115,8 +115,9 @@ def page_box():
 
 def search_ready():
     """Super+Space can actually be tried: the schema has `first-used` AND the extension is
-    running in this session. A freshly installed extension is not loaded until the next login on
-    Wayland, so during first-boot provisioning this is False even though the files exist."""
+    running in this session. The ISO bakes the extension in (iso/bake-shell.sh), so it is up in the
+    first session. On an image without it, a freshly installed extension is not loaded until the next
+    login on Wayland, so during provisioning this is False even though the files exist."""
     source = Gio.SettingsSchemaSource.get_default()
     schema = source.lookup(SEARCH_SCHEMA, True) if source else None
     if schema is None or not schema.has_key('first-used'):

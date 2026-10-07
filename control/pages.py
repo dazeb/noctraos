@@ -166,7 +166,7 @@ class CardWidget(Gtk.EventBox):
             box.add(label(card.detail, 'card-detail', chars=30))
         self.add(box)
         if card.page and on_open:
-            self.set_tooltip_text(f'Open {card.page.replace("models", "AI models").title()}')
+            self.set_tooltip_text(f'Open {page_title(card.page)}')
             box.get_style_context().add_class('clickable')
             self.connect('button-release-event', lambda *_: on_open(card.page))
             self.connect('realize', lambda w: w.get_window().set_cursor(
@@ -853,6 +853,11 @@ class AboutPage(Page):
     def _copy(self, *_):
         copy_to_clipboard(panel.diagnostics_text(self.status or {}, os.uname().release))
         self.note.set_text('Copied. Paste it into your bug report.')
+
+
+def page_title(page_id):
+    """The sidebar name of a page ("AI models", not "Ai Models")."""
+    return next((title for pid, title, _ in PAGES if pid == page_id), page_id)
 
 
 PAGES = [('overview', 'Overview', OverviewPage), ('updates', 'Updates', UpdatesPage),

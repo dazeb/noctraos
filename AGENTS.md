@@ -122,6 +122,8 @@ assets/boot/                boot-chain artwork: plymouth/noctraos (two-step them
                             (outputs are committed; JetBrains Mono, OFL)
 iso/strip-census.sh         sourced by the build script: removes Zorin's census (installer checkbox, cron jobs)
 iso/rebrand-labels.sh       sourced by the build script: user-facing Zorin names (About, sessions, banner, launchers, live user)
+iso/bake-shell.sh           sourced by the build script: copies the Shell extensions, search app, schemas and the two setup
+                            autostarts into the squashfs so the FIRST session has Super+Space and the Start panel
 iso/boot-theme.sh           sourced by the build script: themes the extracted ISO
                             tree, the live initrd and the squashfs
 iso/initrd-theme.py         swaps the Plymouth theme inside casper/initrd.zstd
@@ -339,6 +341,16 @@ tail -f /root/noctraos-build.log
   "Try/Install ${RELEASE}". The old `sed 's/Zorin OS/…/'` never matched; it is now
   `s/^Zorin[- ]OS/NoctraOS/`. The two pictures on that page are
   `usr/share/ubiquity/pixmaps/{cd_in_tray,ubuntu_installed}.png`.
+- **Clamp every radius spelling, not just `border-radius`.** Zorin rounds headerbars and titlebars with
+  `border-top-left-radius: 15px` and the `-gtk-outline-*-radius` variants. `scripts/build-desktop-theme.py`
+  only clamped `border-radius:`, so with `radius: 0` the window frame was square but the headerbar corner
+  stayed round and showed as a dark wedge at the top-left of every GTK3 window (Welcome, Software Updater).
+  The clamp now covers the per-corner longhands too (`RADIUS_DECLARATION`; tests pin it).
+- **GNOME Shell scans for extensions once, at start.** Anything the first-boot provisioner installs into
+  the running session is invisible until the next login on Wayland, so the extensions, schemas, search app
+  and setup autostarts are baked into the squashfs (`iso/bake-shell.sh`, tests/test_bake_shell.py). Module 09
+  still installs them (a no-op on a baked image) for `boot.sh` installs on an existing system, where the
+  sign-out/in is still needed. Keep the file lists of the two in step.
 - **Zorin's theme defaults live in `:zorin` session groups** (e.g.
   `[org.gnome.desktop.interface:zorin] gtk-theme`, `[org.gnome.shell.extensions.user-theme:zorin] name`
   in `50_zorin-desktop-session.gschema.override`), and a session group beats a plain
@@ -571,8 +583,11 @@ steps and scripts are the same for any version).
   ISO changes (torf in a throwaway venv; same trackers, 4 MiB pieces). `v0.3.0` stays published beside it.
 - Released: tag `v0.3.1` (the release merge commit: it adds the torrent and the download page to the
   `main` the ISO was built from, 95c5097) and the GitHub release with links and checksums
-  only (GitHub caps assets at 2 GiB). Do not move the tag; later fixes go in the next version. Known nit
-  shipped in 0.3.1: the Control Panel's card tooltip reads "Open Ai Models" (should be "AI models").
+  only (GitHub caps assets at 2 GiB). Do not move the tag; later fixes go in the next version. Known
+  issues shipped in 0.3.1, fixed on main afterwards (they ship in the next release): the card tooltip read
+  "Open Ai Models"; Super+Space and the Start panel needed one sign-out/in on the first login (extensions installed
+  by the first-boot provisioner are not seen by the running shell; now baked into the ISO, `iso/bake-shell.sh`);
+  windows had a dark wedge in the top-left corner (see the pitfall on per-corner radii).
 - Never published: the unattended/appliance ISO. The old unattended test ISO that was public at
   the bucket root was deleted.
 - Tested: `proxmox-install.sh` against the public files on a PVE 9.2 node, both modes (the image boots to the
