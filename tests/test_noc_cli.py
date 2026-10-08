@@ -4,6 +4,7 @@ Nothing here touches the real system: Ollama is a throwaway local HTTP server, H
 XDG_CONFIG_HOME are temp dirs, and the commands an update would run (sudo, apt-get, mise) are
 stubs on PATH.
 """
+import gzip
 import json
 import os
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -23,6 +24,10 @@ TAGS = {"models": [
 ]}
 
 
+# nomic-embed-text is absent on purpose: a model Ollama cannot describe lists as "unknown" ([]).
+SHOW_CAPABILITIES = {"qwen2.5-coder:7b": ["completion", "tools", "insert"]}
+
+
 class FakeOllama(BaseHTTPRequestHandler):
     def do_GET(self):  # noqa: N802
         body = {"/api/tags": TAGS, "/api/version": {"version": "0.0.test"}}.get(self.path)
@@ -30,6 +35,19 @@ class FakeOllama(BaseHTTPRequestHandler):
             self.send_error(404)
             return
         data = json.dumps(body).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+    def do_POST(self):  # noqa: N802  (/api/show: what a model can do)
+        request = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}")
+        caps = SHOW_CAPABILITIES.get(request.get("model"))
+        if self.path != "/api/show" or caps is None:
+            self.send_error(404)
+            return
+        data = json.dumps({"capabilities": caps}).encode()
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(data)))
@@ -129,7 +147,12 @@ class ModelTests(unittest.TestCase):
         self.assertEqual(data["default"], "qwen2.5-coder:7b")
         self.assertEqual({m["name"]: m["is_default"] for m in data["models"]},
                          {"qwen2.5-coder:7b": True, "nomic-embed-text:latest": False})
-        self.assertEqual(set(data["models"][0]), {"name", "size", "modified", "is_default"})
+        self.assertEqual(set(data["models"][0]), {"name", "size", "modified", "is_default", "capabilities"})
+
+    def test_list_json_capabilities(self):
+        data = json.loads(Env(self).noc("models", "list", "--json").stdout)
+        self.assertEqual({m["name"]: m["capabilities"] for m in data["models"]},
+                         {"qwen2.5-coder:7b": ["completion", "tools", "insert"], "nomic-embed-text:latest": []})
 
     def test_list_json_ollama_down_is_a_state_not_an_error(self):
         result = Env(self, ollama=False).noc("models", "list", "--json")
@@ -191,6 +214,31 @@ class DoctorStatusTests(unittest.TestCase):
         by_id = {r["id"]: r for r in rows}
         self.assertEqual(by_id["ollama"]["status"], "ok")
         self.assertIn(by_id["appmanager"]["fix"], (None, "module:04d_appmanager.sh"))
+
+    def flatpak_row(self, version, changelog=None):
+        e = Env(self)
+        e.stub("flatpak", f'[ "$1" = "--version" ] && echo "Flatpak {version}"')
+        log = e.home / "changelog.Debian.gz"
+        with gzip.open(log, "wt") as f:
+            f.write(changelog or "flatpak (1.14.6-1) noble; urgency=medium\n  * Routine update\n")
+        out = e.noc("doctor", "--json", NOC_FLATPAK_CHANGELOG=str(log)).stdout
+        return {r["id"]: r for r in json.loads(out)}["flatpak-security"]
+
+    def test_doctor_flatpak_at_or_above_the_fixed_version(self):
+        for version in ("1.18.4", "1.18.10", "1.19.2", "1.20.0"):
+            with self.subTest(version=version):
+                self.assertEqual(self.flatpak_row(version)["status"], "ok")
+
+    def test_doctor_flatpak_old_version_warns(self):
+        for version in ("1.14.6", "1.18.3", "1.9.0"):
+            with self.subTest(version=version):
+                row = self.flatpak_row(version)
+                self.assertEqual(row["status"], "warn")
+                self.assertIn("1.18.4", row["detail"])
+
+    def test_doctor_flatpak_old_version_with_backported_fix_is_ok(self):
+        row = self.flatpak_row("1.14.6", "flatpak (1.14.6-1ubuntu0.1) noble-security\n  * SECURITY: CVE-2026-97024\n")
+        self.assertEqual((row["status"], row["detail"]), ("ok", "1.14.6 (patched by the distribution)"))
 
     def test_doctor_json_gpu_detail_has_no_status_markers(self):
         e = Env(self)

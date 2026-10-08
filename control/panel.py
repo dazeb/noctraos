@@ -232,11 +232,22 @@ def same_model(a, b):
     return strip(a) == strip(b)
 
 
+# Ollama capability names in plain words; the ones not listed are shown as Ollama spells them.
+CAPABILITY_TEXT = {'completion': 'chat', 'tools': 'tool use', 'vision': 'images', 'embedding': 'embeddings',
+                   'thinking': 'reasoning', 'insert': 'code completion', 'audio': 'audio'}
+
+
+def capability_text(capabilities):
+    """"chat, tool use" for a model's capabilities; '' when Ollama did not report any."""
+    return ', '.join(CAPABILITY_TEXT.get(c, c) for c in capabilities or [])
+
+
 def installed_rows(listing):
-    """Rows for the installed list from `noc models list --json`: name, size text, default flag."""
+    """Rows for the installed list from `noc models list --json`: name, size text, what it can do, default flag."""
     if not listing or not listing.get('ollama'):
         return []
-    rows = [{'name': m['name'], 'size': fmt_bytes(m['size']), 'default': bool(m.get('is_default'))}
+    rows = [{'name': m['name'], 'size': fmt_bytes(m['size']), 'default': bool(m.get('is_default')),
+             'can': capability_text(m.get('capabilities'))}
             for m in listing.get('models', [])]
     return sorted(rows, key=lambda r: (not r['default'], r['name']))
 

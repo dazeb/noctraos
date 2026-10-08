@@ -114,6 +114,16 @@ model_installed() {
     && return 0 || return 1
 }
 
+# What a model can do (completion, tools, vision, embedding, thinking, ...), as a JSON array from
+# Ollama's /api/show. Older Ollama versions do not report it, and a failed call is not an error:
+# the answer is then [] ("unknown").
+model_capabilities() {
+  local out
+  out="$(curl -fsS --max-time 5 -d "$(jq -nc --arg m "$1" '{model:$m}')" "$OLLAMA_URL/api/show" 2>/dev/null \
+    | jq -c '[.capabilities[]? | strings]' 2>/dev/null)" || out=""
+  echo "${out:-[]}"
+}
+
 # ---- model presets and the RAM/VRAM suggestion ---------------------------------------------
 # name|memory needed in GB (weights plus headroom)|note
 MODEL_PRESET_TABLE=(
@@ -192,9 +202,13 @@ cmd_models() {
         local tags def
         def="$(effective_model)"
         if tags="$(curl -fsS --max-time 5 "$OLLAMA_URL/api/tags" 2>/dev/null)" && printf '%s' "$tags" | jq -e . >/dev/null 2>&1; then
-          printf '%s' "$tags" | jq --arg d "$def" \
+          local caps='{}' name
+          while IFS= read -r name; do
+            caps="$(model_capabilities "$name" | jq -c --arg n "$name" --argjson c "$caps" '$c + {($n): .}')"
+          done < <(printf '%s' "$tags" | jq -r '.models[]?.name')
+          printf '%s' "$tags" | jq --arg d "$def" --argjson caps "$caps" \
             '{ollama:true, default:$d, models:[.models[]? | {name, size, modified:.modified_at,
-              is_default:(.name == $d or .name == ($d + ":latest"))}]}'
+              is_default:(.name == $d or .name == ($d + ":latest")), capabilities:($caps[.name] // [])}]}'
         else
           jq -n --arg d "$def" '{ollama:false, default:$d, models:[]}'
         fi
@@ -348,6 +362,26 @@ cmd_update() {
 JSON=0
 CHECKS=()
 
+# Flatpak 1.18.4 (2026-09-28) fixed six security bugs, two of which let a malicious app overwrite or
+# delete host files as root. A distro may carry the fixes without the version number, so a version
+# below 1.18.4 is only a warning when the package changelog does not name the first of those CVEs
+# (NOC_FLATPAK_CHANGELOG overrides the changelog path for tests).
+FLATPAK_FIXED_VERSION="1.18.4"
+FLATPAK_FIXED_CVE="CVE-2026-97024"
+check_flatpak_security() {
+  local ver log="${NOC_FLATPAK_CHANGELOG:-/usr/share/doc/flatpak/changelog.Debian.gz}"
+  ver="$(flatpak --version 2>/dev/null | awk '{print $2}')"
+  if [ -z "$ver" ]; then
+    chk warn flatpak-security "Flatpak security" "could not read the Flatpak version"
+  elif [ "$(printf '%s\n%s\n' "$FLATPAK_FIXED_VERSION" "$ver" | sort -V | head -n 1)" = "$FLATPAK_FIXED_VERSION" ]; then
+    chk ok flatpak-security "Flatpak security" "$ver (has the 1.18.4 security fixes)"
+  elif [ -r "$log" ] && zcat -f "$log" 2>/dev/null | grep -F "$FLATPAK_FIXED_CVE" >/dev/null; then
+    chk ok flatpak-security "Flatpak security" "$ver (patched by the distribution)"
+  else
+    chk warn flatpak-security "Flatpak security" "$ver is older than $FLATPAK_FIXED_VERSION, which fixes six security bugs; update when your distribution ships the fix (Updates page)"
+  fi
+}
+
 # chk <ok|warn|fail|info> <id> <label> [detail] [fix]
 # Text mode prints the classic OK / !! line; --json collects a row for the panel. `fix` names a
 # repair the panel may offer ("module:<name>" runs an install module through the privileged
@@ -438,6 +472,7 @@ cmd_doctor() {
   fi
 
   if have flatpak; then
+    check_flatpak_security
     flatpak list --app 2>/dev/null | grep MissionCenter >/dev/null \
       && chk ok mission-center "Mission Center" "installed" || chk warn mission-center "Mission Center" "missing"
   fi

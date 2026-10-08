@@ -109,7 +109,7 @@ The GUI should consume structured output, not scrape coloured text:
   progress; steps are the four in `cmd_update`. Add `--only apt|flatpak|mise|models`.
 - `noc-gpu detect --json` already needs checking; `noc-gpu` is 819 lines with fixture-based tests
   (`tests/test_gpu_detect.py`); extend rather than reimplement.
-- `noc models list --json` (name, size, modified) and `noc models default <name>`. Ollama has no
+- `noc models list --json` (name, size, modified, is_default, capabilities) and `noc models default <name>`. Ollama has no
   global default, so this needs a decision first (phase 0): store the choice in one file
   (suggested `~/.config/noctraos/model`, plain model name) and migrate **every** consumer to read
   it, otherwise the panel claims a default the AI integrations ignore. Today they hardcode

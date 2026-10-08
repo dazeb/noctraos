@@ -194,8 +194,15 @@ class ModelListTests(unittest.TestCase):
         rows = panel.installed_rows(LISTING)
         self.assertEqual([(r["name"], r["size"], r["default"]) for r in rows],
                          [("qwen2.5-coder:7b", "4.4 GB", True), ("nomic-embed-text:latest", "261.3 MB", False)])
+        self.assertEqual([r["can"] for r in rows], ["", ""])  # LISTING has no capabilities: nothing to show
         self.assertEqual(panel.installed_rows({"ollama": False, "models": []}), [])
         self.assertEqual(panel.installed_rows(None), [])
+
+    def test_capability_text(self):
+        self.assertEqual(panel.capability_text(["completion", "tools", "vision"]), "chat, tool use, images")
+        self.assertEqual(panel.capability_text(["embedding"]), "embeddings")
+        self.assertEqual(panel.capability_text(["brand-new"]), "brand-new")  # unknown names pass through
+        self.assertEqual((panel.capability_text([]), panel.capability_text(None)), ("", ""))
 
     def test_suggestions_skip_installed_and_rank_fit(self):
         rows = panel.suggestion_rows(PRESETS, [r["name"] for r in panel.installed_rows(LISTING)])
