@@ -54,7 +54,7 @@ class BrowserTests(unittest.TestCase):
     var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
     var d, links = document.querySelectorAll('.shot > a'), log = [];
     function check(name, ok) { log.push((ok ? 'PASS ' : 'FAIL ') + name); }
-    function key(k) { d.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true })); }
+    function key(k, shift) { d.dispatchEvent(new KeyboardEvent('keydown', { key: k, shiftKey: !!shift, bubbles: true })); }
     try {
       d = $('dialog.lb');
       check('enhancement is active', document.documentElement.classList.contains('lb-ready') && !!d);
@@ -74,6 +74,32 @@ class BrowserTests(unittest.TestCase):
       key('z'); await wait(300);
       check('Z zooms to actual size', d.classList.contains('zoomed') && $('.lb-zoom').getAttribute('aria-pressed') === 'true');
       check('the zoomed image is its natural width', $('.lb-stage img').clientWidth === $('.lb-stage img').naturalWidth);   // layout width: the pop-in transform must not count
+      var st = $('.lb-stage');
+      check('zoomed, the stage is a keyboard-reachable region', st.tabIndex === 0 && st.getAttribute('role') === 'region' && st.getAttribute('aria-label').indexOf('Arrow keys') >= 0);
+      st.scrollLeft = 0; st.scrollTop = 0; var countBefore = $('.lb-count').textContent;
+      key('ArrowRight'); await wait(150);
+      check('zoomed: the right arrow pans instead of changing screenshot', st.scrollLeft > 0 && $('.lb-count').textContent === countBefore);
+      key('ArrowDown'); await wait(150);
+      check('zoomed: the down arrow pans vertically', st.scrollTop > 0 || st.scrollHeight <= st.clientHeight);
+      key('End'); await wait(150);
+      check('zoomed: End goes to the far corner, not the last screenshot', st.scrollLeft >= st.scrollWidth - st.clientWidth - 2 && $('.lb-count').textContent === countBefore);
+      key('Home'); await wait(150);
+      check('zoomed: Home goes back to the corner', st.scrollLeft === 0 && st.scrollTop === 0 && $('.lb-count').textContent === countBefore);
+      key('ArrowRight', true); await wait(250);
+      check('Shift+Right changes screenshot even when zoomed', $('.lb-count').textContent === '2 / ' + links.length);
+      check('a new screenshot opens fitted', !d.classList.contains('zoomed') && st.tabIndex === -1);
+      key('Home'); await wait(200);
+      check('fitted: Home goes to screenshot 1 again', $('.lb-count').textContent === '1 / ' + links.length);
+      // the clicked point stays under the pointer: click 80% across and 30% down, then check where the scroll put it
+      var im = $('.lb-stage img'), r = im.getBoundingClientRect(), sr = st.getBoundingClientRect();
+      var cx = r.left + 0.8 * r.width, cy = r.top + 0.3 * r.height;
+      im.dispatchEvent(new MouseEvent('click', { clientX: cx, clientY: cy, bubbles: true })); await wait(300);
+      var cs = getComputedStyle(st), maxX = st.scrollWidth - st.clientWidth, maxY = st.scrollHeight - st.clientHeight;
+      var wantX = Math.max(0, Math.min(maxX, parseFloat(cs.paddingLeft) + im.clientLeft + 0.8 * im.naturalWidth - (cx - sr.left)));
+      var wantY = Math.max(0, Math.min(maxY, parseFloat(cs.paddingTop) + im.clientTop + 0.3 * im.naturalHeight - (cy - sr.top)));
+      check('zoom keeps the clicked point under the pointer (horizontal)', d.classList.contains('zoomed') && Math.abs(st.scrollLeft - wantX) <= 2);
+      check('zoom keeps the clicked point under the pointer (vertical)', Math.abs(st.scrollTop - wantY) <= 2);
+      check('it is not simply centred (the old behaviour)', Math.abs(st.scrollLeft - (maxX / 2)) > 20);
       $('.lb-stage img').click(); await wait(300);
       check('clicking the image zooms back out', !d.classList.contains('zoomed'));
       $('.lb-close').click(); await wait(300);
@@ -104,7 +130,7 @@ class BrowserTests(unittest.TestCase):
         self.assertIsNotNone(m, "the test script did not run")
         lines = html.unescape(m.group(1)).splitlines()
         failures = [l for l in lines if l.startswith("FAIL")]
-        self.assertGreaterEqual(len([l for l in lines if l.startswith("PASS")]), 15)
+        self.assertGreaterEqual(len([l for l in lines if l.startswith("PASS")]), 25)
         self.assertEqual(failures, [], "\n".join(lines))
 
 

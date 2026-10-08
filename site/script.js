@@ -37,7 +37,7 @@
         '<button type="button" class="lb-next" aria-label="Next screenshot">' + icon("M9 5l7 7-7 7") + "</button>" +
       "</div>" +
       '<div class="lb-tools">' +
-        '<button type="button" class="lb-zoom" aria-pressed="false">' + icon("M10.5 4.5a6 6 0 1 0 0 12 6 6 0 0 0 0-12zM15 15l5 5M10.5 8v5M8 10.5h5") + "<span>Actual size</span></button>" +
+        '<button type="button" class="lb-zoom" aria-pressed="false" title="Zoom to actual size (Z). When zoomed, the arrow keys move the image; Shift+Left/Right change screenshot.">' + icon("M10.5 4.5a6 6 0 1 0 0 12 6 6 0 0 0 0-12zM15 15l5 5M10.5 8v5M8 10.5h5") + "<span>Actual size</span></button>" +
         '<button type="button" class="lb-close" aria-label="Close" autofocus>' + icon("M6 6l12 12M18 6L6 18") + "</button>" +
       "</div>" +
     "</div>" +
@@ -57,14 +57,22 @@
     var t = fig && fig.textContent.trim();
     return t || (thumbOf(a) && thumbOf(a).alt) || "";
   }
-  function setZoom(on, focalX, focalY) {
+  // setZoom(on, fx, fy, px, py): fx/fy is the clicked point as a fraction of the image, px/py where the pointer is inside the stage.
+  // Zooming in scrolls so that point stays under the pointer, like a magnifier; with no pointer (the button, the Z key) the middle
+  // of the image goes to the middle of the stage.
+  function setZoom(on, fx, fy, px, py) {
     on = !!on && !dialog.classList.contains("fits");
     dialog.classList.toggle("zoomed", on);
     zoomBtn.setAttribute("aria-pressed", String(on));
     zoomText.textContent = on ? "Fit to screen" : "Actual size";
-    if (on) { // keep the point that was clicked under the pointer, like a magnifier
-      stage.scrollLeft = (focalX == null ? 0.5 : focalX) * img.naturalWidth - stage.clientWidth / 2;
-      stage.scrollTop = (focalY == null ? 0.5 : focalY) * img.naturalHeight - stage.clientHeight / 2;
+    // Zoomed, the stage is a scrollable region: reachable with Tab and described to screen readers; the arrow keys pan it.
+    stage.tabIndex = on ? 0 : -1;
+    if (on) { stage.setAttribute("role", "region"); stage.setAttribute("aria-label", "Screenshot at actual size. Arrow keys move the image, Z fits it to the screen."); }
+    else { stage.removeAttribute("role"); stage.removeAttribute("aria-label"); }
+    if (on) {
+      var cs = getComputedStyle(stage);
+      stage.scrollLeft = parseFloat(cs.paddingLeft) + img.clientLeft + (fx == null ? 0.5 : fx) * img.naturalWidth - (px == null ? stage.clientWidth / 2 : px);
+      stage.scrollTop = parseFloat(cs.paddingTop) + img.clientTop + (fy == null ? 0.5 : fy) * img.naturalHeight - (py == null ? stage.clientHeight / 2 : py);
     } else { stage.scrollLeft = stage.scrollTop = 0; }
   }
   function measure() { // zooming only helps when the screenshot is larger than the space it is shown in
@@ -120,18 +128,29 @@
   $(".lb-next").addEventListener("click", function () { show(index + 1); });
   zoomBtn.addEventListener("click", function () { setZoom(!dialog.classList.contains("zoomed")); });
   img.addEventListener("click", function (e) {
-    var r = img.getBoundingClientRect();
-    setZoom(!dialog.classList.contains("zoomed"), (e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height);
+    var r = img.getBoundingClientRect(), st = stage.getBoundingClientRect();
+    setZoom(!dialog.classList.contains("zoomed"), (e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height,
+            e.clientX - st.left, e.clientY - st.top);
   });
   dialog.addEventListener("click", function (e) { if (e.target === dialog || e.target === stage) close(); }); // outside the image
+  // Keys. Fitted: the arrows, Home and End move between screenshots. Zoomed: the arrows pan the image (so a keyboard user can see
+  // all of it), PageUp/PageDown scroll a page, Home/End jump to the corners; Shift+Left/Right still change screenshot.
+  var STEP = 80;
   dialog.addEventListener("keydown", function (e) {
     if (e.altKey || e.ctrlKey || e.metaKey) return;
-    var k = e.key;
-    if (k === "ArrowLeft") { show(index - 1); e.preventDefault(); }
-    else if (k === "ArrowRight") { show(index + 1); e.preventDefault(); }
-    else if (k === "Home") { show(0); e.preventDefault(); }
-    else if (k === "End") { show(links.length - 1); e.preventDefault(); }
-    else if (k === "z" || k === "Z" || k === "+" || k === "=") { setZoom(!dialog.classList.contains("zoomed")); e.preventDefault(); }
+    var k = e.key, zoomed = dialog.classList.contains("zoomed"), handled = true;
+    if (k === "ArrowLeft" || k === "ArrowRight") {
+      var dir = k === "ArrowLeft" ? -1 : 1;
+      if (zoomed && !e.shiftKey) stage.scrollBy(dir * STEP, 0); else show(index + dir);
+    } else if (zoomed && (k === "ArrowUp" || k === "ArrowDown")) { stage.scrollBy(0, (k === "ArrowUp" ? -1 : 1) * STEP); }
+    else if (zoomed && (k === "PageUp" || k === "PageDown")) { stage.scrollBy(0, (k === "PageUp" ? -1 : 1) * stage.clientHeight * 0.9); }
+    else if (zoomed && k === "Home") { stage.scrollTo(0, 0); }
+    else if (zoomed && k === "End") { stage.scrollTo(stage.scrollWidth, stage.scrollHeight); }
+    else if (k === "Home") { show(0); }
+    else if (k === "End") { show(links.length - 1); }
+    else if (k === "z" || k === "Z" || k === "+" || k === "=") { setZoom(!zoomed); }
+    else handled = false;
+    if (handled) e.preventDefault();
   });
   var startX = 0, startY = 0;                                       // swipe between screenshots on a touch screen
   stage.addEventListener("touchstart", function (e) { startX = e.touches[0].clientX; startY = e.touches[0].clientY; }, { passive: true });
