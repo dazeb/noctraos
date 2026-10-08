@@ -277,7 +277,11 @@ step_apt() {
 # The NoctraOS layer itself (theme, extensions, Control Panel, noc): a signed, staged update, see docs/updates.md.
 # Needs root; in the Control Panel it already runs as root through noc-privileged.
 SELFUPDATE=/usr/local/libexec/noctraos/noc-selfupdate
-[ "$(id -u)" -eq 0 ] || SELFUPDATE="${NOC_SELFUPDATE:-$SELFUPDATE}"   # tests only; root always runs the installed, root-owned copy
+# Test hooks: NOC_SELFUPDATE, NOC_UPSTREAM and NOC_ACCOUNTS point `noc` at stand-ins. Root never honours them, so a root run (the
+# privileged helper, `sudo noc update`) always uses the installed, root-owned copy; the only exception is a test saying so on purpose
+# (NOC_TEST_HOOKS=1: CI runs the whole suite as root inside a container, where there is nothing to protect).
+test_hooks() { [ "$(id -u)" -ne 0 ] || [ -n "${NOC_TEST_HOOKS:-}" ]; }
+test_hooks && SELFUPDATE="${NOC_SELFUPDATE:-$SELFUPDATE}"
 step_noctraos() {
   if [ ! -x "$SELFUPDATE" ]; then
     bad "this install has no NoctraOS updater yet; run the one-line installer once (README) to add it"
@@ -303,9 +307,9 @@ step_mise() {
 # Hermes and the coding agents come straight from their upstream releases (GitHub Releases / npm), not from apt:
 # noc-upstream resolves the newest published release of each and moves the installed copy to exactly that.
 UPSTREAM=/usr/local/bin/noc-upstream
-[ "$(id -u)" -eq 0 ] || UPSTREAM="${NOC_UPSTREAM:-$UPSTREAM}"   # tests only
+test_hooks && UPSTREAM="${NOC_UPSTREAM:-$UPSTREAM}"
 ACCOUNTS=/usr/local/bin/noc-accounts
-[ "$(id -u)" -eq 0 ] || ACCOUNTS="${NOC_ACCOUNTS:-$ACCOUNTS}"   # tests only
+test_hooks && ACCOUNTS="${NOC_ACCOUNTS:-$ACCOUNTS}"
 
 step_apps() {
   if [ ! -x "$UPSTREAM" ]; then
