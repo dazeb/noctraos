@@ -88,8 +88,9 @@ local-only choice.
   headline product.
 - Version 0.4.0 is **published**: the ISO, the VM disks and their checksums are on the download
   page. The `v0.4.0` git tag and GitHub release exist (so do `v0.3.2`, `v0.3.1` and `v0.3.0`); see
-  [release-runbook.md](release-runbook.md). Installed systems also get the NoctraOS layer through
-  signed update channels between releases ([updates.md](updates.md)).
+  [release-runbook.md](release-runbook.md). Systems installed from 0.4.0 or later also get the NoctraOS
+  layer through signed update channels between releases ([updates.md](updates.md)); a system installed
+  from 0.3.2 or earlier has no updater and gets it by running the one-line installer once.
 
 ## Visual direction
 
