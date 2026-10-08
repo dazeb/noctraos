@@ -95,7 +95,8 @@ configs/update/             update-signers: the PUBLIC update key every machine 
 tests/                      unittest: theme composition (test_desktop_theme), GPU detection (test_gpu_detect),
                             noc/noctraos-hermes JSON modes (test_noc_cli), Control Panel cards (test_control_core)
 site/                       project website (static, deployed via wrangler.jsonc); keep claims in step with README
-                            every page head carries canonical, Open Graph, Twitter and JSON-LD metadata; social cards live in
+                            every page head carries canonical, Open Graph, Twitter and JSON-LD metadata; `script.js` also holds the screenshot lightbox (a
+                            progressive enhancement of the `figure.shot > a` links, native `<dialog>`; tests/test_site_lightbox.py drives it in headless Chrome); social cards live in
                             site/img/social/ (1200x630), favicons/manifest/robots.txt/sitemap.xml/.well-known/security.txt in site/
 scripts/render-social.py    renders the OG cards, the X promo images (assets/promo/x/) and the favicons with headless Chrome,
                             from assets/social/fonts (local woff2); rerun it when a page title or a screenshot changes
