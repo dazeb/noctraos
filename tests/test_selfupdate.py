@@ -429,6 +429,32 @@ class HttpTests(Sandbox):
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertIn("No NoctraOS updates have been published", r.stdout)
 
+    def test_a_host_that_answers_403_for_a_missing_manifest_counts_as_nothing_published(self):
+        """S3-style storage (the Hetzner bucket) says 403, not 404, for a key that does not exist."""
+        import http.server
+        import threading
+
+        class Forbidden(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):  # noqa: N802
+                self.send_error(403)
+
+            def log_message(self, *a):
+                pass
+        server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Forbidden)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        self.write_config(mirrors=[f"http://127.0.0.1:{server.server_address[1]}"])
+        c = self.check()
+        self.assertEqual((c["status"], c["online"]), ("current", True))
+        self.assertIn("published", c["detail"])
+
+    def test_one_mirror_saying_nothing_is_published_is_enough_when_another_is_unreachable(self):
+        empty = self.tmp / "empty"
+        empty.mkdir()
+        self.write_config(mirrors=[self.serve(empty), "http://127.0.0.1:9"])   # 404 here, unreachable there
+        self.assertEqual(self.check()["status"], "current")                       # a mirror that answers is enough
+
     def test_a_server_that_is_down_is_offline(self):
         self.write_config(mirrors=["http://127.0.0.1:9"])
         c = self.check()
