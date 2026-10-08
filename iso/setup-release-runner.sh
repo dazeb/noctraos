@@ -16,6 +16,10 @@
 # (/run/media/dazeb/2tb/noctraos-release-ci), GITLAB_ENV (~/secrets/gitlab.env).
 set -Eeuo pipefail
 
+HERE_DIR="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck source=iso/disks.sh
+source "$HERE_DIR/disks.sh"
+
 PROJECT="${RUNNER_PROJECT:-dazeb/noctraos}"
 TAG="${RUNNER_TAG:-noctraos-release}"
 BUILD_DIR="${RUNNER_BUILD_DIR:-/run/media/dazeb/2tb/noctraos-release-ci}"
@@ -55,9 +59,10 @@ doctor() {
   check "ssh push to GitHub" "{ ssh -o BatchMode=yes -T git@github.com 2>&1 || true; } | grep 'successfully authenticated' >/dev/null" "an ssh key GitHub accepts"
   check "GitLab token" "test -r \${GITLAB_ENV:-\$HOME/secrets/gitlab.env}" "$HOME/secrets/gitlab.env"
   check "build drive" "test -d $(dirname "$BUILD_DIR") -a -w $(dirname "$BUILD_DIR")" "$(dirname "$BUILD_DIR") must exist and be writable"
-  check "ext4 for the VM disk (/mnt/nvme1)" "test -w /mnt/nvme1" "VM_DIR must be on ext4"
+  check "a fast Linux disk for the VM disks and ISO scratch ($(fast_disk 2>/dev/null))" "linux_fs \"$(fast_disk 2>/dev/null)\"" "see iso/disks.sh and run iso/fastest-disk.sh"
+  check "at least ${RUNNER_MIN_FREE_GB:-100} GB free on the VM disk drive ($(fast_disk 2>/dev/null))" "[ \$(free_gb \"$(fast_disk 2>/dev/null)\") -ge ${RUNNER_MIN_FREE_GB:-100} ]" "offload cold data: ~/workspace/shared/scripts/offload-dir.sh <dir>"
   check "base Zorin ISO in $BUILD_DIR/in" "test -f $BUILD_DIR/in/Zorin-OS-18.1-Core-64-bit.iso" "install seeds it from an earlier build dir if it can find one"
-  say "free: $(df -h --output=avail "$(dirname "$BUILD_DIR")" | tail -1 | tr -d ' ') on the build drive, $(df -h --output=avail /mnt/nvme1 | tail -1 | tr -d ' ') on /mnt/nvme1 (a release needs about 120 GB and 64 GB)"
+  say "free: $(free_gb "$(dirname "$BUILD_DIR")") GB on the build drive, $(free_gb "$(fast_disk 2>/dev/null)") GB on the VM disk drive $(fast_disk 2>/dev/null) (a release needs about 120 GB of scratch and 64 GB of VM disk)"
   return "$bad"
 }
 

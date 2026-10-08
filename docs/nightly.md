@@ -30,7 +30,7 @@ iso/build-nightly.sh /run/media/dazeb/2tb/noctraos-build --upload   # build and 
 
 About 45 to 60 minutes, almost all provisioning. It builds an appliance ISO with the `nightly`
 branch baked in (`NOCTRAOS_BRANCH`, so first boot fetches `nightly`, not `main`), installs it
-unattended into a throwaway local KVM VM (`/mnt/nvme1/noctraos-nightly-vm`, ssh port 2223, so it
+unattended into a throwaway local KVM VM (`noctraos-nightly-vm` on the fastest disk, see `iso/disks.sh`, ssh port 2223, so it
 can run beside the 2222 test VM), waits for provisioning, checks `noc doctor`, runs the sysprep and
 exports the qcow2 to `<build-dir>/out/nightly/`. Upload is only done with `--upload`, and
 overwrites the same three names each time. Uploading is public: build first, look, then upload.

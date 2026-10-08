@@ -144,9 +144,9 @@ Design choices worth knowing:
 
 `iso/build-noctraos-iso.sh` remasters the base system's stock live ISO (see
 [the base-system credits](../README.md#credits-and-license)). The easy way to run
-it is `iso/build-local.sh`, which does the build in a privileged Docker container
-on a workstation (about 2 minutes per ISO, work directory an ext4 image file so
-an NTFS drive can host it):
+it is `iso/build-local.sh`, which does the build in a Docker container on a
+workstation (about 3 minutes per ISO, built straight into a directory on an ext4/xfs/btrfs
+drive; on a drive that is not a Linux filesystem it falls back to a loop-mounted image):
 
 ```bash
 iso/build-local.sh <dir> [release|appliance|both]    # default: release

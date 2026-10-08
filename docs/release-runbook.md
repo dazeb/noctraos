@@ -103,7 +103,7 @@ The welcome app running **while first-boot provisioning runs** (`--provisioning`
 reviewed, never run. Use the appliance ISO for the unattended path:
 
 ```bash
-export VM_DIR=/mnt/nvme1/noctraos-vm            # ext4, not NTFS
+export VM_DIR=/run/media/dazeb/2tb/noctraos-vm   # the fastest disk (iso/disks.sh picks it by default); a Linux filesystem, never NTFS
 iso/local-vm.sh stop; rm -f $VM_DIR/disk.qcow2 $VM_DIR/vars.fd
 VM_DISK_SIZE=64G iso/local-vm.sh start /run/media/dazeb/2tb/noctraos-build/out/noctraos-0.3.0-appliance-build.iso
 iso/local-vm.sh shot /tmp/s.png                 # look at it; the installer slideshow, then a reboot
@@ -191,7 +191,7 @@ GitHub `main` is updated, so merging the PR publishes the site.
 ## Cleanup
 
 - Local: `iso/local-vm.sh stop`, delete `$VM_DIR/disk.qcow2` when done;
-  `/run/media/dazeb/2tb/noctraos-build/work.img` (40 GB sparse) can be deleted any time.
+  an old `work.img` (40 GB sparse) in a build directory is no longer used on an ext4 drive and can be deleted.
 - Proxmox node: VM 115 `noctraos-release-test` (stopped, mine) and the files in
   `/local-zfs/noctraos-isos/template/iso/` are all stale; `qm destroy 115 --purge` and delete them
   when the user agrees. Do not touch VMs 107, 108, 113, 114 (rule 9 in AGENTS.md).
