@@ -22,8 +22,8 @@
 # without the tag and `main` checks, into release/v<VERSION>-rehearsal/. publish-release.sh cannot
 # publish a rehearsal. Use it to try changes to the pipeline itself.
 #
-# Environment: REPO_URL (https://github.com/dazeb/noctraos.git), VM_DIR (/mnt/nvme1/noctraos-release-vm,
-# ext4 only), VM_SSH_PORT (2225), VM_RAM, VM_CPUS, NOCTRAOS_KEEP_VM=1 to keep the VM disk afterwards.
+# Environment: REPO_URL (https://github.com/dazeb/noctraos.git), VM_DIR (noctraos-release-vm on the fastest
+# disk with room, see iso/disks.sh; a Linux filesystem only), VM_SSH_PORT (2225), VM_RAM, VM_CPUS, NOCTRAOS_KEEP_VM=1 to keep the VM disk afterwards.
 set -Eeuo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -32,7 +32,9 @@ DIR="$(cd "${1:?usage: build-release.sh <build-dir>}" && pwd)"
 REPO_URL="${REPO_URL:-https://github.com/dazeb/noctraos.git}"
 VERSION="$(tr -d '[:space:]' < "$ROOT/VERSION")"
 TAG="${CI_COMMIT_TAG:-v$VERSION}"
-export VM_DIR="${VM_DIR:-/mnt/nvme1/noctraos-release-vm}" VM_SSH_PORT="${VM_SSH_PORT:-2225}"
+# shellcheck source=iso/disks.sh
+source "$HERE/disks.sh"
+export VM_DIR="${VM_DIR:-$(fast_dir noctraos-release-vm)}" VM_SSH_PORT="${VM_SSH_PORT:-2225}"
 export VM_DISK_SIZE="${VM_DISK_SIZE:-64G}"
 VM="$HERE/local-vm.sh"
 # shellcheck source=iso/vm-image.sh
@@ -50,6 +52,9 @@ for f in bin/noc bin/noc-gpu; do
   grep -q "^VERSION=\"$VERSION\"" "$ROOT/$f" || { echo "$f does not match VERSION $VERSION" >&2; exit 1; }
 done
 [ -f "$DIR/in/Zorin-OS-18.1-Core-64-bit.iso" ] || { echo "missing $DIR/in/Zorin-OS-18.1-Core-64-bit.iso (the base ISO)" >&2; exit 1; }
+# Fail in seconds, not after a 20 minute ISO build: the VM disk and the build scratch need real room on a Linux filesystem.
+require_linux_fs "$VM_DIR" && require_linux_fs "$DIR" || exit 1
+require_free_gb "$VM_DIR" "${RELEASE_MIN_FREE_GB:-100}" && require_free_gb "$DIR" "${RELEASE_MIN_BUILD_FREE_GB:-60}" || exit 1
 
 SHA="$(git -C "$ROOT" rev-parse HEAD)"
 MAIN="$(git ls-remote "$REPO_URL" "refs/heads/$BRANCH" | cut -c1-40)"

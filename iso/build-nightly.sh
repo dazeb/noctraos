@@ -17,7 +17,7 @@
 # each build). Nothing is uploaded without the flag. The image is a trial appliance: autologin,
 # user noctraos / password noctraos, passwordless sudo. It is for testing, never for production.
 #
-# Environment: VM_DIR (default /mnt/nvme1/noctraos-nightly-vm; ext4, NOT NTFS), VM_SSH_PORT (2223,
+# Environment: VM_DIR (default: noctraos-nightly-vm on the fastest disk, see iso/disks.sh; a Linux filesystem, NOT NTFS), VM_SSH_PORT (2223,
 # so it can run beside the 2222 test VM), VM_RAM, VM_CPUS, NIGHTLY_BRANCH (nightly).
 set -Eeuo pipefail
 
@@ -25,7 +25,9 @@ DIR="${1:?usage: build-nightly.sh <build-dir> [--upload]}"
 UPLOAD=0; [ "${2:-}" = "--upload" ] && UPLOAD=1
 BRANCH="${NIGHTLY_BRANCH:-nightly}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
-export VM_DIR="${VM_DIR:-/mnt/nvme1/noctraos-nightly-vm}" VM_SSH_PORT="${VM_SSH_PORT:-2223}"
+# shellcheck source=iso/disks.sh
+source "$HERE/disks.sh"
+export VM_DIR="${VM_DIR:-$(fast_dir noctraos-nightly-vm)}" VM_SSH_PORT="${VM_SSH_PORT:-2223}"
 export VM_DISK_SIZE="${VM_DISK_SIZE:-64G}"
 VM="$HERE/local-vm.sh"
 OUT="$DIR/out/nightly"

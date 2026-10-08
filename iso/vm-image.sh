@@ -10,7 +10,10 @@
 # output is kept in <build-dir>/<label>-doctor.log.
 #
 # Needs the caller to have set HERE (the iso/ directory), VM (local-vm.sh) and exported VM_DIR,
-# VM_SSH_PORT and VM_DISK_SIZE. VM_DIR must be on ext4, never NTFS.
+# VM_SSH_PORT and VM_DISK_SIZE. VM_DIR must be on a Linux filesystem (checked by what it IS, via disks.sh), never NTFS.
+
+# shellcheck source=iso/disks.sh
+source "$(dirname "${BASH_SOURCE[0]}")/disks.sh"
 
 log() { printf '=== %s %s\n' "$(date +%H:%M)" "$*"; }
 vm_ssh() { "$VM" ssh "$@"; }
@@ -25,7 +28,8 @@ wait_for() {  # wait_for <minutes> <description> <command...>
 
 vm_image_build() {
   local dir="$1" iso="$2" branch="$3" sha="$4" label="$5"
-  case "$VM_DIR" in /run/media/*|/mnt/c/*|*/ntfs*) echo "VM_DIR must be on ext4, not NTFS" >&2; return 1 ;; esac
+  require_linux_fs "$VM_DIR" || return 1
+  require_free_gb "$VM_DIR" "${VM_MIN_FREE_GB:-80}" || return 1   # the 64 GB sparse disk plus the export overlay
 
   log "unattended install into a fresh VM ($VM_DIR)"
   "$VM" stop >/dev/null 2>&1 || true

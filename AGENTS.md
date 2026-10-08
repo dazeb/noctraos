@@ -241,6 +241,12 @@ iso/vm-sysprep.sh           run inside a fully provisioned VM before exporting i
   release workstation, (5) a published bundle `updates/bundles/noctraos-N.tar.gz` is never replaced: publish the next serial,
   (6) manifests expire after 30 days, so `iso/publish-update.sh renew stable` at least every 2 weeks once machines follow it.
   Not wired into the tag pipeline yet; machines installed from 0.3.2 or earlier need the one-line installer once to get the updater.
+- **VM disks and ISO scratch go on the fastest local disk** (rule from the user, 2026-10-08). `iso/disks.sh` picks it:
+  the candidates in `NOCTRAOS_DISK_CANDIDATES`, best first, the first that is a real Linux filesystem (never NTFS/FAT/tmpfs)
+  with enough free space. Measured with `iso/fastest-disk.sh` on 2026-10-08: the Crucial P310 2 TB (`/run/media/dazeb/2tb`) writes 2.2 GB/s
+  and reads 2.8 GB/s; the Samsung 960 PRO (`/mnt/nvme1`) 0.6 to 1.1 GB/s and 2.3 GB/s, so the 2 TB drive is first. Re-measure after
+  hardware changes (when no build runs). `build-release.sh` fails in seconds if the VM disk drive has under 100 GB free.
+  Keep cold data off `/mnt/nvme1` with `~/workspace/shared/scripts/offload-dir.sh <dir>` (copy, checksum-verify, symlink).
 - **Preferred ISO build is local** (`iso/build-local.sh`, see docs/release-runbook.md): about 2
   minutes versus 35 to 45 on the node. Building on the node loads the HDD pool that the test VMs
   live on and crashed VM 114 once; do not run builds and VMs on the node at the same time.
@@ -570,9 +576,10 @@ tail -f /root/noctraos-build.log
 - **Local KVM test VM (ubuntubox):** `qemu-system-x86_64 -enable-kvm` with OVMF, user-mode
   networking (`hostfwd` 2222->22), `-usb -device usb-tablet`, a monitor socket for `sendkey` and
   `screendump`, and a **QMP socket for clicks**: HMP `mouse_move` is relative and a tablet ignores
-  it, QMP `input-send-event` with `abs` axes (0..32767) works. Keep the disk on ext4
-  (/mnt/nvme1), not NTFS. ISO builds run in a privileged Docker container with an ext4 image
-  file on the 2 TB drive as the work dir (NTFS cannot hold the unpacked system); ~2 min per ISO.
+  it, QMP `input-send-event` with `abs` axes (0..32767) works. Keep the disk on a Linux filesystem
+  (/mnt/nvme1 or the 2 TB drive, both ext4 now), never NTFS. ISO builds run in a Docker container that builds
+  straight into `<dir>/work` on the ext4 drive (no `--privileged`, scratch removed afterwards; ~3 min per ISO).
+  `iso/build-local.sh` falls back to a loop-mounted `work.img` (privileged) only when the drive is not a Linux filesystem.
 
 ## Verification checklist for any change
 
@@ -591,7 +598,7 @@ A release is a tag: `git tag vX.Y.Z origin/main && git push gitlab vX.Y.Z` (docs
 `.gitlab-ci.yml` runs `release-build` (iso/build-release.sh), `release-publish` (iso/publish-release.sh) and
 `release-site` (scripts/release-site-pr.sh) on a project runner tagged `noctraos-release` that lives on the
 workstation (`iso/setup-release-runner.sh`); the checks stay on the TrueNAS Docker runner, which is unprivileged,
-has no spare RAM and cannot do loop mounts or KVM. Rules that keep it safe:
+has no spare RAM and cannot do KVM. Rules that keep it safe:
 
 - The release runner is ref-protected and `v*` tags are protected: a branch or MR pipeline can never reach the
   workstation's Docker, KVM or `~/secrets`. Do not add `tags: [noctraos-release]` to a job that runs on branches.

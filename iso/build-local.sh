@@ -9,13 +9,15 @@
 #                                      in /var/lib/vz/template/iso/).
 #   out/                               results: noctraos-<VERSION>-amd64.iso (+ .sha256) and, for
 #                                      `appliance`, noctraos-<VERSION>-appliance-build.iso
-#   work.img                           a sparse 40 GB ext4 image, loop-mounted inside the container
+#   work/                              scratch, removed when the build ends (ext4/xfs/btrfs/zfs drives)
+#   work.img                           only on a drive that is not a Linux filesystem: see below
 #
-# Why a container: the build needs root (loop mount, chroot) and xorriso, and a workstation may have
-# no passwordless sudo. Why an image file: the work directory must be a real Linux filesystem (the
-# unpacked system has symlinks, device nodes and ownership); an NTFS drive cannot hold it, so an
-# ext4 image file on that drive is loop-mounted INSIDE the container. --privileged is only for that
-# mount. Everything is built from a fresh clone of GitHub main (REPO_URL to override, and
+# Why a container: the build needs root (unsquashfs keeps ownership and device nodes) and xorriso, and a
+# workstation may have no passwordless sudo. The work directory must be a real Linux filesystem (the unpacked
+# system has symlinks, device nodes and ownership). On one (the 2 TB build drive is ext4 now) the container builds
+# straight into <dir>/work and runs unprivileged-by-default (no --privileged). On NTFS/exFAT/FAT, which cannot hold
+# it, a sparse ext4 image file is loop-mounted INSIDE the container instead, and only that needs --privileged;
+# BUILD_USE_IMAGE=1 forces this path. Everything is built from a fresh clone of GitHub main (REPO_URL to override, and
 # NOCTRAOS_BRANCH=nightly for the nightly image), exactly like the first-boot runner, so push first.
 #
 #   release    interactive installer: no seed, no password hash, no unattended boot entry. This is
@@ -45,7 +47,13 @@ RUN apt-get update -qq && apt-get install -y -qq --no-install-recommends \
 DOCKERFILE
   docker build -q -t "$IMAGE" "$DIR/ctx"
 fi
-if [ ! -f "$DIR/work.img" ]; then
+# A real Linux filesystem can hold the unpacked system directly; anything else needs the loop-mounted image.
+case "$(stat -f -c %T "$DIR")" in
+  ext2/ext3|ext4|xfs|btrfs|zfs) DIRECT=1 ;;
+  *) DIRECT=0 ;;
+esac
+[ -z "${BUILD_USE_IMAGE:-}" ] || DIRECT=0
+if [ "$DIRECT" = 0 ] && [ ! -f "$DIR/work.img" ]; then
   truncate -s 40G "$DIR/work.img"
   mkfs.ext4 -F -q -L noctraos-work "$DIR/work.img"
 fi
@@ -54,17 +62,24 @@ fi
 cat > "$DIR/run-build.sh" <<'INNER'
 #!/usr/bin/env bash
 set -Eeuo pipefail
-mkdir -p /work
-mount -o loop /host/work.img /work
-trap 'cd /; umount /work 2>/dev/null || true' EXIT
+if [ "$DIRECT" = 1 ]; then
+  WORK=/host/work
+  mkdir -p "$WORK"
+  trap 'cd /; rm -rf "$WORK"' EXIT   # root-owned scratch (unpacked system): the host user could not delete it
+else
+  WORK=/work
+  mkdir -p "$WORK"
+  mount -o loop /host/work.img "$WORK"
+  trap 'cd /; umount "$WORK" 2>/dev/null || true' EXIT
+fi
 git config --global --add safe.directory '*'   # a REPO_URL=file:// clone is owned by the host user
-rm -rf /work/src /work/tmp   # the image is reused between runs: start from a clean tree
-git clone -q --depth 1 --branch "${NOCTRAOS_BRANCH:-main}" "${REPO_URL:-https://github.com/dazeb/noctraos.git}" /work/src
-git -C /work/src log -1 --format="building ${NOCTRAOS_BRANCH:-main} at %h %s"
-VERSION="$(tr -d '[:space:]' < /work/src/VERSION)"
-export WORK_BASE=/work/tmp; mkdir -p "$WORK_BASE"
+rm -rf "$WORK/src" "$WORK/tmp"   # start from a clean tree
+git clone -q --depth 1 --branch "${NOCTRAOS_BRANCH:-main}" "${REPO_URL:-https://github.com/dazeb/noctraos.git}" "$WORK/src"
+git -C "$WORK/src" log -1 --format="building ${NOCTRAOS_BRANCH:-main} at %h %s"
+VERSION="$(tr -d '[:space:]' < "$WORK/src/VERSION")"
+export WORK_BASE="$WORK/tmp"; mkdir -p "$WORK_BASE"
 BASE=/host/in/Zorin-OS-18.1-Core-64-bit.iso
-BUILD=/work/src/iso/build-noctraos-iso.sh
+BUILD="$WORK/src/iso/build-noctraos-iso.sh"
 
 if [ "$WHAT" = release ] || [ "$WHAT" = both ]; then
   OUT=/host/out/noctraos-$VERSION-amd64.iso
@@ -93,6 +108,7 @@ fi
 echo "=== ALL DONE $(date +%H:%M)"
 INNER
 
-docker run --rm --privileged -e WHAT="$WHAT" ${REPO_URL:+-e REPO_URL="$REPO_URL"} ${NOCTRAOS_BRANCH:+-e NOCTRAOS_BRANCH="$NOCTRAOS_BRANCH"} -v "$DIR:/host" "$IMAGE" \
+PRIV=(); [ "$DIRECT" = 1 ] || PRIV=(--privileged)
+docker run --rm "${PRIV[@]}" -e WHAT="$WHAT" -e DIRECT="$DIRECT" ${REPO_URL:+-e REPO_URL="$REPO_URL"} ${NOCTRAOS_BRANCH:+-e NOCTRAOS_BRANCH="$NOCTRAOS_BRANCH"} -v "$DIR:/host" "$IMAGE" \
   bash /host/run-build.sh
 ls -lh "$DIR/out"

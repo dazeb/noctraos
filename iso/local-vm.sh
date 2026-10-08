@@ -12,7 +12,7 @@
 #   iso/local-vm.sh ssh '<command>'     run a command in the VM as noctraos (password: noctraos)
 #   iso/local-vm.sh scp <file>...       copy files into the VM's /tmp
 #
-# Environment: VM_DIR (default ~/noctraos-vm; keep it on ext4, NOT NTFS), VM_DISK_SIZE (48G; the
+# Environment: VM_DIR (default: noctraos-vm on the fastest disk, see iso/disks.sh; a Linux filesystem, NOT NTFS), VM_DISK_SIZE (48G; the
 # downloadable appliance uses 64G), VM_RAM (8192), VM_CPUS (6), VM_USER (noctraos), VM_PASSWORD
 # (noctraos), VM_SSH_PORT (2222).
 #
@@ -25,7 +25,9 @@
 #    python3 with PIL or ffmpeg for `shot` (else it leaves the .ppm).
 set -euo pipefail
 
-VM_DIR="${VM_DIR:-$HOME/noctraos-vm}"
+# shellcheck source=iso/disks.sh
+source "$(dirname "${BASH_SOURCE[0]}")/disks.sh"
+VM_DIR="${VM_DIR:-$(fast_dir noctraos-vm)}"
 VM_USER="${VM_USER:-noctraos}"; VM_PASSWORD="${VM_PASSWORD:-noctraos}"; VM_SSH_PORT="${VM_SSH_PORT:-2222}"
 DISK="$VM_DIR/disk.qcow2"; VARS="$VM_DIR/vars.fd"
 MON="$VM_DIR/mon.sock"; QMP="$VM_DIR/qmp.sock"; PID="$VM_DIR/qemu.pid"

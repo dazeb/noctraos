@@ -13,11 +13,13 @@ DISK="$(readlink -f "${1:?usage: boot-test-image.sh <disk.qcow2>}")"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 # Its own variables: build-release.sh calls this with the build VM's VM_DIR/VM_SSH_PORT exported, and this
 # script deletes its VM directory.
-export VM_DIR="${BOOT_TEST_VM_DIR:-/mnt/nvme1/noctraos-boottest-vm}" VM_SSH_PORT="${BOOT_TEST_SSH_PORT:-2224}"
+# shellcheck source=iso/disks.sh
+source "$HERE/disks.sh"
+export VM_DIR="${BOOT_TEST_VM_DIR:-$(fast_dir noctraos-boottest-vm)}" VM_SSH_PORT="${BOOT_TEST_SSH_PORT:-2224}"
 VM="$HERE/local-vm.sh"
 # shellcheck source=iso/vm-image.sh
 source "$HERE/vm-image.sh"
-case "$VM_DIR" in /run/media/*|/mnt/c/*|*/ntfs*) echo "VM_DIR must be on ext4, not NTFS" >&2; exit 1 ;; esac
+require_linux_fs "$VM_DIR" || exit 1
 
 cleanup() { "$VM" stop >/dev/null 2>&1 || true; rm -rf "$VM_DIR"; }
 trap cleanup EXIT
