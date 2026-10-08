@@ -20,6 +20,15 @@ iso/publish-update.sh renew stable                                              
 Needs `~/secrets/noctraos-update-signing` (private; never commit) and the usual store credentials. Do not publish an
 update while a release build runs from the same `main` (the same rule as merging).
 
+## Before you tag (learned on 0.4.0)
+
+1. Merge everything that belongs in the release; stacked PRs are retargeted to `main` one by one before each merge.
+2. Run the **whole test suite as root in a container with a real clone** (that is how GitLab runs it), not only as your user:
+   `git clone --no-hardlinks <repo> /tmp/ci && docker run --rm -v /tmp/ci:/w -w /w ubuntu:24.04 bash -c 'apt-get update -qq && apt-get install -y -qq python3 jq curl git openssh-client && git config --global --add safe.directory /w && python3 -B -m unittest discover -s tests'`.
+3. `git push gitlab origin/main:refs/heads/main` and wait until the pipeline on that commit is green (`shell`, `version`, `tests`).
+4. Run `RELEASE_REHEARSAL=1 REHEARSAL_BRANCH=main iso/build-release.sh <build-dir>` on that exact commit (as a `systemd-run --user` unit; about 42 minutes, publishes nothing) and read its `release-doctor.log`.
+5. Tag that commit and push the tag to GitLab. Merge nothing to `main` until `release-build` finishes.
+
 ## Releasing with the GitLab pipeline (the normal way)
 
 A release is one tag. The homelab GitLab builds, tests and publishes everything and updates the site.

@@ -648,13 +648,38 @@ update and GPU setup had no GUI.
 
 ## Current state (2026-10-08)
 
-Version **0.3.2** (`VERSION`), released by the pipeline: tag `v0.3.2` (a0ba2c5), files at
-`https://dl.noctraos.dev/releases/v0.3.2/` (ISO, QCOW2, VMDK, SHA256SUMS, each verified through the public hostname),
-GitHub release, site and torrent updated by `release-site` (PR #59). `v0.3.1` and `v0.3.0` stay published. The text
-below describes 0.3.1 and the 0.3.0-era runbook; the steps and scripts are the same for any version, and
-`docs/release-runbook.md` (top section) is the pipeline procedure. What 0.3.2 fixed from the 0.3.1 known issues: the
-window-corner wedge, the "Open Ai Models" tooltip, and Super+Space/Start panel needing a sign-out/in (extensions are
-baked into the ISO). Still untested: a full interactive ISO install, real hardware, NVIDIA/ROCm.
+Version **0.4.0** (`VERSION`), released by the pipeline on 2026-10-08: tag `v0.4.0` (f377828, GitLab pipeline 122: `release-build`
+37 min, `release-publish` 35 min, `release-site` 1 min), files at `https://dl.noctraos.dev/releases/v0.4.0/` (ISO 3.9 GB, QCOW2 17 GB,
+VMDK 17 GB, SHA256SUMS, each verified through the public hostname), GitHub release, site and torrent updated by `release-site`
+(PR #70). `v0.3.2`, `v0.3.1` and `v0.3.0` stay published. The text below describes 0.3.1 and the 0.3.0-era runbook; the steps and
+scripts are the same for any version, and `docs/release-runbook.md` (top section) is the pipeline procedure.
+
+What 0.4.0 added: the Accounts page (Git name/e-mail and the GitHub sign-in with no terminal), the Apps page and `noc-upstream`
+(installed vs newest release of Hermes, Ollama, AppManager and the coding agents), the built-in updater `noc-selfupdate`
+(signed, staged updates of the NoctraOS layer, `docs/updates.md`), and the fastest-disk policy for VM disks and ISO scratch
+(`iso/disks.sh`). Still untested: a full interactive ISO install, real hardware, NVIDIA/ROCm, a real desktop session running the
+GitHub approval and the privileged update prompts, and a machine applying an update from a real desktop. Not in the Control Panel
+yet: signing in to the coding agents.
+
+**Update channels (2026-10-08):** `nightly` and `stable` are both at update 2 (update 1 was a baseline identical to 0.4.0; update 2
+is the client fix below). Manifests expire after 30 days; the weekly timer from `iso/setup-update-renewal.sh` renews both
+(`status` shows the real expiry). The 0.4.0 images contain the pre-fix client and receive the fix as update 2.
+
+What the first 0.4.0 run taught us, all fixed:
+- **GitLab runs the tests as root in a container; a normal-user run on the workstation does not prove the CI will pass.** `noc`
+  ignores `NOC_SELFUPDATE`/`NOC_UPSTREAM`/`NOC_ACCOUNTS` as root (so the privileged helper and `sudo noc update` always use the
+  installed copies) and nine tests failed on `main` (pipeline 120). Tests now set `NOC_TEST_HOOKS=1`. Before tagging: run the
+  whole suite as root in a container with a real clone, and push `main` to GitLab and wait for green. Mounting a worktree into the
+  container breaks git (the `.git` file points outside it); use `git clone --no-hardlinks` into a directory you mount.
+- **S3-style storage answers 403, not 404, for a key that does not exist** (the Hetzner mirror). The update client now treats a 403
+  for the manifest as "nothing published yet", and one answering mirror is enough when another is unreachable.
+- **Rehearse the final `main`, not an earlier one.** A rehearsal of the commit before the last merges proves nothing about the tag;
+  `RELEASE_REHEARSAL=1 REHEARSAL_BRANCH=main iso/build-release.sh <dir>` takes about 42 minutes and publishes nothing. Do not merge
+  while it runs (stop it first if the merges supersede it).
+- **Stacked PRs: retarget each to `main` before merging it.** Merging a PR into a branch that was already merged never reaches `main`.
+- **`gh pr edit` fails on this repository** (GitHub's classic-projects deprecation error): use `gh api -X PATCH repos/OWNER/REPO/pulls/N -F body=@file`.
+- A background job started from a tool call is killed at about 10 minutes: run anything longer (a rehearsal, an offload) as a
+  `systemd-run --user` unit and watch its log. Never `pkill -f <pattern>` when your own command line contains the pattern.
 
 - On `main`: provisioner modules 00 to 11 (Hermes Desktop last), the app policy
   (`04c_app_policy.sh`: Flatpak/AppImage first, unwanted apps removed, launchers hidden), the

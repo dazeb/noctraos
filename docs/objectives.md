@@ -86,9 +86,10 @@ local-only choice.
 - `install.sh` / `boot.sh` remain as the engine the ISO bakes in and as a way
   to provision an existing Zorin OS machine. They are no longer the
   headline product.
-- Version 0.3.2 is **published**: the ISO, the VM disks and their checksums are on the download
-  page. The `v0.3.2` git tag and GitHub release exist (so do `v0.3.1` and `v0.3.0`); see
-  [release-runbook.md](release-runbook.md).
+- Version 0.4.0 is **published**: the ISO, the VM disks and their checksums are on the download
+  page. The `v0.4.0` git tag and GitHub release exist (so do `v0.3.2`, `v0.3.1` and `v0.3.0`); see
+  [release-runbook.md](release-runbook.md). Installed systems also get the NoctraOS layer through
+  signed update channels between releases ([updates.md](updates.md)).
 
 ## Visual direction
 
