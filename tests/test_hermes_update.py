@@ -15,6 +15,9 @@ INSTALLER = r'''#!/usr/bin/env bash
 echo "$*" >> "$INSTALL_LOG"
 [ -z "${INSTALL_FAIL:-}" ] || { echo "stub installer: failing on purpose" >&2; exit 1; }
 tag=""; while [ $# -gt 0 ]; do [ "$1" = "--branch" ] && tag="$2"; shift; done
+[ -z "${INSTALL_FAIL_ON_TAG:-}" ] || [ -z "$tag" ] || { echo "stub installer: this release does not install" >&2; exit 1; }
+[ -n "$tag" ] || tag="main-tip"
+
 d="$HERMES_HOME/hermes-agent"
 mkdir -p "$d/apps/desktop/release/linux-unpacked"
 echo "${tag#v}" > "$d/VERSION"
@@ -105,6 +108,13 @@ class InstallTests(HermesBox):
         self.assertEqual(self.installs(), ["--skip-setup"])
         self.assertIn("could not read the latest Hermes release", r.stdout)
 
+    def test_a_release_the_installer_cannot_install_falls_back_to_its_default_branch(self):
+        r = self.hermes("install", INSTALL_FAIL_ON_TAG="1")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertEqual(self.installs(), ["--skip-setup --branch v0.21.7", "--skip-setup"])
+        self.assertIn("did not install with the current installer", r.stdout)
+        self.assertTrue((self.hh / "hermes-agent/.hermes-bootstrap-complete").exists())
+
     def test_an_installed_runtime_is_left_alone_by_install(self):
         self.install_version("0.21.5")
         self.hermes("install")
@@ -148,6 +158,14 @@ class UpdateTests(HermesBox):
         self.assertEqual((self.hh / "memories/SENTINEL").read_text(), "keep\n")
         r = subprocess.run([str(self.home / ".local/bin/hermes"), "--version"], capture_output=True, text=True, env=self.env)
         self.assertIn("v0.21.5", r.stdout)                  # and it still runs
+
+    def test_an_update_never_falls_back_to_the_development_branch(self):
+        self.install_version("0.21.5")
+        r = self.hermes("update", INSTALL_FAIL_ON_TAG="1")
+        self.assertEqual(r.returncode, 1)
+        self.assertEqual(self.installs(), ["--skip-setup --branch v0.21.7"])     # tried the release once, nothing else
+        self.assertEqual(self.version(), "0.21.5")                               # and kept what the person had
+        self.assertIn("putting the previous Hermes back", r.stdout)
 
     def test_no_release_information_changes_nothing(self):
         self.install_version("0.21.5")
