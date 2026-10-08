@@ -76,8 +76,18 @@ for f in "${TODO[@]}"; do   # FILES come before SHA256SUMS, so a half-uploaded r
 done
 
 log "verifying through $BASE (what a downloader gets)"
+# A 17 GB stream through a CDN drops now and then (curl exit 92, HTTP/2 stream error). Piping straight into
+# sha256sum cannot resume, so download into a file with Range resumption, then hash it; a drop only costs the rest.
+VERIFY_TMP="$(mktemp "$DIR/verify.XXXXXX")"
+trap 'rm -f "$VERIFY_TMP"' EXIT
 while read -r want name; do
-  have="$(curl -sSfL --retry 3 "$BASE/$name" | sha256sum | cut -d' ' -f1)"
+  size="$(stat -c %s "$REL/$name")"
+  : > "$VERIFY_TMP"
+  for _try in 1 2 3 4 5 6 7 8 9 10; do
+    [ "$(stat -c %s "$VERIFY_TMP")" = "$size" ] && break
+    curl -sSfL -C - --connect-timeout 20 -o "$VERIFY_TMP" "$BASE/$name" || sleep "${VERIFY_RETRY_DELAY:-5}"
+  done
+  have="$(sha256sum "$VERIFY_TMP" | cut -d' ' -f1)"
   [ "$have" = "$want" ] || { echo "FAIL: $name from $BASE hashes to $have, expected $want" >&2; exit 1; }
   echo "OK  $name"
 done < <(sed 's/  */ /' "$REL/SHA256SUMS")
