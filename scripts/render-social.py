@@ -131,13 +131,13 @@ CARDS = {
     "og-home": (1200, 630, "site/img/social", lambda: og(
         "An <em>AI</em> development workstation OS.",
         "Local models and AI coding assistants, one click from Start. Super + Space finds anything.",
-        og_shot("desktop", "64% 78%"), ["Free download", "Based on Ubuntu 24.04", "0.3.2"])),
+        og_shot("desktop", "64% 78%"), ["Free download", "Based on Ubuntu 24.04", "0.4.0"])),
     "og-features": (1200, 630, "site/img/social", lambda: og(
         "Search, assistants and local AI, <em>set up</em> for you.",
         "A calm dark desktop with Hermes, Codex, Claude Code, OpenCode, Grok, Gemini CLI and Qwen Code in the Start panel.",
         og_shot("start-panel", "50% 50%", 310), ["Super + Space", "Local models", "Dark + amber"])),
     "og-download": (1200, 630, "site/img/social", lambda: og(
-        "Get <em>NoctraOS</em> 0.3.2",
+        "Get <em>NoctraOS</em> 0.4.0",
         "The installer ISO, VM disks for KVM, VMware and VirtualBox, and a one-command Proxmox installer.",
         og_term(), ["ISO", "QCOW2", "VMDK", "Proxmox"])),
     "og-community": (1200, 630, "site/img/social", lambda: og(
@@ -155,7 +155,7 @@ def x_card(inner, u=18):
 def x_launch():
     return x_card(f"""
 <div style="position:absolute;left:84px;top:70px"><div class="brand" style="font-size:34px">{LOGO_MARK}<span>Noctra <small>OS</small></span></div></div>
-<h1 style="position:absolute;left:84px;top:180px;width:680px;font-size:92px">NoctraOS <em>0.3.2</em><br>is out.</h1>
+<h1 style="position:absolute;left:84px;top:180px;width:680px;font-size:92px">NoctraOS <em>0.4.0</em><br>is out.</h1>
 <p class="sub" style="position:absolute;left:84px;top:470px;width:600px;font-size:33px">An AI development workstation OS. Local AI and coding assistants, ready when you are.</p>
 <div style="position:absolute;left:84px;bottom:76px">{chips(["ISO", "VM disks", "Proxmox script"])}</div>
 <div class="win" style="left:730px;top:140px;width:790px;height:444px"><img src="{shot('desktop')}"></div>
@@ -180,7 +180,7 @@ def x_proxmox():
 <p class="sub" style="position:absolute;left:84px;top:330px;width:1100px;font-size:34px">Run it on the Proxmox host. It asks for RAM, cores and storage, checks the download and builds a UEFI VM.</p>
 <div class="term" style="left:84px;top:450px;width:1432px;--u:21px"><div class="bar"><i></i><i></i><i></i></div>
 <pre style="font-size:22px;white-space:pre;line-height:1.7"><span class="p">$</span> {html.escape(ONE_LINER)}
-<span class="ok">OK:</span> noctraos-0.3.2.qcow2 matches SHA256SUMS
+<span class="ok">OK:</span> noctraos-0.4.0.qcow2 matches SHA256SUMS
 <span class="ok">VM 100 is running.</span></pre></div>
 <div style="position:absolute;left:84px;bottom:76px">{chips(["Proxmox VE 8 and 9", "Ready-made disk or installer ISO", "SHA-256 checked"])}</div>
 <div class="url" style="position:absolute;right:84px;bottom:76px;font-size:24px"><b>noctraos.dev</b></div>""", 20)
