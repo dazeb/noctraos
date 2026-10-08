@@ -38,6 +38,7 @@ install/
   02b_gpu_drivers.sh        GPU detect + NVIDIA driver/CUDA or AMD ROCm (thin wrapper
                             over bin/noc-gpu; before 03 so Ollama sees the GPU)
   03_ai_core.sh             Ollama + qwen2.5-coder:7b + nomic-embed-text
+  03b_ollama_update.sh      Ollama to the newest upstream release (vendor installer pinned to it); not in the full run, root, via the panel
   04_gui_apps.sh            Microsoft VS Code (apt repo) + extensions, Mission Center,
                             CopyQ; retires codium/chatbox/foot (user data kept)
   04_workstation_apps.sh    Omarchy-style workstation app set: apt CLI/system tools + the Flathub GUI apps
@@ -64,6 +65,8 @@ bin/
                             | bg [list|next|set] | gpu. Sourceable (tests call its functions); NOC_OLLAMA_URL overrides the Ollama URL
   noc-gpu                   GPU detect [--json] | install | status [--json] (NVIDIA driver+CUDA, AMD ROCm); VERSION must match noc
   noctraos-control          wrapper that execs the system-Python Control Panel (control/)
+  noc-upstream              tracks apps that come from their publisher's releases (Hermes, Ollama, AppManager, the coding agents):
+                            installed vs newest release, version history, user-level updates; `noc apps`, the panel's Apps page
   noc-selfupdate            updates the NoctraOS layer itself (signed manifest + bundle, staged rollout, migrations, rollback);
                             installed to /usr/local/libexec/noctraos by module 07; check/status/notify/migrate user-side, apply/rollback as root
   noc-privileged            root side of the panel, run through pkexec: allowlisted `update apt,flatpak,noctraos`, `update-channel`, `update-rollback`, `module <name>`, `gpu-install <vendor>`
@@ -247,6 +250,13 @@ iso/vm-sysprep.sh           run inside a fully provisioned VM before exporting i
   and reads 2.8 GB/s; the Samsung 960 PRO (`/mnt/nvme1`) 0.6 to 1.1 GB/s and 2.3 GB/s, so the 2 TB drive is first. Re-measure after
   hardware changes (when no build runs). `build-release.sh` fails in seconds if the VM disk drive has under 100 GB free.
   Keep cold data off `/mnt/nvme1` with `~/workspace/shared/scripts/offload-dir.sh <dir>` (copy, checksum-verify, symlink).
+- **Upstream apps follow the newest published release** (2026-10-08, `docs/updates.md`): `bin/noc-upstream` is the only place that
+  resolves "latest" (GitHub `releases/latest`, npm `latest`; never a prerelease or a branch tip). Hermes: do not use
+  `hermes update --branch <tag>` (it treats the tag as a branch and fails) or `hermes update --channel stable` (not published,
+  HTTP 404); `noctraos-hermes install|update` pin the official installer to the release tag and swap the runtime directory, and
+  restore it on failure. The installer is coupled to current code: an old tag (v2026.9.14, v2026.9.24) fails with it, so
+  never pin to a release older than the installer expects. The installer's own re-run path only fetches branches. Root-owned
+  apps (Ollama, AppManager) are updated only by allowlisted modules in `noc-privileged`'s `MODULES`.
 - **Preferred ISO build is local** (`iso/build-local.sh`, see docs/release-runbook.md): about 2
   minutes versus 35 to 45 on the node. Building on the node loads the HDD pool that the test VMs
   live on and crashed VM 114 once; do not run builds and VMs on the node at the same time.

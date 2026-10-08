@@ -1,0 +1,436 @@
+#!/usr/bin/python3
+"""noc-upstream — track and update the apps NoctraOS takes straight from their upstream releases.
+
+  noc-upstream list [--json] [--refresh] [--offline]   installed vs latest release for every tracked app
+  noc-upstream latest <id> [--tag]                     the latest release version (or its git tag) of one app
+  noc-upstream update [--only id,id] [--json]          update the user-level apps that are behind (Hermes, coding agents)
+
+Tracked: Hermes (GitHub Releases of NousResearch/hermes-agent), Ollama (ollama/ollama), AppManager (kem-a/AppManager)
+and the coding agents that noctraos-agent installs from npm (codex, claude, opencode, grok, gemini, qwen).
+"Latest" always means the newest published non-prerelease: GitHub's releases/latest, or the npm `latest` dist-tag.
+Apps that need root (Ollama, AppManager) are only reported here; the Control Panel updates them through
+noc-privileged. The installed version of every app is remembered in ~/.local/state/noctraos/apps.json so the
+panel can show when it last changed even when a person updated it by hand.
+
+Environment (tests): NOC_UPSTREAM_GITHUB_API, NOC_UPSTREAM_NPM_REGISTRY, NOC_UPSTREAM_GITHUB_WEB, NOC_UPSTREAM_CACHE,
+NOC_UPSTREAM_STATE, NOC_UPSTREAM_HERMES, NOC_UPSTREAM_OLLAMA, NOC_UPSTREAM_NPM, NOC_UPSTREAM_APPMANAGER_VERSION,
+NOC_UPSTREAM_HERMES_UPDATER.
+"""
+import argparse
+import datetime
+import json
+import os
+import re
+import shlex
+import subprocess
+import sys
+import urllib.error
+import urllib.parse
+import urllib.request
+
+TTL = 6 * 3600
+TIME_FORMAT = '%Y-%m-%dT%H:%M:%SZ'
+GITHUB_API = os.environ.get('NOC_UPSTREAM_GITHUB_API', 'https://api.github.com')
+GITHUB_WEB = os.environ.get('NOC_UPSTREAM_GITHUB_WEB', 'https://github.com')
+NPM_REGISTRY = os.environ.get('NOC_UPSTREAM_NPM_REGISTRY', 'https://registry.npmjs.org')
+MISE_PROFILE = '/etc/profile.d/noctraos-mise.sh'
+
+# id, title, critical (shown first and called out), where the newest release is published, how it updates.
+APPS = [
+    {'id': 'hermes', 'title': 'Hermes', 'critical': True, 'github': 'NousResearch/hermes-agent',
+     'updater': 'user', 'about': 'The Hermes agent and Hermes Desktop'},
+    {'id': 'ollama', 'title': 'Ollama', 'critical': True, 'github': 'ollama/ollama',
+     'updater': 'root', 'module': '03b_ollama_update.sh', 'about': 'Runs the local AI models'},
+    {'id': 'appmanager', 'title': 'AppManager', 'critical': False, 'github': 'kem-a/AppManager',
+     'updater': 'root', 'module': '04d_appmanager.sh', 'about': 'Installs and updates AppImages'},
+    {'id': 'codex', 'title': 'Codex', 'agent': True, 'npm': '@openai/codex', 'updater': 'user'},
+    {'id': 'claude', 'title': 'Claude Code', 'agent': True, 'npm': '@anthropic-ai/claude-code', 'updater': 'user'},
+    {'id': 'opencode', 'title': 'OpenCode', 'agent': True, 'npm': 'opencode-ai', 'updater': 'user'},
+    {'id': 'grok', 'title': 'Grok', 'agent': True, 'npm': '@vibe-kit/grok-cli', 'updater': 'user'},
+    {'id': 'gemini', 'title': 'Gemini CLI', 'agent': True, 'npm': '@google/gemini-cli', 'updater': 'user'},
+    {'id': 'qwen', 'title': 'Qwen Code', 'agent': True, 'npm': '@qwen-code/qwen-code', 'updater': 'user'},
+]
+BY_ID = {a['id']: a for a in APPS}
+
+
+# ---- small helpers -------------------------------------------------------------------------------
+
+def now():
+    return datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0, tzinfo=None)
+
+
+def stamp(t=None):
+    return (t or now()).strftime(TIME_FORMAT)
+
+
+def parse_stamp(s):
+    try:
+        return datetime.datetime.strptime(s, TIME_FORMAT)
+    except (TypeError, ValueError):
+        return None
+
+
+def cache_path():
+    return os.environ.get('NOC_UPSTREAM_CACHE') or os.path.join(
+        os.environ.get('XDG_CACHE_HOME') or os.path.expanduser('~/.cache'), 'noctraos/upstream.json')
+
+
+def state_path():
+    return os.environ.get('NOC_UPSTREAM_STATE') or os.path.join(
+        os.environ.get('XDG_STATE_HOME') or os.path.expanduser('~/.local/state'), 'noctraos/apps.json')
+
+
+def read_json(path, default):
+    try:
+        with open(path) as f:
+            data = json.load(f)
+        return data if isinstance(data, type(default)) else default
+    except (OSError, ValueError):
+        return default
+
+
+def write_json(path, data):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tmp = path + '.tmp'
+    with open(tmp, 'w') as f:
+        json.dump(data, f, indent=1, sort_keys=True)
+        f.write('\n')
+    os.replace(tmp, path)
+
+
+def shell(cmd, timeout=60):
+    """Run a shell snippet with the mise node on PATH (the way noctraos-agent does). Returns (code, stdout)."""
+    prefix = f'. {MISE_PROFILE} 2>/dev/null; ' if os.path.isfile(MISE_PROFILE) else ''
+    home_bin = os.path.expanduser('~/.local/bin')
+    env = dict(os.environ, PATH=f'{home_bin}:{os.environ.get("PATH", "")}')
+    try:
+        r = subprocess.run(['bash', '-c', prefix + cmd], capture_output=True, text=True, timeout=timeout, env=env)
+        return r.returncode, r.stdout
+    except (OSError, subprocess.SubprocessError):
+        return 1, ''
+
+
+VERSION_RE = re.compile(r'(\d+(?:\.\d+){1,3})')
+
+
+def parse_version(text):
+    """The first dotted number in the text ('v0.21.5+9141 (2026.9.24)' -> '0.21.5'), or None."""
+    m = VERSION_RE.search(text or '')
+    return m.group(1) if m else None
+
+
+def version_key(v):
+    """Sortable (numbers, release-not-prerelease) for '1.2.3' or '1.2.3-rc.1'. Build metadata (+...) is ignored."""
+    core = re.split(r'[+]', v or '', maxsplit=1)[0].lstrip('vV')
+    pre = '-' in core
+    nums = tuple(int(x) for x in re.findall(r'\d+', core.split('-', 1)[0]))
+    return nums + (0,) * (4 - len(nums)), 0 if pre else 1
+
+
+def is_newer(latest, installed):
+    return version_key(latest) > version_key(installed)
+
+
+# ---- latest release lookups ----------------------------------------------------------------------
+
+def http_get(url, accept='application/json', timeout=15):
+    req = urllib.request.Request(url, headers={'User-Agent': 'noc-upstream', 'Accept': accept})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return r.read(2_000_000)
+
+
+class NoRelease(Exception):
+    pass
+
+
+def github_latest(repo):
+    """Newest published (non-prerelease, non-draft) release: {'version', 'tag'}. The API first; if it is rate
+    limited (60 an hour per address), the /releases/latest redirect on github.com, which names the same tag."""
+    try:
+        data = json.loads(http_get(f'{GITHUB_API}/repos/{repo}/releases/latest'))
+        tag = data.get('tag_name') or ''
+        # Hermes names the release "Hermes Agent v0.21.5 (v2026.9.24)" while the tag is a date: the version is in the name.
+        version = parse_version(data.get('name') or '') or parse_version(tag)
+        if tag and version:
+            return {'version': version, 'tag': tag, 'published': data.get('published_at', '')}
+    except (urllib.error.URLError, OSError, ValueError):
+        pass
+    try:
+        class NoFollow(urllib.request.HTTPRedirectHandler):
+            def redirect_request(self, *a, **k):
+                return None
+        opener = urllib.request.build_opener(NoFollow)
+        req = urllib.request.Request(f'{GITHUB_WEB}/{repo}/releases/latest', method='HEAD',
+                                     headers={'User-Agent': 'noc-upstream'})
+        try:
+            opener.open(req, timeout=15)
+        except urllib.error.HTTPError as e:
+            loc = e.headers.get('Location', '')
+            tag = loc.rsplit('/tag/', 1)[-1] if '/tag/' in loc else ''
+            version = parse_version(tag)
+            if tag and version:
+                return {'version': version, 'tag': tag, 'published': ''}
+    except (urllib.error.URLError, OSError):
+        pass
+    raise NoRelease(f'could not read the latest {repo} release')
+
+
+def npm_latest(package):
+    try:
+        data = json.loads(http_get(f'{NPM_REGISTRY}/{urllib.parse.quote(package, safe="@")}/latest'))
+        version = data.get('version')
+        if version and parse_version(version):
+            return {'version': version, 'tag': version, 'published': ''}
+    except (urllib.error.URLError, OSError, ValueError):
+        pass
+    raise NoRelease(f'could not read the latest {package} on npm')
+
+
+def lookup_latest(app):
+    return github_latest(app['github']) if 'github' in app else npm_latest(app['npm'])
+
+
+def load_latest(apps, refresh=False, offline=False):
+    """Latest release per app id, from the cache when it is fresh. Returns (results, checked_at, online)."""
+    cache = read_json(cache_path(), {})
+    results, online, changed = {}, True, False
+    for app in apps:
+        entry = cache.get(app['id'])
+        fresh = entry and (parse_stamp(entry.get('checked_at')) or datetime.datetime.min) > now() - datetime.timedelta(seconds=TTL)
+        if entry and (offline or (fresh and not refresh)):
+            results[app['id']] = entry
+            continue
+        if offline:
+            continue
+        try:
+            got = lookup_latest(app)
+            entry = dict(got, checked_at=stamp())
+            cache[app['id']] = entry
+            changed = True
+            results[app['id']] = entry
+        except NoRelease:
+            online = False
+            if entry:
+                results[app['id']] = dict(entry, stale=True)   # an old answer beats none, and is marked as old
+    if changed:
+        with_suppress(lambda: write_json(cache_path(), cache))
+    times = [parse_stamp(e.get('checked_at')) for e in results.values() if parse_stamp(e.get('checked_at'))]
+    return results, (stamp(max(times)) if times else ''), online
+
+
+def with_suppress(fn):
+    try:
+        fn()
+    except OSError:
+        pass
+
+
+# ---- installed versions --------------------------------------------------------------------------
+
+def hermes_bin():
+    return os.environ.get('NOC_UPSTREAM_HERMES') or os.path.expanduser('~/.local/bin/hermes')
+
+
+def installed_hermes():
+    b = hermes_bin()
+    if not os.access(b, os.X_OK):
+        return None
+    code, out = shell(f'{shlex.quote(b)} --version 2>/dev/null | head -n 1', timeout=30)
+    return parse_version(out) if code == 0 else None
+
+
+def installed_ollama():
+    b = os.environ.get('NOC_UPSTREAM_OLLAMA') or 'ollama'
+    code, out = shell(f'{shlex.quote(b)} --version 2>&1 | head -n 3', timeout=20)
+    m = re.search(r'(?:client|ollama) version is (\S+)', out or '')
+    return parse_version(m.group(1)) if m else (parse_version(out) if code == 0 else None)
+
+
+def installed_appmanager():
+    path = os.environ.get('NOC_UPSTREAM_APPMANAGER_VERSION') or '/opt/appmanager/VERSION'
+    try:
+        return parse_version(open(path).read())
+    except OSError:
+        return None
+
+
+_NPM_ROOT = []
+
+
+def npm_root():
+    if not _NPM_ROOT:
+        npm = os.environ.get('NOC_UPSTREAM_NPM') or 'npm'
+        code, out = shell(f'{shlex.quote(npm)} root -g 2>/dev/null', timeout=30)
+        _NPM_ROOT.append(out.strip() if code == 0 else '')
+    return _NPM_ROOT[0]
+
+
+def installed_npm(package):
+    root = npm_root()
+    if not root:
+        return None
+    try:
+        with open(os.path.join(root, package, 'package.json')) as f:
+            return json.load(f).get('version')
+    except (OSError, ValueError):
+        return None
+
+
+def installed_version(app):
+    if app['id'] == 'hermes':
+        return installed_hermes()
+    if app['id'] == 'ollama':
+        return installed_ollama()
+    if app['id'] == 'appmanager':
+        return installed_appmanager()
+    return installed_npm(app['npm'])
+
+
+# ---- tracking ------------------------------------------------------------------------------------
+
+def track(rows):
+    """Remember each app's installed version, and when it last changed, whoever changed it."""
+    state = read_json(state_path(), {})
+    dirty = False
+    for row in rows:
+        cur = row['installed']
+        if cur is None:
+            continue
+        rec = state.get(row['id'])
+        if rec is None:
+            state[row['id']] = {'version': cur, 'first_seen': stamp(), 'updated_at': '', 'previous': ''}
+            dirty = True
+        elif rec.get('version') != cur:
+            state[row['id']] = dict(rec, version=cur, previous=rec.get('version', ''), updated_at=stamp())
+            dirty = True
+        row['updated_at'] = state[row['id']].get('updated_at', '')
+        row['previous'] = state[row['id']].get('previous', '')
+        row['first_seen'] = state[row['id']].get('first_seen', '')
+    if dirty:
+        with_suppress(lambda: write_json(state_path(), state))
+
+
+def build_rows(refresh=False, offline=False):
+    latest, checked_at, online = load_latest(APPS, refresh=refresh, offline=offline)
+    rows = []
+    for app in APPS:
+        inst = installed_version(app)
+        late = latest.get(app['id']) or {}
+        lv = late.get('version')
+        if inst is None:
+            status = 'absent'
+        elif lv is None:
+            status = 'unknown'
+        else:
+            status = 'outdated' if is_newer(lv, inst) else 'current'
+        rows.append({'id': app['id'], 'title': app['title'], 'critical': bool(app.get('critical')),
+                     'agent': bool(app.get('agent')), 'installed': inst, 'latest': lv,
+                     'latest_tag': late.get('tag'), 'status': status, 'updater': app['updater'],
+                     'module': app.get('module'), 'about': app.get('about', ''),
+                     'url': f'https://github.com/{app["github"]}/releases' if 'github' in app
+                     else f'https://www.npmjs.com/package/{app["npm"]}',
+                     'stale': bool(late.get('stale')), 'updated_at': '', 'previous': '', 'first_seen': ''})
+    track(rows)
+    return {'checked_at': checked_at, 'online': online or offline, 'offline_cache': offline,
+            'updates': sum(1 for r in rows if r['status'] == 'outdated'),
+            'user_updates': sum(1 for r in rows if r['status'] == 'outdated' and r['updater'] == 'user'),
+            'apps': rows}
+
+
+# ---- commands ------------------------------------------------------------------------------------
+
+def cmd_list(args):
+    data = build_rows(refresh=args.refresh, offline=args.offline)
+    if args.json:
+        print(json.dumps(data))
+        return 0
+    for r in data['apps']:
+        mark = {'current': 'OK ', 'outdated': '!! ', 'absent': '-- ', 'unknown': '?? '}[r['status']]
+        print(f'{mark}{r["title"]:<12} installed {r["installed"] or "-":<10} latest {r["latest"] or "?"}')
+    return 0
+
+
+def cmd_latest(args):
+    app = BY_ID.get(args.id)
+    if not app:
+        print(f'noc-upstream: unknown app "{args.id}"', file=sys.stderr)
+        return 2
+    results, _, _ = load_latest([app])
+    got = results.get(app['id'])
+    if not got:
+        print(f'noc-upstream: no release information for {app["id"]}', file=sys.stderr)
+        return 1
+    print(got['tag'] if args.tag else got['version'])
+    return 0
+
+
+def run_update(cmd, label):
+    print(f'Updating {label}...', flush=True)
+    try:
+        r = subprocess.run(cmd, stdout=sys.stdout, stderr=subprocess.STDOUT, text=True)
+    except OSError as e:
+        print(f'  could not run {cmd[0]}: {e}', flush=True)
+        return False
+    return r.returncode == 0
+
+
+def update_hermes(row):
+    updater = os.environ.get('NOC_UPSTREAM_HERMES_UPDATER') or '/usr/local/bin/noctraos-hermes'
+    return run_update([updater, 'update'], f'Hermes {row["installed"]} to {row["latest"]}')
+
+
+def update_agent(row):
+    app = BY_ID[row['id']]
+    npm = os.environ.get('NOC_UPSTREAM_NPM') or 'npm'
+    cmd = shell_cmd(f'{shlex.quote(npm)} install -g {shlex.quote(app["npm"] + "@" + row["latest"])}')
+    return run_update(cmd, f'{row["title"]} {row["installed"]} to {row["latest"]}')
+
+
+def shell_cmd(snippet):
+    prefix = f'. {MISE_PROFILE} 2>/dev/null; ' if os.path.isfile(MISE_PROFILE) else ''
+    return ['bash', '-c', prefix + snippet]
+
+
+def cmd_update(args):
+    only = set(args.only.split(',')) if args.only else None
+    if only and not only <= set(BY_ID):
+        print(f'noc-upstream: unknown app in --only: {", ".join(sorted(only - set(BY_ID)))}', file=sys.stderr)
+        return 2
+    data = build_rows(refresh=True)
+    todo = [r for r in data['apps'] if r['updater'] == 'user' and r['status'] == 'outdated'
+            and (only is None or r['id'] in only)]
+    if not todo:
+        print('Hermes and the coding agents are up to date.' if not data['online'] is False
+              else 'Could not check for new releases (no connection), so nothing was changed.', flush=True)
+        return 0 if data['online'] else 1
+    failed = []
+    for row in todo:
+        ok = update_hermes(row) if row['id'] == 'hermes' else update_agent(row)
+        if ok:
+            print(f'  {row["title"]} is now {row["latest"]}.', flush=True)
+        else:
+            failed.append(row['title'])
+            print(f'  {row["title"]} could not be updated; it stays on {row["installed"]}.', flush=True)
+    build_rows(offline=True)   # record the new versions
+    return 1 if failed else 0
+
+
+def main(argv=None):
+    p = argparse.ArgumentParser(prog='noc-upstream', description=__doc__.split('\n')[0])
+    sub = p.add_subparsers(dest='cmd', required=True)
+    ls = sub.add_parser('list')
+    ls.add_argument('--json', action='store_true')
+    ls.add_argument('--refresh', action='store_true')
+    ls.add_argument('--offline', action='store_true')
+    la = sub.add_parser('latest')
+    la.add_argument('id')
+    la.add_argument('--tag', action='store_true')
+    up = sub.add_parser('update')
+    up.add_argument('--only')
+    up.add_argument('--json', action='store_true')
+    args = p.parse_args(argv)
+    return {'list': cmd_list, 'latest': cmd_latest, 'update': cmd_update}[args.cmd](args)
+
+
+if __name__ == '__main__':
+    sys.exit(main())

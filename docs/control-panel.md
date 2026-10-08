@@ -19,6 +19,7 @@ Keyboard: Ctrl+1 to Ctrl+7 switch pages, Ctrl+R or F5 check again, Ctrl+W or Ctr
 | Page | Shows | Actions |
 |---|---|---|
 | Overview | Version, updates, local AI, graphics, disk, Hermes mode, search index. Each card opens its page | Refresh, Run health check |
+| Apps | Hermes, Ollama, AppManager and the coding agents: installed version, newest upstream release, when it last changed, an Update button ([updates.md](updates.md#apps-that-come-straight-from-their-publishers-hermes-ollama-coding-agents)) | Check now, Update |
 | Updates | System packages (count and download size), Flatpak, NoctraOS features (signed rolling updates, [updates.md](updates.md)), programming languages (mise), AI models | Tick what to update, then Update. Needs no terminal; one password prompt for the system steps |
 | AI models | Installed models with size and the default; suggestions chosen from this machine's RAM and video memory | Download with a progress bar and Cancel, Remove (confirms), Make default, a custom name |
 | Hardware | The GPU found, whether the stack is ready, RAM and disk | Set up the GPU, only after a summary of what will be installed and a yes |

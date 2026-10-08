@@ -50,6 +50,15 @@ sudo rm -f /usr/local/bin/zom /usr/local/bin/zom-menu /usr/local/bin/zom-gpu \
   /usr/local/share/applications/zom-menu.desktop
 sudo install -m 755 "$REPO_ROOT/bin/noc" /usr/local/bin/noc
 sudo install -m 755 "$REPO_ROOT/bin/noc-gpu" /usr/local/bin/noc-gpu
+sudo install -m 755 "$REPO_ROOT/bin/noc-upstream" /usr/local/bin/noc-upstream
+# Programs other modules installed (noctraos-hermes, noctraos-agent, the welcome app, ...) are refreshed in place, so an update
+# that changes one reaches machines that already have it. Only programs that are already there: a new one arrives with its own
+# module (menu entry, icon). This copies files only; it never touches a person's settings.
+for program in "$REPO_ROOT"/bin/noctraos-*; do
+  [ -f "$program" ] && [ -f "/usr/local/bin/$(basename "$program")" ] || continue
+  cmp -s "$program" "/usr/local/bin/$(basename "$program")" \
+    || sudo install -m 755 "$program" "/usr/local/bin/$(basename "$program")"
+done
 
 log "Installing the Control Panel (replaces the old zenity noc-menu)..."
 # Clean break: the zenity panel and its launcher are gone, not aliased.

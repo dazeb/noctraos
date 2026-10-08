@@ -16,6 +16,39 @@ The tools are `bin/noc-selfupdate` (the machine), `scripts/make-update.py` and `
 The ISO is for new machines. An update is a small signed bundle (about 5 MB) of the same files the ISO's first boot would
 install, plus migrations for things that changed on a machine that already has the old version.
 
+## Apps that come straight from their publishers (Hermes, Ollama, coding agents)
+
+Some apps are not in apt or Flatpak: they are installed from the publisher's own release channel. NoctraOS follows the
+**newest published release** of each (GitHub's "latest release", never a prerelease or the development branch; the npm
+`latest` tag for the coding agents), records the installed version, and shows both in the Control Panel.
+`bin/noc-upstream` is the one place that knows how; `noc apps [--json] [--refresh]` prints it.
+
+| App | Newest release comes from | Installed version read from | Updated by |
+|---|---|---|---|
+| Hermes | GitHub Releases of `NousResearch/hermes-agent` | `hermes --version` | `noctraos-hermes update` (user) |
+| Ollama | GitHub Releases of `ollama/ollama` | `ollama --version` | `install/03b_ollama_update.sh` through the privileged helper (root; the Apps page asks first, it restarts the service) |
+| AppManager | GitHub Releases of `kem-a/AppManager` | `/opt/appmanager/VERSION` | `install/04d_appmanager.sh` through the privileged helper (root) |
+| Codex, Claude Code, OpenCode, Grok, Gemini CLI, Qwen Code | npm registry `latest` | the global `node_modules` | `npm install -g <package>@<exact version>` (user); only when already installed |
+
+* **Lookups are cheap and polite:** one request per app, cached for 6 hours (`~/.cache/noctraos/upstream.json`); GitHub's API
+  first, and when it rate-limits (60 an hour per address) the `/releases/latest` redirect, which names the same tag. A failed
+  lookup keeps the old answer and marks it as old; with no answer at all an app is "unknown", never "up to date".
+* **Version history:** `~/.local/state/noctraos/apps.json` remembers each app's installed version and when it changed (including
+  changes made by hand), so the panel can say "changed 2 days ago".
+* **Ordering is by release, not by tag:** Hermes names its releases `v2026.9.24` (a date) while the version is `0.21.5`; the
+  version is read from the release name. A build ahead of the newest release (0.21.5+9141) is not "behind" it.
+* **Hermes is moved to a release, not to `main`.** Hermes' own `hermes update` can only follow a branch (`main` is days ahead of
+  the last release), its release channels (`--channel stable`) are not published yet (HTTP 404, checked 2026-10-08) and the
+  official installer's re-run path fetches branches only. So a fresh install runs the installer pinned to the release tag
+  (`--branch v0.21.6`, which works), and `noctraos-hermes update` sets the old runtime directory aside, installs the release
+  tag fresh, rebuilds the desktop app, and **puts the old directory back if anything fails**. Everything a person made
+  (`config.yaml`, memories, sessions, `SOUL.md`) lives in `~/.hermes` outside that directory and is never touched. It refuses while Hermes
+  is running and when under 4 GB is free. If Nous publishes the `stable` channel, switch `cmd_update` to
+  `hermes update --channel stable`.
+* **Where it shows:** Overview has an **Apps** card; the **Apps** page lists every tracked app with installed and newest version,
+  when it last changed, and an Update button (a confirmation for Ollama); the **Updates** page has a "Hermes and coding agents"
+  step; `noc update` runs it as step `apps`.
+
 ## The model in one paragraph
 
 A publisher builds a **bundle** from a git ref and gives it a **serial** (1, 2, 3, ...). A **channel** (`stable` or
@@ -95,6 +128,11 @@ several updates behind, so it runs **every** migration it has not run, in order,
 `migrations/README.md` make that safe: idempotent, additive first (expand, ship the code, contract in a later update),
 never override a person's choice. A failed migration is recorded, retried at the next run, and shown in `noc doctor`
 (row `noctraos-update`); it does not roll the update back, because half a migration is not undone by old code.
+
+What an update refreshes without a migration: module 07's files (`noc`, `noc-gpu`, `noc-upstream`, the root helper, the Control
+Panel, the updater) and every installed `/usr/local/bin/noctraos-*` program. Files that modules 06, 08 and 09 install (extensions,
+the search app, themes, launchers, schemas) are **not** refreshed, because those modules also apply desktop settings; a change to
+them ships with a migration that re-runs the module (see `migrations/README.md`).
 
 Do not put work in a migration that an install module already does for fresh installs without also making the module
 the source of truth: fresh machines run modules, updated machines run modules (07) plus migrations.

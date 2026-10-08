@@ -50,6 +50,8 @@ class ValidateTests(unittest.TestCase):
             (Path(d) / "install/00_preflight.sh").write_text("#!/bin/sh\n")
             snap = f'SNAPSHOT="{d}"; '
             self.assertTrue(self.ok(snap + "validate_module 04d_appmanager.sh"))
+            (Path(d) / "install/03b_ollama_update.sh").write_text("#!/bin/sh\n")
+            self.assertTrue(self.ok(snap + "validate_module 03b_ollama_update.sh"))
             # present in the snapshot but not on the allowlist
             self.assertFalse(self.ok(snap + "validate_module 00_preflight.sh"))
             # on the allowlist but missing from the snapshot

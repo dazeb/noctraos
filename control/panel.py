@@ -4,6 +4,7 @@ The panel is a GUI for `noc`, not a second implementation (docs/control-panel-pl
 number on screen comes from `noc status --json` and friends, so this module only formats it.
 Kept free of PyGObject so the unit tests (and CI) can import it.
 """
+import datetime
 import json
 import os
 import re
@@ -67,6 +68,19 @@ def _updates_card(updates):
     return Card('updates', 'Updates', value, detail, level, 'updates')
 
 
+def _apps_card(apps):
+    """Hermes, Ollama, AppManager and the coding agents: how far behind their newest upstream release."""
+    rows = (apps or {}).get('apps') if isinstance(apps, dict) else None
+    if not rows or all(r.get('status') == 'unknown' for r in rows if r.get('installed')):
+        return Card('apps', 'Apps', 'Not checked yet', 'Open Apps to check Hermes, Ollama and the coding agents.', 'info', 'apps')
+    behind = [r for r in rows if r.get('status') == 'outdated']
+    if behind:
+        names = ', '.join(f'{r["title"]} {r["installed"]} → {r["latest"]}' for r in behind[:2]) + ('…' if len(behind) > 2 else '')
+        return Card('apps', 'Apps', f'{len(behind)} update{"" if len(behind) == 1 else "s"} available', names, 'warn', 'apps')
+    hermes = next((r for r in rows if r.get('id') == 'hermes' and r.get('installed')), None)
+    return Card('apps', 'Apps', 'Up to date', f'Hermes {hermes["installed"]}' if hermes else '', 'ok', 'apps')
+
+
 def _ollama_card(ollama):
     if not ollama.get('running'):
         return Card('ollama', 'Local AI', 'Not running',
@@ -111,6 +125,7 @@ def cards(status):
     return [
         Card('version', 'NoctraOS', f'Version {status.get("version", "?")}', status.get('os') or '', 'ok', 'about'),
         _updates_card(status.get('updates') or {}),
+        _apps_card(status.get('apps')),
         _ollama_card(status.get('ollama') or {}),
         _gpu_card(status.get('gpu')),
         Card('disk', 'Disk', f'{fmt_bytes(free)} free' if free is not None else 'Unknown',
@@ -323,10 +338,10 @@ def noc_run(*args, timeout=120):
 
 # Steps that need root run through the helper; the rest run as the user.
 PRIVILEGED_STEPS = ('apt', 'flatpak', 'noctraos')
-USER_STEPS = ('mise', 'models')
+USER_STEPS = ('mise', 'apps', 'models')
 STEP_ORDER = PRIVILEGED_STEPS + USER_STEPS
 STEP_TITLES = {'apt': 'System packages', 'flatpak': 'Apps (Flatpak)', 'noctraos': 'NoctraOS features',
-               'mise': 'Programming languages',
+               'mise': 'Programming languages', 'apps': 'Hermes and coding agents',
                'models': 'AI models'}
 
 
@@ -387,6 +402,17 @@ def update_rows(updates):
         row('mise', nothing, False, False)
     else:
         row('mise', _plural(mise, 'tool') + ' can be updated', True, True)
+    ap = updates.get('apps')
+    behind = [r for r in (ap or {}).get('apps', []) if r.get('status') == 'outdated' and r.get('updater') == 'user']
+    if not isinstance(ap, dict):
+        row('apps', 'Could not check.' if offline else 'Not available on this install yet.', False, False)
+    elif behind:
+        names = ', '.join(f'{r["title"]} {r["installed"]} → {r["latest"]}' for r in behind[:4])
+        row('apps', names + ('…' if len(behind) > 4 else ''), True, True)
+    elif ap.get('online') is False:
+        row('apps', 'Could not check for new releases.', False, False)
+    else:
+        row('apps', 'Up to date with the newest releases.', False, False)
     if models:
         row('models', f'Refreshes your {_plural(models, "installed model")}; downloads only what changed.', True, False)
     else:
@@ -486,6 +512,76 @@ def offline_message(updates):
     if updates and not updates.get('online', True):
         return 'No internet connection. Updates need the network; local AI keeps working offline.'
     return ''
+
+
+# ---- Apps (upstream releases) ----------------------------------------------------------------
+
+UPSTREAM = '/usr/local/bin/noc-upstream'
+
+
+def _ago(stamp):
+    try:
+        then = datetime.datetime.strptime(stamp, '%Y-%m-%dT%H:%M:%SZ').replace(tzinfo=datetime.timezone.utc)
+    except (TypeError, ValueError):
+        return ''
+    return fmt_age(max(0, (datetime.datetime.now(datetime.timezone.utc) - then).total_seconds()))
+
+
+def app_action(row):
+    """How to update one app: (argv, confirmation text or ''), or None when there is nothing to do.
+    User-level apps (Hermes, the coding agents) update as the person; root ones go through the privileged helper."""
+    if row.get('status') != 'outdated':
+        return None
+    if row.get('updater') == 'user':
+        return [UPSTREAM, 'update', '--only', row['id']], ''
+    if row.get('updater') == 'root' and row.get('module'):
+        text = f'Update {row["title"]} from {row["installed"]} to {row["latest"]}?'
+        if row['id'] == 'ollama':
+            text += ' This downloads about 1.4 GB and restarts the local AI service, so a model that is running stops.'
+        return [PKEXEC, HELPER, 'module', row['module']], text
+    return None
+
+
+def apps_rows(data):
+    """Rows for the Apps page from `noc apps --json`: critical apps first, then the rest, coding agents last."""
+    rows = []
+    for r in (data or {}).get('apps', []):
+        inst, late, status = r.get('installed'), r.get('latest'), r.get('status')
+        if status == 'outdated':
+            text, level = f'Update available: {inst} → {late}', 'warn'
+        elif status == 'current':
+            text, level = 'Up to date', 'ok'
+        elif status == 'absent':
+            text, level = ('Not installed yet. It installs the first time you open it.' if r.get('agent')
+                           else 'Not installed.'), 'info'
+        else:
+            text, level = 'Could not check for a newer release.', 'info'
+        notes = []
+        if inst:
+            notes.append(f'Version {inst}')
+        if late and status != 'outdated':
+            notes.append(f'newest release {late}')
+        if r.get('updated_at'):
+            notes.append(f'changed {_ago(r["updated_at"])}')
+        if r.get('stale'):
+            notes.append('release information is from an earlier check')
+        action = app_action(r)
+        rows.append({'id': r['id'], 'title': r['title'], 'critical': bool(r.get('critical')), 'agent': bool(r.get('agent')),
+                     'about': r.get('about', ''), 'status': text, 'level': level, 'detail': ', '.join(notes),
+                     'url': r.get('url', ''), 'argv': action[0] if action else None,
+                     'confirm': action[1] if action else '', 'updater': r.get('updater')})
+    rows.sort(key=lambda x: (not x['critical'], x['agent'], x['title'].lower()))
+    return rows
+
+
+def apps_headline(data):
+    if not isinstance(data, dict) or not data.get('apps'):
+        return 'Could not read the app versions.'
+    n = data.get('updates', 0)
+    when = f' Last checked {_ago(data["checked_at"])}.' if data.get('checked_at') else ''
+    if not data.get('online', True):
+        return 'No internet connection, so newer releases could not be looked up.' + when
+    return (f'{n} update{"" if n == 1 else "s"} available.' if n else 'Everything is on its newest release.') + when
 
 
 # ---- Hardware --------------------------------------------------------------------------------
