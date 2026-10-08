@@ -21,7 +21,21 @@ case "$1" in
 esac
 '''
 CURL = r'''#!/usr/bin/env bash
-cat "$STUB_REL/$(basename "${@: -1}")"
+# stub: `-o FILE URL` writes the file (appending from FILE's current size, like -C -), else prints it.
+# STUB_CURL_DROP=1 makes the FIRST download of each file stop half-way and fail with 92, like a dropped stream.
+out=""; args=("$@")
+for ((i=0; i<${#args[@]}; i++)); do [ "${args[i]}" = "-o" ] && out="${args[i+1]}"; done
+src="$STUB_REL/$(basename "${@: -1}")"
+if [ -z "$out" ]; then cat "$src"; exit 0; fi
+# STUB_CORRUPT=<file name>: the CDN serves other bytes of the same size for that file
+if [ "$(basename "$src")" = "${STUB_CORRUPT:-}" ]; then tr 'a-z' 'b-za' < "$src" > "$out"; exit 0; fi
+have=$(stat -c %s "$out" 2>/dev/null || echo 0)
+if [ -n "${STUB_CURL_DROP:-}" ] && [ ! -e "$out.dropped.$(basename "$src")" ] && [ "$have" = 0 ]; then
+  touch "$out.dropped.$(basename "$src")"
+  head -c $(( $(stat -c %s "$src") / 2 )) "$src" > "$out"
+  exit 92
+fi
+tail -c +$((have + 1)) "$src" >> "$out"
 '''
 GH = r'''#!/usr/bin/env bash
 [ "$1 $2" = "release view" ] && exit 1
@@ -29,7 +43,7 @@ echo "gh $*" >> "$STUB_LOG"
 '''
 
 
-def run(listing, remote_files=None, lsf_fail=False, edit=None):
+def run(listing, remote_files=None, lsf_fail=False, edit=None, drop=False, corrupt=""):
     with tempfile.TemporaryDirectory() as directory:
         d = Path(directory)
         rel = d / "build/release" / f"v{VERSION}"
@@ -55,7 +69,8 @@ def run(listing, remote_files=None, lsf_fail=False, edit=None):
         env = {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}", "R2_ACCESS_KEY_ID": "x",
                "R2_SECRET_ACCESS_KEY": "x", "R2_ENDPOINT": "x", "R2_BUCKET": "b", "STUB_LISTING": str(d / "listing"),
                "STUB_REMOTE": str(remote), "STUB_LOG": str(d / "log"), "STUB_REL": str(rel),
-               "STUB_LSF_FAIL": "1" if lsf_fail else ""}
+               "STUB_LSF_FAIL": "1" if lsf_fail else "", "STUB_CURL_DROP": "1" if drop else "", "STUB_CORRUPT": corrupt,
+               "VERIFY_RETRY_DELAY": "0"}
         result = subprocess.run(["bash", str(SCRIPT), str(d / "build")], capture_output=True, text=True, env=env)
         log = (d / "log").read_text().splitlines() if (d / "log").exists() else []
         return result, log
@@ -72,6 +87,16 @@ class PublishTests(unittest.TestCase):
         uploads = [line for line in log if not line.startswith("gh ")]
         self.assertEqual([Path(u).name for u in uploads], NAMES + ["SHA256SUMS"])
         self.assertTrue(any(line.startswith("gh release create") for line in log))
+
+    def test_a_dropped_download_resumes_and_still_verifies(self):
+        result, log = run("", drop=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.count("OK  noctraos-"), 3)
+
+    def test_a_public_file_that_differs_fails_verification(self):
+        result, _ = run("", corrupt=NAMES[1])
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("hashes to", result.stderr)
 
     def test_resumes_after_a_partial_upload_without_reuploading(self):
         done = NAMES[:2]
