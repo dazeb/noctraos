@@ -58,7 +58,8 @@ for number, page_id in enumerate([p[0] for p in main.pages.PAGES], 1):
     pump(1.0)
     seen.append(page_id)
 assert not press("x", ctrl=True), "an unrelated key must pass through"
-assert not press("9", ctrl=True), "Ctrl+9 has no page"
+assert not press("0", ctrl=True), "Ctrl+0 is never a page"
+assert len(seen) <= 9, "Ctrl+1..9 is all the digit shortcuts there are: add a different way to reach page 10"
 window.open_page("no-such-page")
 print("PAGES", ",".join(seen))
 '''
@@ -83,7 +84,7 @@ class SmokeTests(unittest.TestCase):
         result = self.run_driver(scale)
         self.assertEqual(result.returncode, 0, result.stderr[-2000:])
         self.assertNotIn("Traceback", result.stderr)
-        self.assertIn("PAGES overview,updates,apps,models,hardware,health,privacy,about", result.stdout)
+        self.assertIn("PAGES overview,accounts,updates,apps,models,hardware,health,privacy,about", result.stdout)
 
     def test_every_page_survives_a_machine_where_nothing_works(self):
         self.check(1)

@@ -8,7 +8,7 @@ reimplements what the CLI does, so the two cannot drift. Slow calls run on a thr
 only ever shows a spinner, never blocks.
 
   noctraos-control                 open the panel
-  noctraos-control --page models   open it on a page (overview, updates, apps, models, hardware, health, privacy, about)
+  noctraos-control --page models   open it on a page (overview, accounts, updates, apps, models, hardware, health, privacy, about)
 """
 import sys
 from pathlib import Path
@@ -100,7 +100,7 @@ class ControlPanel(Gtk.ApplicationWindow):
         self.list = Gtk.ListBox()
         self.list.get_style_context().add_class('sidebar')
         side.pack_start(self.list, True, True, 0)
-        hint = label('Ctrl+1 to 7: pages\nCtrl+R: check again', 'muted', xalign=0)
+        hint = label(f'Ctrl+1 to {len(pages.PAGES)}: pages\nCtrl+R: check again', 'muted', xalign=0)
         hint.set_margin_start(18)
         hint.set_margin_bottom(14)
         side.pack_end(hint, False, False, 0)
@@ -124,7 +124,7 @@ class ControlPanel(Gtk.ApplicationWindow):
         self.open_page('overview')
 
     def _on_key(self, _widget, event):
-        """Ctrl+1..7 pages, Ctrl+R or F5 check again, Ctrl+W or Ctrl+Q close."""
+        """Ctrl+1..N pages (N = how many there are), Ctrl+R or F5 check again, Ctrl+W or Ctrl+Q close."""
         key = Gdk.keyval_name(event.keyval) or ''
         ctrl = bool(event.state & Gdk.ModifierType.CONTROL_MASK)
         if ctrl and key.isdigit() and 1 <= int(key) <= len(self.ids):

@@ -51,6 +51,7 @@ sudo rm -f /usr/local/bin/zom /usr/local/bin/zom-menu /usr/local/bin/zom-gpu \
 sudo install -m 755 "$REPO_ROOT/bin/noc" /usr/local/bin/noc
 sudo install -m 755 "$REPO_ROOT/bin/noc-gpu" /usr/local/bin/noc-gpu
 sudo install -m 755 "$REPO_ROOT/bin/noc-upstream" /usr/local/bin/noc-upstream
+sudo install -m 755 "$REPO_ROOT/bin/noc-accounts" /usr/local/bin/noc-accounts
 # Programs other modules installed (noctraos-hermes, noctraos-agent, the welcome app, ...) are refreshed in place, so an update
 # that changes one reaches machines that already have it. Only programs that are already there: a new one arrives with its own
 # module (menu entry, icon). This copies files only; it never touches a person's settings.

@@ -351,6 +351,22 @@ class UpdatesCommandTests(unittest.TestCase):
         self.assertIn("--offline", log.read_text())
         self.assertIsNone(json.loads(e.noc("status", "--json").stdout)["apps"])
 
+    def test_status_carries_the_accounts_state(self):
+        e = Env(self)
+        e.stub("acct", 'echo \'{"git": {"ready": false}, "github": {"signed_in": false}}\'')
+        data = json.loads(e.noc("status", "--json", NOC_ACCOUNTS=str(e.bin / "acct")).stdout)
+        self.assertEqual(data["accounts"]["git"]["ready"], False)
+        self.assertIsNone(json.loads(e.noc("status", "--json").stdout)["accounts"])
+        e.stub("acct", "echo not-json")
+        self.assertIsNone(json.loads(e.noc("status", "--json", NOC_ACCOUNTS=str(e.bin / "acct")).stdout)["accounts"])
+
+    def test_noc_accounts_passes_everything_through(self):
+        e = Env(self)
+        e.stub("acct", 'echo "ran: $*"')
+        r = e.noc("accounts", "git", "set", "--name", "Ada Lovelace", "--email", "a@b.co", NOC_ACCOUNTS=str(e.bin / "acct"))
+        self.assertEqual(r.stdout.strip(), "ran: git set --name Ada Lovelace --email a@b.co")
+        self.assertNotEqual(e.noc("accounts", NOC_ACCOUNTS="/nonexistent").returncode, 0)
+
     def test_noc_apps_runs_the_tracker_with_its_arguments(self):
         e = Env(self)
         e.stub("tracker", 'echo "ran: $*"')

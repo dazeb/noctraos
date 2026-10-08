@@ -1,0 +1,280 @@
+#!/usr/bin/python3
+"""noc-accounts — the first-time setup people trip over: who Git says you are, and signing in to GitHub.
+
+  noc-accounts status [--json] [--verify]   Git name/email and the GitHub sign-in, as the Control Panel shows them
+  noc-accounts git set --name N --email E   set the identity Git signs commits with (and a sane default branch name)
+  noc-accounts github login [--json]    sign in to GitHub in the browser; --json prints events for the Control Panel:
+                                        {"event":"code","code":"ABCD-1234","url":...} then {"event":"done","ok":true,"login":...}
+  noc-accounts github logout
+  noc-accounts github suggest [--json]  name and e-mail to use, read from the signed-in GitHub account (needs the network)
+
+No terminal, no tokens in front of the person: `gh auth login --web` is the device flow (a short code, approved in the
+browser), run here with prompts off, and the result is wired into Git (`gh auth setup-git`) so `git push` just works.
+Nothing here ever reads or prints a token. GitHub's private "noreply" address is offered so a person who hides their
+e-mail can still push (GitHub rejects pushes that would publish a private address).
+"""
+import argparse
+import json
+import os
+import re
+import shutil
+import signal
+import subprocess
+import sys
+import threading
+
+HOST = 'github.com'
+LOGIN_TIMEOUT = 16 * 60            # GitHub's device codes last 15 minutes
+CODE_RE = re.compile(r'one-time code:\s*([A-Z0-9]{4}-[A-Z0-9]{4})')
+URL_RE = re.compile(r'(https://github\.com/login/device\S*)')
+EMAIL_RE = re.compile(r'^[^@\s<>]+@[^@\s<>]+\.[^@\s<>]+$')
+
+
+def emit(event, **fields):
+    print(json.dumps(dict(event=event, **fields)), flush=True)
+
+
+def clean_env():
+    """gh refuses to log in while a token variable is set; the person's login is what we want."""
+    env = dict(os.environ)
+    for name in ('GH_TOKEN', 'GITHUB_TOKEN', 'GH_ENTERPRISE_TOKEN', 'GITHUB_ENTERPRISE_TOKEN'):
+        env.pop(name, None)
+    env['GH_PROMPT_DISABLED'] = '1'
+    env['NO_COLOR'] = '1'
+    return env
+
+
+def run(argv, timeout=30, env=None):
+    try:
+        r = subprocess.run(argv, capture_output=True, text=True, timeout=timeout, env=env)
+    except (OSError, subprocess.SubprocessError) as e:
+        return 127, '', str(e)
+    return r.returncode, r.stdout, r.stderr
+
+
+# ---- Git identity --------------------------------------------------------------------------------
+
+def git_get(key):
+    code, out, _ = run(['git', 'config', '--global', '--get', key])
+    return out.strip() if code == 0 else ''
+
+
+def validate_identity(name, email):
+    """A reason the identity is not acceptable, or ''."""
+    name, email = (name or '').strip(), (email or '').strip()
+    if not name:
+        return 'Enter your name.'
+    if len(name) > 100 or re.search(r'[\x00-\x1f<>]', name):
+        return 'That name has characters Git cannot use. Use letters, spaces and normal punctuation.'
+    if not EMAIL_RE.match(email) or len(email) > 200:
+        return 'That does not look like an e-mail address.'
+    return ''
+
+
+def set_identity(name, email):
+    problem = validate_identity(name, email)
+    if problem:
+        return False, problem
+    for key, value in (('user.name', name.strip()), ('user.email', email.strip())):
+        code, _, err = run(['git', 'config', '--global', key, value])
+        if code != 0:
+            return False, f'Git could not save {key}: {err.strip() or "unknown error"}'
+    if not git_get('init.defaultBranch'):
+        run(['git', 'config', '--global', 'init.defaultBranch', 'main'])   # new projects start on "main", as GitHub expects
+    return True, ''
+
+
+# ---- GitHub --------------------------------------------------------------------------------------
+
+def gh_path():
+    return os.environ.get('NOC_ACCOUNTS_GH') or shutil.which('gh') or ''
+
+
+def github_login_name():
+    """Who gh is signed in as, from its own config (no network, no token)."""
+    base = os.environ.get('GH_CONFIG_DIR') or os.path.join(
+        os.environ.get('XDG_CONFIG_HOME') or os.path.expanduser('~/.config'), 'gh')
+    try:
+        lines = open(os.path.join(base, 'hosts.yml')).read().splitlines()
+    except OSError:
+        return ''
+    in_host = False
+    for line in lines:
+        if re.match(r'^\S', line):
+            in_host = line.strip().rstrip(':') == HOST
+        elif in_host:
+            m = re.match(r'^\s+user:\s*(\S+)', line)
+            if m:
+                return m.group(1).strip('\'"')
+    return ''
+
+
+def github_signed_in():
+    gh = gh_path()
+    if not gh:
+        return False
+    code, _, _ = run([gh, 'auth', 'status', '--hostname', HOST], timeout=20, env=clean_env_keep_token())
+    return code == 0
+
+
+def clean_env_keep_token():
+    env = dict(os.environ)
+    env['GH_PROMPT_DISABLED'] = '1'
+    env['NO_COLOR'] = '1'
+    return env
+
+
+def status(verify=False):
+    """Local facts only (gh's own config), so the Control Panel can show them at once and offline. verify=True also asks
+    GitHub whether the saved login still works (a token can be revoked)."""
+    name, email = git_get('user.name'), git_get('user.email')
+    gh = gh_path()
+    login = github_login_name() if gh else ''
+    signed = bool(login) and (github_signed_in() if verify else True)
+    return {'git': {'installed': bool(shutil.which('git')), 'name': name, 'email': email, 'ready': bool(name and email)},
+            'github': {'installed': bool(gh), 'signed_in': signed, 'login': login if signed else ''}}
+
+
+def github_user():
+    """The signed-in account: {'login', 'name', 'email'}, or None. Needs the network."""
+    gh = gh_path()
+    if not gh:
+        return None
+    code, out, _ = run([gh, 'api', 'user'], timeout=30, env=clean_env_keep_token())
+    if code != 0:
+        return None
+    try:
+        data = json.loads(out)
+    except ValueError:
+        return None
+    return {'login': data.get('login') or '', 'id': data.get('id'), 'name': data.get('name') or '',
+            'email': data.get('email') or ''}
+
+
+def suggestion():
+    user = github_user()
+    if not user or not user['login']:
+        return None
+    private = f'{user["id"]}+{user["login"]}@users.noreply.github.com' if user.get('id') else \
+        f'{user["login"]}@users.noreply.github.com'
+    return {'login': user['login'], 'name': user['name'] or user['login'], 'public_email': user['email'],
+            'private_email': private}
+
+
+def github_login(as_json):
+    gh = gh_path()
+    if not gh:
+        if as_json:
+            emit('done', ok=False, message="GitHub's tool (gh) is not installed on this computer.")
+        else:
+            print('gh is not installed', file=sys.stderr)
+        return 1
+    proc = subprocess.Popen([gh, 'auth', 'login', '--hostname', HOST, '--git-protocol', 'https', '--web'],
+                            stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                            env=clean_env())
+    timer = threading.Timer(LOGIN_TIMEOUT, proc.kill)
+    timer.daemon = True            # a leftover timer must never keep the program alive after Cancel
+    timer.start()
+
+    def stop(*_):
+        timer.cancel()
+        proc.terminate()
+        sys.exit(130)
+    signal.signal(signal.SIGTERM, stop)
+    code = url = None
+    announced = False
+    lines = []
+    for line in proc.stdout:
+        line = line.rstrip('\n')
+        lines.append(line)
+        m = CODE_RE.search(line)
+        if m:
+            code = m.group(1)
+        m = URL_RE.search(line)
+        if m:
+            url = m.group(1)
+        if code and url and not announced:
+            announced = True
+            if as_json:
+                emit('code', code=code, url=url)
+            else:
+                print(f'\n  1. Copy this code:  {code}\n  2. Open {url} and paste it there.\n  Waiting for you...', flush=True)
+        elif as_json and line.strip() and not (m or CODE_RE.search(line)):
+            emit('log', line=line)
+    rc = proc.wait()
+    timer.cancel()
+    ok = rc == 0
+    message = ''
+    if ok:
+        run([gh, 'auth', 'setup-git', '--hostname', HOST], env=clean_env_keep_token())   # git push over https uses this login
+    else:
+        tail = next((l for l in reversed(lines) if l.strip()), '')
+        message = 'The sign-in was not approved in time.' if rc in (-9, -15) else (tail or 'The sign-in did not finish.')
+    login = github_login_name() if ok else ''
+    if as_json:
+        emit('done', ok=ok, login=login, message=message)
+    else:
+        print(f'Signed in to GitHub as {login}.' if ok else f'Sign-in failed: {message}')
+    return 0 if ok else 1
+
+
+def github_logout():
+    gh = gh_path()
+    if not gh:
+        return 1
+    code, _, err = run([gh, 'auth', 'logout', '--hostname', HOST], env=clean_env_keep_token())
+    if code != 0:
+        print(err.strip(), file=sys.stderr)
+    return 0 if code == 0 else 1
+
+
+# ---- command line --------------------------------------------------------------------------------
+
+def main(argv=None):
+    p = argparse.ArgumentParser(prog='noc-accounts', description=__doc__.split('\n')[0])
+    sub = p.add_subparsers(dest='cmd', required=True)
+    st = sub.add_parser('status')
+    st.add_argument('--json', action='store_true')
+    st.add_argument('--verify', action='store_true', help='also ask GitHub whether the saved login still works')
+    g = sub.add_parser('git')
+    gs = g.add_subparsers(dest='sub', required=True)
+    gset = gs.add_parser('set')
+    gset.add_argument('--name', required=True)
+    gset.add_argument('--email', required=True)
+    h = sub.add_parser('github')
+    hs = h.add_subparsers(dest='sub', required=True)
+    login = hs.add_parser('login')
+    login.add_argument('--json', action='store_true')
+    hs.add_parser('logout')
+    sg = hs.add_parser('suggest')
+    sg.add_argument('--json', action='store_true')
+    args = p.parse_args(argv)
+
+    if args.cmd == 'status':
+        data = status(verify=args.verify)
+        if args.json:
+            print(json.dumps(data))
+        else:
+            g, h = data['git'], data['github']
+            print(f'Git:    {g["name"]} <{g["email"]}>' if g['ready'] else 'Git:    your name and e-mail are not set')
+            print(f'GitHub: signed in as {h["login"] or "?"}' if h['signed_in']
+                  else ('GitHub: not signed in' if h['installed'] else 'GitHub: the gh tool is not installed'))
+        return 0
+    if args.cmd == 'git':
+        ok, message = set_identity(args.name, args.email)
+        print(message if not ok else f'Git will now sign your work as {args.name.strip()} <{args.email.strip()}>.')
+        return 0 if ok else 1
+    if args.sub == 'login':
+        return github_login(args.json)
+    if args.sub == 'logout':
+        return github_logout()
+    data = suggestion()
+    if data is None:
+        print('Could not read your GitHub account. Sign in first, and check the connection.', file=sys.stderr)
+        return 1
+    print(json.dumps(data) if args.json else f'{data["name"]} <{data["private_email"]}>')
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())

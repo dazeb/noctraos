@@ -65,6 +65,8 @@ bin/
                             | bg [list|next|set] | gpu. Sourceable (tests call its functions); NOC_OLLAMA_URL overrides the Ollama URL
   noc-gpu                   GPU detect [--json] | install | status [--json] (NVIDIA driver+CUDA, AMD ROCm); VERSION must match noc
   noctraos-control          wrapper that execs the system-Python Control Panel (control/)
+  noc-accounts              first-time setup without a terminal: Git name/e-mail (`git config --global`) and the GitHub sign-in (`gh auth login --web`
+                            device flow); `noc accounts ...`, the panel's Accounts page, the Overview card, a button in the Welcome app
   noc-upstream              tracks apps that come from their publisher's releases (Hermes, Ollama, AppManager, the coding agents):
                             installed vs newest release, version history, user-level updates; `noc apps`, the panel's Apps page
   noc-selfupdate            updates the NoctraOS layer itself (signed manifest + bundle, staged rollout, migrations, rollback);
@@ -250,6 +252,13 @@ iso/vm-sysprep.sh           run inside a fully provisioned VM before exporting i
   and reads 2.8 GB/s; the Samsung 960 PRO (`/mnt/nvme1`) 0.6 to 1.1 GB/s and 2.3 GB/s, so the 2 TB drive is first. Re-measure after
   hardware changes (when no build runs). `build-release.sh` fails in seconds if the VM disk drive has under 100 GB free.
   Keep cold data off `/mnt/nvme1` with `~/workspace/shared/scripts/offload-dir.sh <dir>` (copy, checksum-verify, symlink).
+- **Accounts setup is for people who are not developers** (user's rule, 2026-10-08: "they just want AI and they want it to work"). Never
+  make Git or GitHub setup need a terminal, a token or a command to copy. `noc-accounts` runs `gh auth login --web` with prompts off
+  (stdin closed, `GH_PROMPT_DISABLED=1`; it prints a one-time code and a URL and then waits, no Enter needed), strips `GH_TOKEN` and
+  `GITHUB_TOKEN` from its environment (gh refuses to log in while they are set), runs `gh auth setup-git` so `git push` works, and offers
+  GitHub's private `ID+login@users.noreply.github.com` address (pushes that would reveal a private address are rejected). It never reads or
+  prints a token. Local status reads `~/.config/gh/hosts.yml`; `--verify` asks GitHub. The sign-in subprocess is stopped with SIGTERM
+  (Cancel); its timer thread must stay a daemon or the program will not exit.
 - **Upstream apps follow the newest published release** (2026-10-08, `docs/updates.md`): `bin/noc-upstream` is the only place that
   resolves "latest" (GitHub `releases/latest`, npm `latest`; never a prerelease or a branch tip). Hermes: do not use
   `hermes update --branch <tag>` (it treats the tag as a branch and fails) or `hermes update --channel stable` (not published,

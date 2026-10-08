@@ -48,7 +48,7 @@ class CardTests(unittest.TestCase):
 
     def test_ids_are_unique_and_ordered(self):
         ids = [c.id for c in panel.cards(STATUS)]
-        self.assertEqual(ids, ["version", "updates", "apps", "ollama", "gpu", "disk", "hermes", "search"])
+        self.assertEqual(ids, ["version", "updates", "accounts", "apps", "ollama", "gpu", "disk", "hermes", "search"])
 
     def test_updates(self):
         self.assertEqual(by_id(STATUS)["updates"].value, "3 updates available")
@@ -101,7 +101,7 @@ class CardTests(unittest.TestCase):
         self.assertEqual(by_id({**STATUS, "search_index_age_seconds": None})["search"].value, "Not built yet")
 
     def test_sparse_status_does_not_raise(self):
-        self.assertEqual(len(panel.cards({})), 8)
+        self.assertEqual(len(panel.cards({})), 9)
 
 
 APPS = {"checked_at": "2026-10-08T10:00:00Z", "online": True, "updates": 2, "user_updates": 1, "apps": [
@@ -185,6 +185,70 @@ class AppsTests(unittest.TestCase):
         self.assertIn("Up to date", done["detail"])
         off = rows_by_id({**UPDATES, "apps": {**APPS, "online": False, "apps": []}})["apps"]
         self.assertFalse(off["available"])
+
+
+ACCOUNTS_DONE = {"git": {"installed": True, "name": "Ada", "email": "ada@example.com", "ready": True},
+                 "github": {"installed": True, "signed_in": True, "login": "octocat"}}
+ACCOUNTS_NONE = {"git": {"installed": True, "name": "", "email": "", "ready": False},
+                 "github": {"installed": True, "signed_in": False, "login": ""}}
+
+
+class AccountsTests(unittest.TestCase):
+    def test_state(self):
+        s = panel.accounts_state(ACCOUNTS_DONE)
+        self.assertTrue(s["done"] and s["git_ready"] and s["signed_in"])
+        self.assertEqual((s["login"], s["name"]), ("octocat", "Ada"))
+        self.assertIn("Git signs your work as Ada", s["git_text"])
+        self.assertIn("octocat", s["github_text"])
+        n = panel.accounts_state(ACCOUNTS_NONE)
+        self.assertFalse(n["done"])
+        self.assertEqual((n["git_text"], n["github_text"]), ("Git does not know your name yet", "Not signed in to GitHub"))
+        half = panel.accounts_state({**ACCOUNTS_DONE, "git": {"name": "Ada", "email": ""}})
+        self.assertFalse(half["git_ready"])                           # a name without an e-mail still stops git commit
+        missing_gh = panel.accounts_state({**ACCOUNTS_NONE, "github": {"installed": False}})
+        self.assertIn("not installed", missing_gh["github_text"])
+        for bad in (None, {}, "x", {"github": {}}):
+            self.assertIsNone(panel.accounts_state(bad))
+
+    def test_overview_card(self):
+        ok = by_id({**STATUS, "accounts": ACCOUNTS_DONE})["accounts"]
+        self.assertEqual((ok.value, ok.level, ok.page), ("Ready", "ok", "accounts"))
+        todo = by_id({**STATUS, "accounts": ACCOUNTS_NONE})["accounts"]
+        self.assertEqual((todo.value, todo.level), ("Needs setting up", "warn"))
+        self.assertIn("Git name and e-mail", todo.detail)
+        self.assertIn("GitHub sign-in", todo.detail)
+        only_github = by_id({**STATUS, "accounts": {**ACCOUNTS_DONE, "github": {"installed": True, "signed_in": False}}})["accounts"]
+        self.assertEqual(only_github.detail, "GitHub sign-in (one minute, no terminal).")
+        self.assertEqual(by_id(STATUS)["accounts"].value, "Not checked yet")
+
+    def test_identity_problems_are_in_plain_words(self):
+        self.assertEqual(panel.identity_problem("Ada Lovelace", "ada@example.com"), "")
+        self.assertEqual(panel.identity_problem("  Ada  ", "  ada@example.com "), "")
+        self.assertEqual(panel.identity_problem("", "ada@example.com"), "Type your name.")
+        self.assertIn("e-mail", panel.identity_problem("Ada", "ada"))
+        self.assertIn("e-mail", panel.identity_problem("Ada", "ada@host"))
+        self.assertIn("characters", panel.identity_problem("Ada <x>", "ada@example.com"))
+        self.assertIn("characters", panel.identity_problem("a" * 101, "ada@example.com"))
+
+    def test_suggestion_prefers_the_private_address_and_falls_back_to_the_login(self):
+        s = {"login": "octocat", "name": "The Octocat", "public_email": "octo@example.com",
+             "private_email": "1+octocat@users.noreply.github.com"}
+        self.assertEqual(panel.suggested_identity(s), ("The Octocat", "1+octocat@users.noreply.github.com"))
+        self.assertEqual(panel.suggested_identity(s, private=False), ("The Octocat", "octo@example.com"))
+        no_public = {**s, "public_email": ""}
+        self.assertEqual(panel.suggested_identity(no_public, private=False)[1], "1+octocat@users.noreply.github.com")
+        self.assertEqual(panel.suggested_identity({**s, "name": ""})[0], "octocat")
+        self.assertIsNone(panel.suggested_identity(None))
+        self.assertIsNone(panel.suggested_identity({}))
+
+    def test_login_events_parse_and_noise_is_ignored(self):
+        self.assertEqual(panel.parse_event('{"event": "code", "code": "ABCD-1234", "url": "u"}')["code"], "ABCD-1234")
+        for noise in ("", "! First copy your one-time code", "[1, 2]", '{"no": "event"}', "{bad json"):
+            self.assertIsNone(panel.parse_event(noise), noise)
+
+    def test_the_login_command_is_the_fixed_helper(self):
+        self.assertEqual(panel.ACCOUNTS_LOGIN, [panel.ACCOUNTS, "github", "login", "--json"])
+        self.assertNotIn("sudo", panel.ACCOUNTS_LOGIN)
 
 
 class DiagnosticsTests(unittest.TestCase):
