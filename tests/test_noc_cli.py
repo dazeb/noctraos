@@ -88,7 +88,7 @@ class Env:
     def env(self, **extra):
         env = {k: v for k, v in os.environ.items() if k != "NOCTRAOS_MODEL"}
         env.update(HOME=str(self.home), XDG_CONFIG_HOME=str(self.home / ".config"),
-                   NOC_OLLAMA_URL=self.url, PATH=f"{self.bin}:{os.environ['PATH']}")
+                   NOC_OLLAMA_URL=self.url, PATH=f"{self.bin}:{os.environ['PATH']}", NOC_TEST_HOOKS="1")
         env.update(extra)
         return env
 
@@ -107,6 +107,28 @@ class Env:
 def bash_fn(expr):
     return subprocess.run(["bash", "-c", f'source "{NOC}"; {expr}'],
                           capture_output=True, text=True, check=True).stdout.strip()
+
+
+class TestHookTests(unittest.TestCase):
+    """Root never honours the NOC_* stand-in variables (so the privileged helper and `sudo noc update` always run the installed,
+    root-owned copies), unless a test says so with NOC_TEST_HOOKS. `id` is faked here so this runs as any user."""
+
+    def resolved(self, uid, **env):
+        script = f'id() {{ echo {uid}; }}; source "{NOC}"; echo "$SELFUPDATE $UPSTREAM $ACCOUNTS"'
+        out = subprocess.run(["bash", "-c", script], capture_output=True, text=True,
+                             env={**{k: v for k, v in os.environ.items() if not k.startswith("NOC_")},
+                                  "NOC_SELFUPDATE": "/x/su", "NOC_UPSTREAM": "/x/up", "NOC_ACCOUNTS": "/x/ac", **env})
+        return out.stdout.strip().split()
+
+    def test_a_normal_user_can_point_noc_at_stand_ins(self):
+        self.assertEqual(self.resolved(1000), ["/x/su", "/x/up", "/x/ac"])
+
+    def test_root_ignores_them(self):
+        self.assertEqual(self.resolved(0), ["/usr/local/libexec/noctraos/noc-selfupdate", "/usr/local/bin/noc-upstream",
+                                            "/usr/local/bin/noc-accounts"])
+
+    def test_root_honours_them_only_when_a_test_asks(self):
+        self.assertEqual(self.resolved(0, NOC_TEST_HOOKS="1"), ["/x/su", "/x/up", "/x/ac"])
 
 
 class SuggestionTests(unittest.TestCase):
@@ -398,6 +420,27 @@ class UpdateTests(unittest.TestCase):
         lines = [json.loads(line) for line in result.stdout.splitlines()]
         return result, lines
 
+    def test_apps_step_as_root_runs_the_tracker_as_the_asking_user_or_refuses(self):
+        """These are the person's own apps, never root's: as root the step runs through `sudo -u $SUDO_USER`, and refuses without
+        one. `id` is faked so this runs as any user, and a stub sudo records what it was asked to run."""
+        e = Env(self)
+        e.stub("sudo", 'echo "sudo $*"')
+        e.stub("tracker", "echo tracker-ran")
+
+        def step(sudo_user):
+            script = (f'id() {{ echo 0; }}; source "{NOC}"; UPSTREAM="{e.bin}/tracker"; '
+                      f'{f"SUDO_USER={sudo_user}; " if sudo_user else "unset SUDO_USER; "}step_apps')
+            return subprocess.run(["bash", "-c", script], capture_output=True, text=True, env=e.env())
+        ok = step("ada")
+        self.assertEqual(ok.returncode, 0, ok.stderr)
+        self.assertIn(f"sudo -u ada -H {e.bin}/tracker update", ok.stdout)
+        refused = step("")
+        self.assertNotEqual(refused.returncode, 0)
+        self.assertIn("run this as your own user", refused.stdout)
+        self.assertNotIn("tracker-ran", refused.stdout)
+        self.assertNotEqual(step("root").returncode, 0)
+
+    @unittest.skipIf(os.geteuid() == 0, "as root the step runs as SUDO_USER through sudo; the test above covers that")
     def test_apps_step_runs_the_tracker_update_and_reports_failure(self):
         e = Env(self)
         e.stub("tracker", 'echo "Hermes is now 0.21.7."; [ "$1" = update ] || exit 9; [ -z "${TRACKER_FAIL:-}" ]')
