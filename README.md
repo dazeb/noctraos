@@ -25,10 +25,13 @@ in, and the desktop is dark with a little amber along the way.
   the web. Browser history is available if you opt in.
 - **AI on your computer.** Ollama runs local models; VS Code and Continue are
   set up to use them.
-- **A Control Panel.** Updates, AI models, your graphics card, a health check,
-  and your privacy choices in one window, with no terminal needed.
+- **A Control Panel.** Updates, your apps, Git and GitHub setup, AI models,
+  your graphics card, a health check, and your privacy choices in one window,
+  with no terminal needed.
 - **Assistants within reach.** Hermes Desktop, Codex, Claude Code, OpenCode,
-  Grok, Gemini CLI, and Qwen Code have a place in the Start panel.
+  Grok, Gemini CLI, and Qwen Code have a place in the Start panel. Hermes,
+  Ollama and the coding agents follow their publishers' newest releases, and
+  the Control Panel shows which version you have.
 - **The everyday tools, too.** A browser, office apps, media tools, a task
   manager, and support for Flatpaks and AppImages.
 
@@ -90,7 +93,7 @@ Questions, press, or a security report: **[admin@noctraos.dev](mailto:admin@noct
 | Setup, configuration, GPU support, maintenance, or troubleshooting | [Setup guide](docs/setup.md) |
 | The project's direction and principles | [Objectives](docs/objectives.md) |
 | The welcome, dock, Start panel, and search experience | [Onboarding](docs/onboarding.md) · [Desktop layout](docs/desktop-layout.md) |
-| The Control Panel: updates, models, hardware, health, privacy | [Control Panel](docs/control-panel.md) |
+| The Control Panel: updates, apps, accounts, models, hardware, health, privacy | [Control Panel](docs/control-panel.md) |
 | How an installed system gets new features: signed, staged rolling updates | [Updates](docs/updates.md) |
 | Themes and the included app set | [Theme design](docs/theme-design.md) · [App comparison](docs/omarchy-parity.md) |
 | Testing and your first change | [Contributing](CONTRIBUTING.md) |
