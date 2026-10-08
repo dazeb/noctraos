@@ -43,7 +43,7 @@ echo "gh $*" >> "$STUB_LOG"
 '''
 
 
-def run(listing, remote_files=None, lsf_fail=False, edit=None, drop=False, corrupt=""):
+def run(listing, remote_files=None, lsf_fail=False, edit=None, drop=False, corrupt="", extra_env=None):
     with tempfile.TemporaryDirectory() as directory:
         d = Path(directory)
         rel = d / "build/release" / f"v{VERSION}"
@@ -70,7 +70,7 @@ def run(listing, remote_files=None, lsf_fail=False, edit=None, drop=False, corru
                "R2_SECRET_ACCESS_KEY": "x", "R2_ENDPOINT": "x", "R2_BUCKET": "b", "STUB_LISTING": str(d / "listing"),
                "STUB_REMOTE": str(remote), "STUB_LOG": str(d / "log"), "STUB_REL": str(rel),
                "STUB_LSF_FAIL": "1" if lsf_fail else "", "STUB_CURL_DROP": "1" if drop else "", "STUB_CORRUPT": corrupt,
-               "VERIFY_RETRY_DELAY": "0"}
+               "VERIFY_RETRY_DELAY": "0", **(extra_env or {})}
         result = subprocess.run(["bash", str(SCRIPT), str(d / "build")], capture_output=True, text=True, env=env)
         log = (d / "log").read_text().splitlines() if (d / "log").exists() else []
         return result, log
@@ -87,6 +87,27 @@ class PublishTests(unittest.TestCase):
         uploads = [line for line in log if not line.startswith("gh ")]
         self.assertEqual([Path(u).name for u in uploads], NAMES + ["SHA256SUMS"])
         self.assertTrue(any(line.startswith("gh release create") for line in log))
+
+    def test_hetzner_store_uploads_to_its_bucket_and_verifies_through_its_public_host(self):
+        env = {"RELEASE_STORE": "hetzner", "AWS_ACCESS_KEY_ID": "x", "AWS_SECRET_ACCESS_KEY": "x",
+               "NOCTRAOS_S3_ENV_FILE": "/nonexistent", "R2_ACCESS_KEY_ID": "", "R2_SECRET_ACCESS_KEY": ""}
+        result, log = run("", extra_env=env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        uploads = [line for line in log if not line.startswith("gh ")]
+        self.assertTrue(all(u.startswith("hz:noctraos-releases/releases/") for u in uploads), uploads)
+        self.assertIn("noctraos-releases.fsn1.your-objectstorage.com", result.stdout)
+
+    def test_hetzner_store_without_credentials_stops(self):
+        env = {"RELEASE_STORE": "hetzner", "NOCTRAOS_S3_ENV_FILE": "/nonexistent", "AWS_ACCESS_KEY_ID": "",
+               "AWS_SECRET_ACCESS_KEY": ""}
+        result, log = run("", extra_env=env)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(log, [])
+
+    def test_unknown_store_is_refused(self):
+        result, log = run("", extra_env={"RELEASE_STORE": "nowhere"})
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(log, [])
 
     def test_a_dropped_download_resumes_and_still_verifies(self):
         result, log = run("", drop=True)

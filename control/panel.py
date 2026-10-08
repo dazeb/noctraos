@@ -322,10 +322,11 @@ def noc_run(*args, timeout=120):
 # ---- Updates ---------------------------------------------------------------------------------
 
 # Steps that need root run through the helper; the rest run as the user.
-PRIVILEGED_STEPS = ('apt', 'flatpak')
+PRIVILEGED_STEPS = ('apt', 'flatpak', 'noctraos')
 USER_STEPS = ('mise', 'models')
 STEP_ORDER = PRIVILEGED_STEPS + USER_STEPS
-STEP_TITLES = {'apt': 'System packages', 'flatpak': 'Apps (Flatpak)', 'mise': 'Programming languages',
+STEP_TITLES = {'apt': 'System packages', 'flatpak': 'Apps (Flatpak)', 'noctraos': 'NoctraOS features',
+               'mise': 'Programming languages',
                'models': 'AI models'}
 
 
@@ -365,6 +366,21 @@ def update_rows(updates):
         row('flatpak', nothing, False, False)
     else:
         row('flatpak', _plural(flatpak, 'update'), True, True)
+    nu = updates.get('noctraos')
+    if not isinstance(nu, dict):
+        row('noctraos', 'Could not check.' if offline else 'Not available on this install yet.', False, False)
+    elif nu.get('status') == 'available' and nu.get('available'):
+        a = nu['available']
+        detail = f'NoctraOS {a.get("version", "")} (update {a.get("serial", "")})'
+        if a.get('notes'):
+            detail += f': {a["notes"]}'
+        if a.get('relogin') or a.get('reboot'):
+            detail += '. You will need to ' + ('restart' if a.get('reboot') else 'sign out and back in') + ' afterwards.'
+        row('noctraos', detail, True, True)
+    elif nu.get('status') in ('current', 'staged'):
+        row('noctraos', 'Up to date.' if nu['status'] == 'current' else 'Up to date. A newer update is being rolled out in stages and will reach you soon.', False, False)
+    else:
+        row('noctraos', 'Could not check.' if nu.get('status') == 'unreachable' else 'Could not verify the update information, so nothing was changed.', False, False)
     if mise is None:
         row('mise', 'Could not check.', False, False)
     elif mise == 0:

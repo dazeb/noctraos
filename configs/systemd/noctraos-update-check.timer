@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily look for a NoctraOS update
+
+[Timer]
+OnStartupSec=10min
+OnUnitInactiveSec=1d
+RandomizedDelaySec=1h
+Unit=noctraos-update-check.service
+
+[Install]
+WantedBy=timers.target

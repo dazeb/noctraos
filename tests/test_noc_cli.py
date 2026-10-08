@@ -215,6 +215,23 @@ class DoctorStatusTests(unittest.TestCase):
         self.assertEqual(by_id["ollama"]["status"], "ok")
         self.assertIn(by_id["appmanager"]["fix"], (None, "module:04d_appmanager.sh"))
 
+    def update_row(self, status_json=None):
+        e = Env(self)
+        extra = {}
+        if status_json is not None:
+            e.stub("selfupdate", f"echo '{status_json}'")
+            extra["NOC_SELFUPDATE"] = str(e.bin / "selfupdate")
+        return {r["id"]: r for r in json.loads(e.noc("doctor", "--json", **extra).stdout)}["noctraos-update"]
+
+    def test_doctor_noctraos_update_rows(self):
+        self.assertEqual(self.update_row()["status"], "info")   # no updater on this system yet
+        ok = self.update_row('{"signing_key": true, "failed_migrations": [], "serial": 3, "channel": "stable"}')
+        self.assertEqual((ok["status"], ok["detail"]), ("ok", "update 3, channel stable"))
+        stuck = self.update_row('{"signing_key": true, "failed_migrations": ["0002_x.sh"], "serial": 3, "channel": "stable"}')
+        self.assertEqual(stuck["status"], "warn")
+        self.assertIn("0002_x.sh", stuck["detail"])
+        self.assertEqual(self.update_row('{"signing_key": false, "failed_migrations": [], "serial": 0, "channel": "stable"}')["status"], "warn")
+
     def flatpak_row(self, version, changelog=None):
         e = Env(self)
         e.stub("flatpak", f'[ "$1" = "--version" ] && echo "Flatpak {version}"')
@@ -305,6 +322,21 @@ class UpdatesCommandTests(unittest.TestCase):
         self.assertEqual(data["flatpak"]["count"], None)
         self.assertEqual(data["mise"]["count"], None)
 
+    def test_noctraos_update_is_null_without_the_updater_and_passed_through_with_it(self):
+        e = Env(self)
+        e.stub("ollama", "true")
+        self.assertIsNone(self.run_updates(e)["noctraos"])   # CI has no /usr/local/libexec/noctraos
+        e.stub("selfupdate", 'echo \'{"status": "available", "channel": "stable", "available": {"serial": 4, "version": "0.3.3"}}\'')
+        data = json.loads(e.noc("updates", NOC_ONLINE_URLS=e.url + "/api/version", NOC_SELFUPDATE=str(e.bin / "selfupdate")).stdout)
+        self.assertEqual(data["noctraos"]["status"], "available")
+        self.assertEqual(data["noctraos"]["available"]["serial"], 4)
+
+    def test_a_garbled_updater_answer_becomes_null_not_a_broken_document(self):
+        e = Env(self)
+        e.stub("selfupdate", "echo not-json")
+        data = json.loads(e.noc("updates", NOC_ONLINE_URLS=e.url + "/api/version", NOC_SELFUPDATE=str(e.bin / "selfupdate")).stdout)
+        self.assertIsNone(data["noctraos"])
+
     def test_apt_size_parser_sums_the_size_column(self):
         lines = ("'http://a/x_1.deb' x_1.deb 94556 MD5Sum:7454\n"
                  "'https://b/y_2.deb' y_2.deb 7776 MD5Sum:6666\n")
@@ -318,10 +350,24 @@ class UpdatesCommandTests(unittest.TestCase):
 
 
 class UpdateTests(unittest.TestCase):
-    def events(self, e, *args):
-        result = e.noc("update", "--json", *args)
+    def events(self, e, *args, **extra):
+        result = e.noc("update", "--json", *args, **extra)
         lines = [json.loads(line) for line in result.stdout.splitlines()]
         return result, lines
+
+    def test_noctraos_step_runs_the_updater_and_reports_failure(self):
+        e = Env(self)
+        e.stub("sudo", 'if [ "$1" = "-n" ]; then shift; fi; exec "$@"')
+        e.stub("selfupdate", 'echo "Updated to NoctraOS 0.3.3 (update 4)."; [ "$1" = apply ] || exit 9')
+        result, ev = self.events(e, "--only", "noctraos", NOC_SELFUPDATE=str(e.bin / "selfupdate"))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual([x for x in ev if x["event"] == "step"][0]["id"], "noctraos")
+        self.assertTrue(any("update 4" in x.get("line", "") for x in ev))
+        self.assertTrue([x for x in ev if x["event"] == "step_done"][0]["ok"])
+        e.stub("selfupdate", "exit 1")
+        result, ev = self.events(e, "--only", "noctraos", NOC_SELFUPDATE=str(e.bin / "selfupdate"))
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse([x for x in ev if x["event"] == "step_done"][0]["ok"])
 
     def test_json_event_stream(self):
         e = Env(self)

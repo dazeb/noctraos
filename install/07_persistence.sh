@@ -66,6 +66,25 @@ sudo install -d -m 755 /usr/local/libexec/noctraos
 sudo install -m 755 "$REPO_ROOT/bin/noc-privileged" /usr/local/libexec/noctraos/noc-privileged
 sudo install -m 644 "$REPO_ROOT/configs/polkit/dev.noctraos.privileged.policy" \
   /usr/share/polkit-1/actions/dev.noctraos.privileged.policy
+log "Installing the NoctraOS updater (signed, staged updates of the NoctraOS layer; docs/updates.md)..."
+sudo install -m 755 "$REPO_ROOT/bin/noc-selfupdate" /usr/local/libexec/noctraos/noc-selfupdate
+sudo install -d -m 755 /usr/local/share/noctraos /etc/noctraos
+sudo install -m 644 "$REPO_ROOT/configs/update/update-signers" /usr/local/share/noctraos/update-signers
+# The channel is the person's choice and is never overwritten; the mirror list stays in the code so an update can change it.
+if [ ! -f /etc/noctraos/update.json ]; then
+  printf '{"channel": "stable"}\n' | sudo tee /etc/noctraos/update.json >/dev/null
+fi
+# A daily look at one small signed file (a plain GET, nothing is sent), and a login-time catch-up for per-account migrations.
+for unit in noctraos-update-check.service noctraos-update-check.timer; do
+  sudo install -D -m 644 "$REPO_ROOT/configs/systemd/$unit" "/etc/systemd/user/$unit"
+done
+if [ ! -L /etc/systemd/user/timers.target.wants/noctraos-update-check.timer ]; then
+  sudo systemctl --global enable noctraos-update-check.timer >/dev/null 2>&1 \
+    || warn "Could not enable the NoctraOS update check timer"
+fi
+sudo install -D -m 644 "$REPO_ROOT/configs/autostart/noctraos-update-migrate.desktop" \
+  /etc/xdg/autostart/noctraos-update-migrate.desktop
+
 # The helper re-runs install modules as root, so it must never run them from a clone the user can
 # edit: keep a root-owned snapshot of what the modules read and run only that. Refreshed only when
 # the content changed, so a second run is a no-op.
@@ -73,7 +92,7 @@ SNAPSHOT=/usr/local/share/noctraos/repo
 STAGE="$(mktemp -d)"
 chmod 755 "$STAGE"   # mktemp makes it 0700; the snapshot must be traversable so the diff below can read it
 trap 'rm -rf "$STAGE"' EXIT
-for item in VERSION install.sh install bin configs scripts assets help extensions branding search control; do
+for item in VERSION install.sh install bin configs scripts assets help extensions branding search control migrations; do
   [ -e "$REPO_ROOT/$item" ] && cp -a "$REPO_ROOT/$item" "$STAGE/"
 done
 rm -rf "$STAGE/assets/promo" "$STAGE/assets/social"

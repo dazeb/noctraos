@@ -50,6 +50,7 @@ doctor() {
   check "python3 venv (for torf)" "python3 -c 'import venv, ensurepip'" "apt install python3-venv"
   check "google-chrome (social cards; Pillow comes from a venv)" "command -v google-chrome" "the PR still opens without it, cards are not redrawn"
   check "rclone and R2 credentials" "command -v rclone && test -r \$HOME/secrets/cloudflare-r2.env" "$HOME/secrets/cloudflare-r2.env"
+  check "Hetzner S3 credentials (only for RELEASE_STORE=hetzner)" "test -r \$HOME/secrets/noctraos-s3.env" "$HOME/secrets/noctraos-s3.env"
   check "gh logged in" "gh auth status" "gh auth login"
   check "ssh push to GitHub" "{ ssh -o BatchMode=yes -T git@github.com 2>&1 || true; } | grep 'successfully authenticated' >/dev/null" "an ssh key GitHub accepts"
   check "GitLab token" "test -r \${GITLAB_ENV:-\$HOME/secrets/gitlab.env}" "$HOME/secrets/gitlab.env"

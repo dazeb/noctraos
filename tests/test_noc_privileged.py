@@ -24,9 +24,17 @@ class ValidateTests(unittest.TestCase):
     def test_update_steps(self):
         self.assertTrue(self.ok("validate_update apt"))
         self.assertTrue(self.ok("validate_update apt,flatpak"))
+        self.assertTrue(self.ok("validate_update apt,flatpak,noctraos"))
         for bad in ("", "mise", "apt,mise", "apt;id", "apt flatpak", "$(id)", "apt,", ",apt", "../apt"):
             with self.subTest(steps=bad):
                 self.assertFalse(self.ok(f"validate_update '{bad}'"))
+
+    def test_update_channels(self):
+        for good in ("stable", "nightly"):
+            self.assertTrue(self.ok(f"validate_channel {good}"), good)
+        for bad in ("", "beta", "stable,nightly", "../stable", "$(id)", "Stable", "--help"):
+            with self.subTest(channel=bad):
+                self.assertFalse(self.ok(f"validate_channel '{bad}'"))
 
     def test_gpu_vendors(self):
         for good in ("nvidia", "amd", "all"):

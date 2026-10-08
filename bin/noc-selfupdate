@@ -1,0 +1,772 @@
+#!/usr/bin/python3
+"""noc-selfupdate — update the NoctraOS layer (provisioner, theme, extensions, Control Panel, noc itself).
+
+  noc-selfupdate check [--json]            read-only: is a verified update available for this machine?
+  noc-selfupdate apply                     root: fetch, verify, swap in, migrate, smoke-test (rolls back on failure)
+  noc-selfupdate notify                    desktop notice once per new update (opt out: touch ~/.config/noctraos/no-update-check)
+  noc-selfupdate migrate --scope system    root: run pending system migrations from the installed snapshot
+  noc-selfupdate migrate --scope user      run pending per-user migrations for the calling user
+  noc-selfupdate rollback                  root: put the previous snapshot back
+  noc-selfupdate set-channel stable|nightly   root
+  noc-selfupdate status [--json]
+
+The design is in docs/updates.md. In short: a channel publishes a small manifest signed with the NoctraOS
+update key (ssh-keygen -Y, ed25519); the manifest names an immutable bundle by SHA-256. Mirrors are untrusted
+transports, so they are all read and the highest verified serial wins. Nothing is trusted until the signature,
+the channel, the freshness window, the serial (never backwards) and the bundle hash all agree.
+
+Everything that touches the machine is root-owned code run through noc-privileged; nothing here takes a path,
+URL or command from the caller. NOC_UPDATE_ROOT (tests only) moves every path under a prefix and allows file:// mirrors.
+"""
+import argparse
+import contextlib
+import datetime
+import fcntl
+import hashlib
+import json
+import os
+import pwd
+import re
+import shutil
+import subprocess
+import sys
+import tarfile
+import tempfile
+import time
+import urllib.error
+import urllib.request
+
+FORMAT = 1
+IDENTITY = 'release@noctraos.dev'
+NAMESPACE = 'noctraos-update'
+CHANNELS = ('stable', 'nightly')
+DEFAULT_MIRRORS = ['https://dl.noctraos.dev/updates', 'https://noctraos-releases.fsn1.your-objectstorage.com/updates']
+# What a bundle may contain. Must stay equal to the item list in install/07_persistence.sh (a test pins it).
+BUNDLE_ITEMS = ['VERSION', 'install.sh', 'install', 'bin', 'configs', 'scripts', 'assets', 'help', 'extensions',
+                'branding', 'search', 'control', 'migrations']
+META = '.update.json'
+MAX_MANIFEST = 256 * 1024
+MAX_BUNDLE = 200 * 1024 * 1024
+MAX_UNPACKED = 400 * 1024 * 1024
+MAX_MEMBERS = 20000
+MIN_FREE = 600 * 1024 * 1024
+BUNDLE_PATH = re.compile(r'^bundles/noctraos-[0-9]{1,9}\.tar\.gz$')
+VERSION_RE = re.compile(r'^[0-9][0-9A-Za-z.+~-]{0,31}$')
+TIME_FORMAT = '%Y-%m-%dT%H:%M:%SZ'
+MIGRATION_RE = re.compile(r'^[0-9]{4}_[a-z0-9][a-z0-9_-]*\.sh$')
+
+
+class UpdateError(Exception):
+    """A reason the update cannot proceed; the message is shown to the person."""
+
+
+class NotPublished(UpdateError):
+    """The mirror answered, but there is no such file (HTTP 404/410): nothing has been published there yet."""
+
+
+# ---- paths ---------------------------------------------------------------------------------------
+
+def _root():
+    return os.environ.get('NOC_UPDATE_ROOT', '')
+
+
+def path(p):
+    return _root() + p
+
+
+def is_test():
+    return bool(_root())
+
+
+def conf_path():
+    return path('/etc/noctraos/update.json')
+
+
+def state_dir():
+    return path('/var/lib/noctraos')
+
+
+def snapshot_dir():
+    return path('/usr/local/share/noctraos/repo')
+
+
+def signers_path():
+    return path('/usr/local/share/noctraos/update-signers')
+
+
+def log_dir():
+    return path('/var/log/noctraos')
+
+
+def say(msg=''):
+    print(msg, flush=True)
+
+
+# ---- config and state ----------------------------------------------------------------------------
+
+def load_config():
+    cfg = {'channel': 'stable', 'mirrors': list(DEFAULT_MIRRORS)}
+    try:
+        with open(conf_path()) as f:
+            data = json.load(f)
+    except FileNotFoundError:
+        return cfg
+    except (OSError, ValueError) as e:
+        raise UpdateError(f'{conf_path()} is not valid JSON ({e})')
+    if data.get('channel') is not None:
+        cfg['channel'] = data['channel']
+    if data.get('mirrors') is not None:
+        cfg['mirrors'] = data['mirrors']
+    if cfg['channel'] not in CHANNELS:
+        raise UpdateError(f'unknown update channel "{cfg["channel"]}" in {conf_path()}')
+    if not isinstance(cfg['mirrors'], list) or not cfg['mirrors']:
+        raise UpdateError(f'no mirrors in {conf_path()}')
+    for m in cfg['mirrors']:
+        if not isinstance(m, str) or not (m.startswith('https://') or (is_test() and m.startswith(('file://', 'http://127.0.0.1')))):
+            raise UpdateError(f'mirror "{m}" must be an https:// URL')
+    return cfg
+
+
+def load_state():
+    """Installed update serial. Missing state means a machine provisioned from a release or from main:
+    serial 0, so the first published update is applied once (harmless: every step is idempotent)."""
+    try:
+        with open(os.path.join(state_dir(), 'update-state.json')) as f:
+            s = json.load(f)
+        return {'serial': int(s.get('serial', 0)), 'version': str(s.get('version', '')),
+                'channel': s.get('channel', ''), 'applied': s.get('applied', ''), 'previous': s.get('previous'),
+                'held': int(s.get('held', 0))}
+    except (OSError, ValueError, TypeError):
+        return {'serial': 0, 'version': installed_version(), 'channel': '', 'applied': '', 'previous': None, 'held': 0}
+
+
+def save_state(state):
+    os.makedirs(state_dir(), exist_ok=True)
+    tmp = os.path.join(state_dir(), 'update-state.json.tmp')
+    with open(tmp, 'w') as f:
+        json.dump(state, f, indent=1)
+        f.write('\n')
+    os.replace(tmp, os.path.join(state_dir(), 'update-state.json'))
+
+
+def installed_version():
+    for p in (os.path.join(snapshot_dir(), 'VERSION'),):
+        with contextlib.suppress(OSError):
+            return open(p).read().strip()
+    return ''
+
+
+def now():
+    return datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0, tzinfo=None)
+
+
+def parse_time(s):
+    try:
+        return datetime.datetime.strptime(s, TIME_FORMAT)
+    except (TypeError, ValueError):
+        raise UpdateError(f'bad time "{s}" in the manifest')
+
+
+# ---- fetching and verifying ----------------------------------------------------------------------
+
+def http_get(url, limit, timeout=20):
+    req = urllib.request.Request(url, headers={'User-Agent': 'noc-selfupdate'})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            data = r.read(limit + 1)
+    except urllib.error.HTTPError as e:
+        if e.code in (404, 410):
+            raise NotPublished(f'{url} is not published')
+        raise UpdateError(f'could not fetch {url}: HTTP {e.code}')
+    except (urllib.error.URLError, OSError, ValueError) as e:
+        raise UpdateError(f'could not fetch {url}: {getattr(e, "reason", e)}')
+    if len(data) > limit:
+        raise UpdateError(f'{url} is larger than {limit} bytes')
+    return data
+
+
+def verify_signature(manifest, sig):
+    signers = signers_path()
+    if not os.path.isfile(signers):
+        raise UpdateError(f'no update signing key installed ({signers})')
+    with tempfile.NamedTemporaryFile('wb', suffix='.sig') as f:
+        f.write(sig)
+        f.flush()
+        try:
+            r = subprocess.run(['ssh-keygen', '-Y', 'verify', '-f', signers, '-I', IDENTITY, '-n', NAMESPACE,
+                                '-s', f.name], input=manifest, capture_output=True, timeout=30)
+        except (OSError, subprocess.SubprocessError) as e:
+            raise UpdateError(f'cannot run ssh-keygen to verify the update ({e})')
+    if r.returncode != 0:
+        raise UpdateError('the update manifest signature does not verify')
+
+
+def validate_manifest(m, cfg):
+    if not isinstance(m, dict) or m.get('format') != FORMAT:
+        raise UpdateError(f'manifest format {m.get("format") if isinstance(m, dict) else "?"} is not supported by '
+                          'this updater: update the system first (apt upgrade)')
+    if m.get('channel') != cfg['channel']:
+        raise UpdateError(f'manifest is for channel "{m.get("channel")}", not "{cfg["channel"]}"')
+    serial = m.get('serial')
+    if not isinstance(serial, int) or isinstance(serial, bool) or serial < 1:
+        raise UpdateError('manifest has no valid serial')
+    if not isinstance(m.get('version'), str) or not VERSION_RE.match(m['version']):
+        raise UpdateError('manifest has no valid version')
+    b = m.get('bundle')
+    if not isinstance(b, dict) or not BUNDLE_PATH.match(str(b.get('path', ''))) \
+            or not re.fullmatch(r'[0-9a-f]{64}', str(b.get('sha256', ''))) \
+            or not isinstance(b.get('size'), int) or not 0 < b['size'] <= MAX_BUNDLE:
+        raise UpdateError('manifest bundle entry is invalid')
+    if b['path'] != f'bundles/noctraos-{serial}.tar.gz':
+        raise UpdateError('manifest bundle does not belong to its serial')
+    r = m.get('rollout', {})
+    pct = r.get('percent') if isinstance(r, dict) else None
+    if not isinstance(pct, int) or isinstance(pct, bool) or not 0 <= pct <= 100:
+        raise UpdateError('manifest rollout is invalid')
+    parse_time(m.get('issued'))
+    parse_time(m.get('expires'))
+    return m
+
+
+def machine_bucket(serial):
+    """0..99, stable for this machine and this serial, different order for every serial, never sent anywhere."""
+    mid = ''
+    with contextlib.suppress(OSError):
+        mid = open(path('/etc/machine-id')).read().strip()
+    digest = hashlib.sha256(f'noctraos-update-rollout:{serial}:{mid}'.encode()).hexdigest()
+    return int(digest[:8], 16) % 100
+
+
+def fetch_manifests(cfg):
+    """Every mirror is read; the highest serial that verifies wins. Returns (manifest, errors, missing), where
+    missing is True when no mirror failed for any reason other than "nothing is published there yet"."""
+    best, errors, unpublished = None, [], 0
+    for base in cfg['mirrors']:
+        base = base.rstrip('/')
+        try:
+            url = f'{base}/{cfg["channel"]}/manifest.json'
+            manifest = last = None
+            for attempt in (1, 2):   # a publish writes manifest and signature one after the other
+                manifest = http_get(url, MAX_MANIFEST)
+                sig = http_get(url + '.sig', MAX_MANIFEST)
+                try:
+                    verify_signature(manifest, sig)
+                    last = None
+                    break
+                except UpdateError as e:
+                    last = e
+                    if attempt == 1:
+                        time.sleep(0 if is_test() else 3)
+            if last is not None:
+                raise last
+            try:
+                data = json.loads(manifest)
+            except ValueError:
+                raise UpdateError('the signed manifest is not JSON')
+            validate_manifest(data, cfg)
+            if best is None or data['serial'] > best['serial']:
+                best = data
+        except NotPublished as e:
+            errors.append(f'{base}: {e}')
+            unpublished += 1
+        except UpdateError as e:
+            errors.append(f'{base}: {e}')
+    return best, errors, bool(errors) and unpublished == len(errors)
+
+
+def evaluate(manifest, state, when=None):
+    """(status, detail). status: available | current | held | staged | expired."""
+    when = when or now()
+    if when > parse_time(manifest['expires']):
+        return 'expired', 'the newest update information is out of date (expired); try again when online'
+    if manifest['serial'] <= state['serial']:
+        return 'current', 'up to date'
+    if manifest['serial'] <= state.get('held', 0):
+        return 'held', 'this update failed its checks or was rolled back here; it will not be offered again. A newer update will be'
+    if machine_bucket(manifest['serial']) >= manifest['rollout']['percent']:
+        return 'staged', 'an update exists and is being rolled out in stages; it will reach this machine soon'
+    return 'available', ''
+
+
+def check(cfg):
+    state = load_state()
+    out = {'channel': cfg['channel'], 'installed': {'serial': state['serial'], 'version': state['version']},
+           'status': 'unknown', 'detail': '', 'available': None, 'online': True}
+    manifest, errors, missing = fetch_manifests(cfg)
+    if manifest is None:
+        out['errors'] = errors
+        if missing:
+            out['status'], out['detail'] = 'current', 'no updates have been published on this channel yet'
+            return out, None
+        out['online'] = not all(('could not fetch' in e) for e in errors)
+        out['detail'] = errors[0] if errors else 'no update information'
+        out['status'] = 'unreachable' if not out['online'] else 'unverified'
+        return out, None
+    status, detail = evaluate(manifest, state)
+    out['status'], out['detail'] = status, detail
+    if status == 'available':
+        out['available'] = {'serial': manifest['serial'], 'version': manifest['version'],
+                            'notes': manifest.get('notes', ''), 'size': manifest['bundle']['size'],
+                            'relogin': bool(manifest.get('relogin')), 'reboot': bool(manifest.get('reboot'))}
+    if errors:
+        out['errors'] = errors
+    return out, manifest
+
+
+# ---- safe unpacking ------------------------------------------------------------------------------
+
+def safe_extract(tar_path, dest):
+    """Unpack only regular files and directories under the allowed top-level names. Ownership comes from
+    the running user (root), permissions are normalised, nothing outside dest can be written."""
+    allowed = set(BUNDLE_ITEMS) | {META}
+    total = count = 0
+    os.makedirs(dest, mode=0o755)
+    with tarfile.open(tar_path, 'r:gz') as tar:
+        for member in tar:
+            count += 1
+            if count > MAX_MEMBERS:
+                raise UpdateError('bundle has too many files')
+            name = member.name
+            parts = [p for p in name.split('/') if p not in ('', '.')]
+            if name.startswith('/') or '..' in parts or not parts:
+                raise UpdateError(f'bundle member "{name}" has an unsafe path')
+            if parts[0] not in allowed:
+                raise UpdateError(f'bundle member "{name}" is outside the allowed layout')
+            if not (member.isfile() or member.isdir()):
+                raise UpdateError(f'bundle member "{name}" is not a plain file or directory')
+            target = os.path.join(dest, *parts)
+            if member.isdir():
+                os.makedirs(target, mode=0o755, exist_ok=True)
+                continue
+            total += member.size
+            if total > MAX_UNPACKED:
+                raise UpdateError('bundle unpacks to more than the allowed size')
+            os.makedirs(os.path.dirname(target), mode=0o755, exist_ok=True)
+            src = tar.extractfile(member)
+            with open(target, 'wb') as out:
+                shutil.copyfileobj(src, out)
+            os.chmod(target, 0o755 if member.mode & 0o111 else 0o644)
+    return dest
+
+
+# ---- apply ---------------------------------------------------------------------------------------
+
+def invoking_user():
+    uid = os.environ.get('PKEXEC_UID', '')
+    if uid.isdigit() and int(uid) != 0:
+        with contextlib.suppress(KeyError):
+            return pwd.getpwuid(int(uid)).pw_name
+    name = os.environ.get('SUDO_USER', '')
+    if name and name != 'root':
+        return name
+    return ''
+
+
+def free_bytes(p):
+    st = os.statvfs(p)
+    return st.f_bavail * st.f_frsize
+
+
+def recover(snapshot):
+    """An interrupted swap leaves the snapshot missing and the previous one beside it."""
+    prev = snapshot + '.prev'
+    if not os.path.isdir(snapshot) and os.path.isdir(prev):
+        os.rename(prev, snapshot)
+        say('Recovered the previous snapshot after an interrupted update.')
+    shutil.rmtree(snapshot + '.new', ignore_errors=True)
+
+
+def run_logged(argv, logfile, env=None, cwd=None):
+    """Run a command, copy its output to the person and the update log. Returns the exit code."""
+    p = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env, cwd=cwd, text=True,
+                         errors='replace')
+    for line in p.stdout:
+        logfile.write(line)
+        logfile.flush()
+        if line.strip():
+            say('    ' + line.rstrip())
+    return p.wait()
+
+
+def clean_env(extra=None):
+    env = {'PATH': '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin', 'HOME': '/root', 'LANG': 'C.UTF-8'}
+    env.update(extra or {})
+    return env
+
+
+def refresh_system(logfile, user):
+    """Re-run the persistence module from the NEW root-owned snapshot: it installs noc, noc-privileged, the
+    Control Panel and refreshes /etc/skel. It needs the desktop user (install.sh refuses to run for bare root)."""
+    if is_test():
+        cmd = os.environ.get('NOC_UPDATE_REFRESH_CMD', 'true')
+        return run_logged(['bash', '-c', cmd], logfile, env=clean_env({'SNAPSHOT': snapshot_dir()}))
+    if not user:
+        raise UpdateError('cannot tell which desktop user asked for the update (run it from the Control Panel or '
+                          'with sudo)')
+    log = os.path.join(log_dir(), 'module-07-update.log')
+    return run_logged(['bash', os.path.join(snapshot_dir(), 'install.sh'), '--only', '07_persistence.sh'], logfile,
+                      env=clean_env({'SUDO_USER': user, 'NOCTRAOS_LOG': log}))
+
+
+def smoke(logfile):
+    """The new layer must at least start: the installed noc runs, and the snapshot is complete."""
+    snap = snapshot_dir()
+    for needed in ('VERSION', 'install.sh', 'install/lib.sh', 'install/07_persistence.sh', 'bin/noc'):
+        if not os.path.isfile(os.path.join(snap, needed)):
+            say(f'smoke test: {needed} is missing from the new snapshot')
+            return False
+    if is_test():
+        return os.environ.get('NOC_UPDATE_SMOKE', 'ok') == 'ok'
+    return run_logged(['/usr/local/bin/noc', 'status'], logfile, env=clean_env()) == 0
+
+
+def pending_migrations(scope, snapshot, done_dir):
+    d = os.path.join(snapshot, 'migrations', scope)
+    if not os.path.isdir(d):
+        return []
+    names = sorted(n for n in os.listdir(d) if MIGRATION_RE.match(n))
+    return [n for n in names if not os.path.exists(os.path.join(done_dir, n))]
+
+
+def run_migrations(scope, logfile, user=None, home=None):
+    """Run each pending migration once, in order. Done ones are recorded; a failed one is recorded and tried
+    again on the next run (migrations must be idempotent), and never stops the others from being reported."""
+    snap = snapshot_dir()
+    if scope == 'system':
+        base = os.path.join(state_dir(), 'migrations')
+    else:
+        base = os.path.join(home or os.path.expanduser('~'), '.local/state/noctraos/migrations')
+    done_dir, failed_dir = os.path.join(base, 'done'), os.path.join(base, 'failed')
+    os.makedirs(done_dir, exist_ok=True)
+    os.makedirs(failed_dir, exist_ok=True)
+    failures = []
+    for name in pending_migrations(scope, snap, done_dir):
+        say(f'  migration ({scope}): {name}')
+        env = clean_env({'NOCTRAOS_SNAPSHOT': snap, 'NOCTRAOS_MIGRATION_SCOPE': scope})
+        if scope == 'user':
+            env = dict(os.environ, NOCTRAOS_SNAPSHOT=snap, NOCTRAOS_MIGRATION_SCOPE=scope)
+            if home:
+                env['HOME'] = home
+        elif user:
+            env['NOCTRAOS_USER'] = user
+        rc = run_logged(['bash', os.path.join(snap, 'migrations', scope, name)], logfile, env=env)
+        marker = os.path.join(done_dir if rc == 0 else failed_dir, name)
+        with open(marker, 'w') as f:
+            f.write(now().strftime(TIME_FORMAT) + '\n')
+        if rc == 0:
+            with contextlib.suppress(FileNotFoundError):
+                os.unlink(os.path.join(failed_dir, name))
+        else:
+            failures.append(name)
+            say(f'  migration {name} failed (exit {rc}); it will be tried again at the next update')
+    return failures
+
+
+def failed_migrations(scope='system', home=None):
+    if scope == 'system':
+        d = os.path.join(state_dir(), 'migrations', 'failed')
+    else:
+        d = os.path.join(home or os.path.expanduser('~'), '.local/state/noctraos/migrations/failed')
+    try:
+        return sorted(os.listdir(d))
+    except OSError:
+        return []
+
+
+@contextlib.contextmanager
+def locked():
+    os.makedirs(state_dir(), exist_ok=True)
+    f = open(os.path.join(state_dir(), 'update.lock'), 'w')
+    try:
+        fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        f.close()
+        raise UpdateError('another NoctraOS update is already running')
+    try:
+        yield
+    finally:
+        f.close()
+
+
+def require_root():
+    if os.geteuid() != 0 and not is_test():
+        raise UpdateError('this needs root: run it from the Control Panel or with sudo')
+
+
+def cmd_apply(args):
+    require_root()
+    cfg = load_config()
+    user = invoking_user()
+    snap = snapshot_dir()
+    os.umask(0o022)
+    with locked():
+        recover(snap)
+        state = load_state()
+        say('Checking for a NoctraOS update...')
+        manifest, errors, missing = fetch_manifests(cfg)
+        if manifest is None and missing:
+            say('No NoctraOS updates have been published on this channel yet.')
+            return 0
+        if manifest is None:
+            raise UpdateError('no verified update information: ' + (errors[0] if errors else 'no mirror answered'))
+        status, detail = evaluate(manifest, state)
+        if args.ignore_rollout and status == 'staged' and is_test():
+            status = 'available'
+        if status != 'available':
+            say(detail[0].upper() + detail[1:] + '.' if detail else 'Nothing to do.')
+            return 0
+        serial, version = manifest['serial'], manifest['version']
+        notes = manifest.get('notes', '')
+        say(f'Update {serial} (NoctraOS {version}) is available' + (f': {notes}' if notes else '.'))
+
+        parent = os.path.dirname(snap)
+        os.makedirs(parent, exist_ok=True)
+        if free_bytes(parent) < MIN_FREE and not is_test():
+            raise UpdateError('not enough free disk space for the update (about 600 MB needed)')
+        with tempfile.TemporaryDirectory(prefix='noctraos-update-', dir=state_dir()) as work:
+            bundle = os.path.join(work, 'bundle.tar.gz')
+            data = None
+            for base in cfg['mirrors']:
+                try:
+                    data = http_get(f'{base.rstrip("/")}/{manifest["bundle"]["path"]}', manifest['bundle']['size'], 120)
+                except UpdateError as e:
+                    errors.append(str(e))
+                    continue
+                if len(data) == manifest['bundle']['size'] \
+                        and hashlib.sha256(data).hexdigest() == manifest['bundle']['sha256']:
+                    break
+                errors.append(f'{base}: the bundle does not match the signed manifest')
+                data = None
+            if data is None:
+                raise UpdateError('could not download a bundle that matches the signed manifest: ' + '; '.join(errors[-2:]))
+            with open(bundle, 'wb') as f:
+                f.write(data)
+            say('Downloaded and verified the update bundle.')
+
+            staged = snap + '.new'
+            shutil.rmtree(staged, ignore_errors=True)
+            safe_extract(bundle, staged)
+            try:
+                meta = json.load(open(os.path.join(staged, META)))
+                shipped = open(os.path.join(staged, 'VERSION')).read().strip()
+            except (OSError, ValueError):
+                shutil.rmtree(staged, ignore_errors=True)
+                raise UpdateError('the bundle is missing its metadata')
+            if meta.get('serial') != serial or shipped != version:
+                shutil.rmtree(staged, ignore_errors=True)
+                raise UpdateError('the bundle does not match the manifest that signed it')
+
+            os.makedirs(log_dir(), exist_ok=True)
+            logname = os.path.join(log_dir(), f'update-{now().strftime("%Y%m%d-%H%M%S")}-{serial}.log')
+            with open(logname, 'a') as logfile:
+                prev = snap + '.prev'
+                shutil.rmtree(prev, ignore_errors=True)
+                had_old = os.path.isdir(snap)
+                if had_old:
+                    os.rename(snap, prev)
+                os.rename(staged, snap)
+                say('Installed the new snapshot; refreshing the system...')
+                ok = False
+                try:
+                    ok = refresh_system(logfile, user) == 0 and smoke(logfile)
+                except UpdateError:
+                    raise
+                finally:
+                    if not ok:
+                        say('The update did not pass its checks: putting the previous version back.')
+                        failed = snap + '.failed'
+                        shutil.rmtree(failed, ignore_errors=True)
+                        os.rename(snap, failed)
+                        if had_old:
+                            os.rename(prev, snap)
+                            with contextlib.suppress(Exception):
+                                refresh_system(logfile, user)
+                        shutil.rmtree(failed, ignore_errors=True)
+                if not ok:
+                    held = dict(state, held=serial)   # do not offer it again until a newer one exists
+                    save_state(held)
+                    raise UpdateError(f'update {serial} failed its checks and was rolled back (log: {logname})')
+
+                new_state = {'serial': serial, 'version': version, 'channel': cfg['channel'], 'held': state.get('held', 0),
+                             'applied': now().strftime(TIME_FORMAT),
+                             'previous': {'serial': state['serial'], 'version': state['version']} if had_old else None}
+                save_state(new_state)
+                with contextlib.suppress(OSError):
+                    os.makedirs(path('/run/noctraos'), exist_ok=True)
+                    if manifest.get('relogin') or manifest.get('reboot'):
+                        open(path('/run/noctraos/relogin-required'), 'w').write('1\n')
+                failures = run_migrations('system', logfile, user=user)
+                if not is_test() and user:
+                    run_user_migrations(user, logfile)
+                elif is_test() and os.environ.get('NOC_UPDATE_USER_HOME'):
+                    failures += run_migrations('user', logfile, home=os.environ['NOC_UPDATE_USER_HOME'])
+        say(f'Updated to NoctraOS {version} (update {serial}).')
+        if failures:
+            say(f'{len(failures)} migration(s) did not finish and will be retried: {", ".join(failures)}')
+        if manifest.get('relogin'):
+            say('Sign out and back in to finish this update.')
+        if manifest.get('reboot'):
+            say('Restart the computer to finish this update.')
+        return 0
+
+
+def run_user_migrations(user, logfile):
+    try:
+        pw = pwd.getpwnam(user)
+    except KeyError:
+        return
+    env = clean_env({'HOME': pw.pw_dir, 'USER': user, 'LOGNAME': user,
+                     'XDG_RUNTIME_DIR': f'/run/user/{pw.pw_uid}',
+                     'DBUS_SESSION_BUS_ADDRESS': f'unix:path=/run/user/{pw.pw_uid}/bus'})
+    run_logged(['runuser', '-u', user, '--', 'env'] + [f'{k}={v}' for k, v in env.items()]
+               + [os.path.join(snapshot_dir(), 'bin/noc-selfupdate'), 'migrate', '--scope', 'user'], logfile)
+
+
+def cmd_check(args):
+    cfg = load_config()
+    out, _ = check(cfg)
+    out['failed_migrations'] = failed_migrations('system')
+    out['relogin_required'] = os.path.exists(path('/run/noctraos/relogin-required'))
+    if args.json:
+        say(json.dumps(out))
+    else:
+        inst = out['installed']
+        say(f'Installed: NoctraOS {inst["version"] or "?"} (update {inst["serial"]}), channel {out["channel"]}')
+        if out['status'] == 'available':
+            a = out['available']
+            say(f'Available: NoctraOS {a["version"]} (update {a["serial"]}). {a["notes"]}')
+        else:
+            say(out['detail'] or out['status'])
+    return 0
+
+
+def cmd_notify(args):
+    if os.path.exists(os.path.expanduser('~/.config/noctraos/no-update-check')):
+        return 0
+    out, _ = check(load_config())
+    if out['status'] != 'available':
+        return 0
+    seen = os.path.expanduser('~/.local/state/noctraos/notified-serial')
+    serial = str(out['available']['serial'])
+    with contextlib.suppress(OSError):
+        if open(seen).read().strip() == serial:
+            return 0
+    if not shutil.which('notify-send'):
+        return 0
+    a = out['available']
+    body = f'NoctraOS {a["version"]} is ready. Open the Control Panel, Updates page, to install it.'
+    if a['notes']:
+        body = a['notes'] + '\n' + body
+    subprocess.run(['notify-send', '--app-name=NoctraOS', '--icon=noctraos-control', 'A NoctraOS update is ready', body],
+                   timeout=15, check=False)
+    os.makedirs(os.path.dirname(seen), exist_ok=True)
+    with open(seen, 'w') as f:
+        f.write(serial + '\n')
+    return 0
+
+
+def cmd_migrate(args):
+    snap = snapshot_dir()
+    if args.scope == 'system':
+        require_root()
+        with locked():
+            os.makedirs(log_dir(), exist_ok=True)
+            with open(os.path.join(log_dir(), 'migrate.log'), 'a') as logfile:
+                failures = run_migrations('system', logfile, user=invoking_user())
+    else:
+        if not os.path.isdir(snap):
+            return 0
+        os.makedirs(os.path.expanduser('~/.local/state/noctraos'), exist_ok=True)
+        with open(os.path.expanduser('~/.local/state/noctraos/migrate.log'), 'a') as logfile:
+            failures = run_migrations('user', logfile)
+    return 1 if failures else 0
+
+
+def cmd_rollback(args):
+    require_root()
+    snap = snapshot_dir()
+    prev = snap + '.prev'
+    with locked():
+        if not os.path.isdir(prev):
+            raise UpdateError('there is no previous version to go back to')
+        state = load_state()
+        user = invoking_user()
+        os.makedirs(log_dir(), exist_ok=True)
+        with open(os.path.join(log_dir(), 'rollback.log'), 'a') as logfile:
+            old = snap + '.undone'
+            shutil.rmtree(old, ignore_errors=True)
+            os.rename(snap, old)
+            os.rename(prev, snap)
+            if refresh_system(logfile, user) != 0:
+                os.rename(snap, prev)
+                os.rename(old, snap)
+                raise UpdateError('the previous version could not be reinstalled; nothing was changed')
+        shutil.rmtree(old, ignore_errors=True)
+        before = state.get('previous') or {}
+        # The serial goes back and the one we left is held, so it is not offered again; a newer one is.
+        state.update({'serial': before.get('serial', 0), 'version': before.get('version', installed_version()),
+                      'previous': None, 'held': max(state.get('held', 0), state['serial'])})
+        save_state(state)
+    say('Went back to the previous NoctraOS version. System changes made by migrations are not undone.')
+    return 0
+
+
+def cmd_set_channel(args):
+    require_root()
+    if args.channel not in CHANNELS:
+        raise UpdateError(f'channel must be one of: {", ".join(CHANNELS)}')
+    cfg = {}
+    with contextlib.suppress(OSError, ValueError):
+        cfg = json.load(open(conf_path()))
+    cfg['channel'] = args.channel
+    os.makedirs(os.path.dirname(conf_path()), exist_ok=True)
+    with open(conf_path() + '.tmp', 'w') as f:
+        json.dump(cfg, f, indent=1)
+        f.write('\n')
+    os.replace(conf_path() + '.tmp', conf_path())
+    say(f'Update channel is now {args.channel}.')
+    return 0
+
+
+def cmd_status(args):
+    state = load_state()
+    cfg = load_config()
+    out = {'channel': cfg['channel'], 'mirrors': cfg['mirrors'], 'serial': state['serial'],
+           'version': state['version'], 'applied': state['applied'],
+           'can_rollback': os.path.isdir(snapshot_dir() + '.prev'), 'held': state['held'],
+           'failed_migrations': failed_migrations('system'), 'signing_key': os.path.isfile(signers_path())}
+    if args.json:
+        say(json.dumps(out))
+    else:
+        for k, v in out.items():
+            say(f'{k}: {v}')
+    return 0
+
+
+def main(argv=None):
+    p = argparse.ArgumentParser(prog='noc-selfupdate', description=__doc__.split('\n')[0])
+    sub = p.add_subparsers(dest='cmd', required=True)
+    c = sub.add_parser('check')
+    c.add_argument('--json', action='store_true')
+    a = sub.add_parser('apply')
+    a.add_argument('--ignore-rollout', action='store_true', help=argparse.SUPPRESS)
+    m = sub.add_parser('migrate')
+    m.add_argument('--scope', choices=('system', 'user'), required=True)
+    sub.add_parser('rollback')
+    sub.add_parser('notify')
+    s = sub.add_parser('set-channel')
+    s.add_argument('channel')
+    st = sub.add_parser('status')
+    st.add_argument('--json', action='store_true')
+    args = p.parse_args(argv)
+    handler = {'check': cmd_check, 'apply': cmd_apply, 'migrate': cmd_migrate, 'rollback': cmd_rollback, 'notify': cmd_notify,
+               'set-channel': cmd_set_channel, 'status': cmd_status}[args.cmd]
+    try:
+        return handler(args)
+    except UpdateError as e:
+        print(f'noc-selfupdate: {e}', file=sys.stderr)
+        return 1
+
+
+if __name__ == '__main__':
+    sys.exit(main())

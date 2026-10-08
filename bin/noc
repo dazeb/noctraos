@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # noc — noctraos workstation management CLI.
-#   noc update        apt + Flatpak + mise runtimes + AI models  [--json] [--only apt,flatpak,mise,models]
+#   noc update        apt + Flatpak + NoctraOS features + mise runtimes + AI models  [--json] [--only apt,flatpak,noctraos,mise,models]
 #   noc doctor        health check of the whole stack  [--json]
 #   noc status        Overview data as JSON (versions, updates, Ollama, GPU, disk, Hermes)
 #   noc updates       what an update would do, as JSON (counts, apt download size, online)
@@ -251,10 +251,11 @@ cmd_models() {
 
 # ---- update --------------------------------------------------------------------------------
 
-UPDATE_STEPS=(apt flatpak mise models)
+UPDATE_STEPS=(apt flatpak noctraos mise models)
 update_label() {
   case "$1" in
     apt)     echo "apt packages" ;;
+    noctraos) echo "NoctraOS features" ;;
     flatpak) echo "Flatpak applications" ;;
     mise)    echo "mise runtimes" ;;
     models)  echo "Ollama models (refresh every installed model)" ;;
@@ -268,6 +269,18 @@ step_apt() {
   $SUDO apt-get -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 -o Acquire::Retries=1 \
     update --error-on=any || { echo "apt could not refresh its package lists (is the network up?)" >&2; return 1; }
   $SUDO env DEBIAN_FRONTEND=noninteractive apt-get upgrade -y
+}
+
+# The NoctraOS layer itself (theme, extensions, Control Panel, noc): a signed, staged update, see docs/updates.md.
+# Needs root; in the Control Panel it already runs as root through noc-privileged.
+SELFUPDATE=/usr/local/libexec/noctraos/noc-selfupdate
+[ "$(id -u)" -eq 0 ] || SELFUPDATE="${NOC_SELFUPDATE:-$SELFUPDATE}"   # tests only; root always runs the installed, root-owned copy
+step_noctraos() {
+  if [ ! -x "$SELFUPDATE" ]; then
+    bad "this install has no NoctraOS updater yet; run the one-line installer once (README) to add it"
+    return 1
+  fi
+  $SUDO "$SELFUPDATE" apply
 }
 
 step_flatpak() {
@@ -297,7 +310,7 @@ step_models() {
   fi
 }
 
-# noc update [--json] [--only apt,flatpak,mise,models]
+# noc update [--json] [--only apt,flatpak,noctraos,mise,models]
 # --json prints one JSON object per line: step (id, label, index, total, percent), log (line),
 # step_done (id, ok) and a final done (ok, reboot_required), so a GUI can draw progress.
 cmd_update() {
@@ -308,7 +321,7 @@ cmd_update() {
       --json) json=1 ;;
       --only) only="${1:-}"; [ $# -gt 0 ] && shift ;;
       --only=*) only="${arg#--only=}" ;;
-      *) echo "usage: noc update [--json] [--only apt,flatpak,mise,models]" >&2; return 2 ;;
+      *) echo "usage: noc update [--json] [--only apt,flatpak,noctraos,mise,models]" >&2; return 2 ;;
     esac
   done
   if [ -n "$only" ]; then
@@ -379,6 +392,23 @@ check_flatpak_security() {
     chk ok flatpak-security "Flatpak security" "$ver (patched by the distribution)"
   else
     chk warn flatpak-security "Flatpak security" "$ver is older than $FLATPAK_FIXED_VERSION, which fixes six security bugs; update when your distribution ships the fix (Updates page)"
+  fi
+}
+
+# The NoctraOS update layer: a signing key must be installed and no migration may be stuck.
+check_noctraos_update() {
+  local st
+  if [ ! -x "$SELFUPDATE" ]; then
+    chk info noctraos-update "NoctraOS updates" "the updater is not installed on this system yet"
+    return
+  fi
+  st="$("$SELFUPDATE" status --json 2>/dev/null)" || { chk warn noctraos-update "NoctraOS updates" "could not read the updater status"; return; }
+  if [ "$(jq -r '.signing_key' <<<"$st")" != true ]; then
+    chk warn noctraos-update "NoctraOS updates" "no update signing key is installed, so updates are refused"
+  elif [ "$(jq -r '.failed_migrations | length' <<<"$st")" != 0 ]; then
+    chk warn noctraos-update "NoctraOS updates" "a migration did not finish: $(jq -r '.failed_migrations | join(", ")' <<<"$st") (retried at the next update)"
+  else
+    chk ok noctraos-update "NoctraOS updates" "update $(jq -r '.serial' <<<"$st"), channel $(jq -r '.channel' <<<"$st")"
   fi
 }
 
@@ -477,6 +507,8 @@ cmd_doctor() {
       && chk ok mission-center "Mission Center" "installed" || chk warn mission-center "Mission Center" "missing"
   fi
 
+  check_noctraos_update
+
   if [ -x /usr/local/bin/app-manager ]; then
     chk ok appmanager "AppManager" "$(cat /opt/appmanager/VERSION 2>/dev/null || echo installed)"
   else
@@ -569,11 +601,14 @@ cmd_updates() {
   if have ollama; then
     models="$(curl -fsS --max-time 5 "$OLLAMA_URL/api/tags" 2>/dev/null | jq '.models | length' 2>/dev/null || echo 0)"
   fi
-  jq -n --argjson online "$on" --argjson apt "$apt_n" --argjson bytes "$apt_bytes" \
+  local nu=""
+  if [ -x "$SELFUPDATE" ]; then nu="$(timeout 40 "$SELFUPDATE" check --json 2>/dev/null)" || nu=""; fi
+  printf '%s' "$nu" | jq -e . >/dev/null 2>&1 || nu=null
+  jq -n --argjson online "$on" --argjson apt "$apt_n" --argjson bytes "$apt_bytes" --argjson noctraos "$nu" \
     --argjson flatpak "$(flatpak_pending)" --argjson mise "$(mise_pending)" --argjson models "${models:-0}" \
     --argjson reboot "$([ -f /var/run/reboot-required ] && echo true || echo false)" \
     '{online:$online, apt:{count:$apt, download_bytes:$bytes}, flatpak:{count:$flatpak}, mise:{count:$mise},
-      models:{installed:$models}, reboot_required:$reboot}'
+      models:{installed:$models}, noctraos:$noctraos, reboot_required:$reboot}'
 }
 
 cmd_status() {

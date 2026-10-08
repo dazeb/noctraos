@@ -78,7 +78,7 @@ tests:
   image: ubuntu:24.04
   before_script:
     - apt-get update -qq
-    - apt-get install -y -qq python3 jq curl >/dev/null   # jq: JSON modes of noc/noc-gpu; curl: noc talks to a fake Ollama in tests
+    - apt-get install -y -qq python3 jq curl git openssh-client >/dev/null   # jq: JSON modes of noc/noc-gpu; curl: noc talks to a fake Ollama in tests; git + ssh-keygen: the update bundle and signing tests
   script:
     - python3 -B -m unittest discover -s tests -v
     - python3 -B scripts/render-theme.py --check

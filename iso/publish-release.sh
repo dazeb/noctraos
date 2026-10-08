@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# publish-release.sh — put a built release on dl.noctraos.dev and create the GitHub release.
+# publish-release.sh — put a built release in the release store (dl.noctraos.dev, or Hetzner with RELEASE_STORE=hetzner) and create the GitHub release.
 #
 #   iso/publish-release.sh <build-dir>
 #
@@ -13,7 +13,7 @@
 #     what a downloader gets (not what the bucket says it holds),
 #   - only after that creates the GitHub release (links and checksums only: GitHub caps assets at 2 GiB).
 #
-# Credentials: see iso/r2-env.sh. GitHub: an authenticated `gh` (or GH_TOKEN) that can create releases.
+# Store and credentials: see iso/r2-env.sh (RELEASE_STORE=r2 is the default). GitHub: an authenticated `gh` (or GH_TOKEN) that can create releases.
 # Release notes: docs/release-notes/v<VERSION>.md is used when it exists (write the known issues
 # there before tagging), followed by the generated download table and the commit list.
 set -Eeuo pipefail
@@ -24,7 +24,6 @@ DIR="$(cd "${1:?usage: publish-release.sh <build-dir>}" && pwd)"
 VERSION="$(tr -d '[:space:]' < "$ROOT/VERSION")"
 TAG="v$VERSION"
 REL="$DIR/release/$TAG"
-BASE="https://dl.noctraos.dev/releases/$TAG"
 GH_REPO="${GH_REPO:-dazeb/noctraos}"
 # shellcheck source=iso/r2-env.sh
 source "$HERE/r2-env.sh"
@@ -39,22 +38,23 @@ for f in "${FILES[@]}" "noctraos-$VERSION-amd64.iso.torrent"; do [ -f "$REL/$f" 
 BUILT="$(sed -n 's/^commit: *//p' "$REL/BUILD-INFO.txt")"
 [ -z "$BUILT" ] || [ "$BUILT" = "$(git -C "$ROOT" rev-parse HEAD)" ] || { echo "the release was built from ${BUILT:0:7}, this checkout is $(git -C "$ROOT" rev-parse --short HEAD)" >&2; exit 1; }
 
-r2_env
+store_env
+BASE="$STORE_PUBLIC_BASE/releases/$TAG"
 # Resume, never overwrite: what is already there must be exactly ours, and only what is missing is uploaded.
 # Anything that differs (another build of this version) stops the publish. The streamed-back SHA-256 check
 # below is what finally proves every file; the size, hash and SHA256SUMS comparisons here stop a mixed release before
 # anything more is uploaded.
 # A listing that FAILS must stop here: an empty answer from a broken connection would look like "nothing uploaded".
 # (A prefix that does not exist yet lists as empty with exit 0.)
-REMOTE="$(rclone lsf --format 'ps' --separator '|' "r2:$R2_BUCKET/releases/$TAG/")" \
-  || { echo "could not list r2:$R2_BUCKET/releases/$TAG/ (credentials or network): not publishing blind" >&2; exit 1; }
+REMOTE="$(rclone lsf --format 'ps' --separator '|' "$STORE_REMOTE:$STORE_BUCKET/releases/$TAG/")" \
+  || { echo "could not list $STORE_REMOTE:$STORE_BUCKET/releases/$TAG/ (credentials or network): not publishing blind" >&2; exit 1; }
 remote_size() { awk -F'|' -v n="$1" '$1 == n {print $2}' <<<"$REMOTE"; }
 TODO=()
 for f in "${FILES[@]}" SHA256SUMS; do
   have="$(remote_size "$f")"
   if [ -z "$have" ]; then TODO+=("$f"); continue; fi
   if [ "$f" = SHA256SUMS ]; then
-    rclone cat "r2:$R2_BUCKET/releases/$TAG/SHA256SUMS" | diff - "$REL/SHA256SUMS" >/dev/null \
+    rclone cat "$STORE_REMOTE:$STORE_BUCKET/releases/$TAG/SHA256SUMS" | diff - "$REL/SHA256SUMS" >/dev/null \
       || { echo "releases/$TAG/SHA256SUMS in the bucket differs from this build: not overwriting a published release" >&2; exit 1; }
   elif [ "$have" != "$(stat -c %s "$REL/$f")" ]; then
     echo "releases/$TAG/$f in the bucket is $have bytes, this build's is $(stat -c %s "$REL/$f"): not overwriting a published release" >&2
@@ -64,7 +64,7 @@ for f in "${FILES[@]}" SHA256SUMS; do
     # Equal sizes prove little (ISOs of one layout are often the same size): compare content before trusting it,
     # and before SHA256SUMS goes next to it.
     want="$(awk -v n="$f" '$2 == n {print $1}' "$REL/SHA256SUMS")"
-    got="$(rclone cat "r2:$R2_BUCKET/releases/$TAG/$f" | sha256sum | cut -d' ' -f1)"
+    got="$(rclone cat "$STORE_REMOTE:$STORE_BUCKET/releases/$TAG/$f" | sha256sum | cut -d' ' -f1)"
     [ "$got" = "$want" ] || { echo "releases/$TAG/$f in the bucket hashes to $got, this build's is $want: another build of $TAG is already there, not overwriting" >&2; exit 1; }
   fi
   echo "already uploaded: $f"
@@ -72,7 +72,7 @@ done
 
 log "uploading $TAG to the bucket (${#TODO[@]} file(s) missing)"
 for f in "${TODO[@]}"; do   # FILES come before SHA256SUMS, so a half-uploaded release never has matching checksums
-  rclone copyto "$REL/$f" "r2:$R2_BUCKET/releases/$TAG/$f" --s3-no-check-bucket --progress --stats-one-line
+  rclone copyto "$REL/$f" "$STORE_REMOTE:$STORE_BUCKET/releases/$TAG/$f" --s3-no-check-bucket --progress --stats-one-line
 done
 
 log "verifying through $BASE (what a downloader gets)"
@@ -101,7 +101,7 @@ else
   {
     [ ! -f "$ROOT/docs/release-notes/$TAG.md" ] || { cat "$ROOT/docs/release-notes/$TAG.md"; echo; }
     echo "## Downloads"; echo
-    echo "Files are hosted on dl.noctraos.dev (GitHub caps release assets at 2 GiB; the ISO is larger)."; echo
+    echo "Files are hosted on ${STORE_PUBLIC_BASE#https://} (GitHub caps release assets at 2 GiB; the ISO is larger)."; echo
     for f in "${FILES[@]}" SHA256SUMS; do echo "- [$f]($BASE/$f)"; done
     echo "- [noctraos-$VERSION-amd64.iso.torrent](https://raw.githubusercontent.com/$GH_REPO/main/noctraos-$VERSION-amd64.iso.torrent)"
     echo; echo '```'; cat "$REL/SHA256SUMS"; echo '```'; echo
