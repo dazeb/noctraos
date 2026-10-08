@@ -103,6 +103,10 @@ After=network-online.target docker.service
 ExecStart=$BIN run --config $CONF_DIR/config.toml --working-directory $BUILD_DIR/jobs
 Restart=on-failure
 RestartSec=10
+# The shell executor starts every job in a login shell. Ubuntu's ~/.bash_logout runs clear_console when SHLVL is 1,
+# which fails without a terminal and makes GitLab report "prepare environment: exit status 1" before the job
+# starts. Starting one level deeper skips it without touching anyone's dotfiles.
+Environment=SHLVL=2
 # a release holds a VM and a 17 GB export: do not let a stop kill it half-way without the usual grace
 TimeoutStopSec=120
 
