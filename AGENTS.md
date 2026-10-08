@@ -134,6 +134,8 @@ iso/strip-census.sh         sourced by the build script: removes Zorin's census 
 iso/rebrand-labels.sh       sourced by the build script: user-facing Zorin names (About, sessions, banner, launchers, live user)
 iso/build-release.sh        release build: ISOs -> VM -> provisioned disk -> qcow2/vmdk/torrent/SHA256SUMS -> boot test (RELEASE_REHEARSAL=1 to try it)
 iso/publish-release.sh      upload to dl.noctraos.dev, verify through the public hostname, create the GitHub release; never overwrites a version
+iso/renew-update-channels.sh, setup-update-renewal.sh   weekly systemd user timer that re-signs the update manifests before
+                            they expire (30 days); `setup-update-renewal.sh status` shows the real expiry of each channel
 iso/publish-update.sh       rolling updates for installed systems: build/promote/renew a signed update on the nightly/stable channel,
                             both stores, read back and verified (docs/updates.md); needs ~/secrets/noctraos-update-signing
 iso/vm-image.sh, r2-env.sh, boot-test-image.sh   shared by nightly and release: the VM provisioning, rclone env, exported-disk boot test
@@ -244,7 +246,8 @@ iso/vm-sysprep.sh           run inside a fully provisioned VM before exporting i
   idempotent and additive (`migrations/README.md`), (3) never give the updater or `noc-privileged` a path, URL or command
   from the caller, (4) the private key `~/secrets/noctraos-update-signing` is used only by `iso/publish-update.sh` on the
   release workstation, (5) a published bundle `updates/bundles/noctraos-N.tar.gz` is never replaced: publish the next serial,
-  (6) manifests expire after 30 days, so `iso/publish-update.sh renew stable` at least every 2 weeks once machines follow it.
+  (6) manifests expire after 30 days: the weekly timer from `iso/setup-update-renewal.sh` renews both channels; check it with
+  `iso/setup-update-renewal.sh status`, and never switch the workstation off for a month without renewing by hand.
   Not wired into the tag pipeline yet; machines installed from 0.3.2 or earlier need the one-line installer once to get the updater.
 - **VM disks and ISO scratch go on the fastest local disk** (rule from the user, 2026-10-08). `iso/disks.sh` picks it:
   the candidates in `NOCTRAOS_DISK_CANDIDATES`, best first, the first that is a real Linux filesystem (never NTFS/FAT/tmpfs)

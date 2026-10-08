@@ -151,9 +151,20 @@ variables). Public key: `configs/update/update-signers`, installed by module 07 
 can still be signed by the old key and carry the new `update-signers`; do that in a deliberate two-step). Back the key
 up offline. `iso/publish-update.sh` is the only thing that uses it, and only on the release workstation.
 
+## Keeping the manifests alive
+
+A manifest expires after 30 days and a client refuses an expired one, so a missed renewal turns "up to date" into "cannot check"
+for everyone. `iso/renew-update-channels.sh` re-signs every channel (same bundle, serial and rollout; fresh signature and expiry),
+checks that the PUBLIC manifest really expires at least 25 days out, and shows a desktop notification if anything fails.
+`iso/setup-update-renewal.sh install` runs it weekly (Mondays 04:30, `Persistent=true` so a missed run happens at the next boot) from a
+systemd **user** timer on the release workstation, the only machine with the signing key. The job uses its own clone of GitHub `main`
+(`~/.local/share/noctraos-renew/repo`, reset before every run), never a development checkout. `status` shows the timer and the real
+expiry of each public manifest; `run` renews now.
+
 ## Limits and next steps
 
 * Not wired into the tag pipeline yet: pushing `vX.Y.Z` still publishes ISOs only. A natural next job is `publish-update.sh nightly --ref vX.Y.Z` plus a first `stable --rollout 10`.
+* **Published so far (2026-10-08):** update 1 (a baseline: the same files as 0.4.0) and update 2 (the 403 fix) on `nightly`; update 2 on `stable` at 100%. Every host must answer a missing manifest as "nothing published": S3-style storage says 403, which the client treats like 404 for the manifest. The 0.4.0 images contain the client from before that fix and receive it as update 2.
 * A nightly timer on the release runner (build the newest `main` if it changed and its tests pass) would make nightly truly rolling.
 * An update-level boot test: boot the previous release's qcow2, apply the update from a local mirror, run `noc doctor`. The unit tests cover the logic with real signing; they do not boot a desktop.
 * A `.deb` in a signed apt repository (the bucket can host one) would let apt and Software Updater carry the NoctraOS layer; the manifest/bundle format stays useful for the nightly channel.
