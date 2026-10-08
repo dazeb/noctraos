@@ -271,6 +271,15 @@ class Welcome(Gtk.ApplicationWindow):
         box.pack_start(label('Hermes will ask who you are and how you want it to behave, then '
                              'offer a short tour. Local only is saved; you can switch any time in '
                              'the Control Panel, under Privacy.', 'muted'), False, False, 0)
+        # The two one-time chores that stop a first git commit and push. Done in the Control Panel, no terminal.
+        box.pack_start(label('Save and share your work', 'section'), False, False, 6)
+        box.pack_start(label('Your AI tools can keep your projects safe on GitHub. That needs your name for Git and a '
+                             'GitHub sign-in: one minute, done once, no terminal.', 'lede'), False, False, 0)
+        accounts = Gtk.Button(label='Set up Git and GitHub', halign=Gtk.Align.CENTER)
+        accounts.connect('clicked', lambda *_: subprocess.Popen(
+            ['/usr/local/bin/noctraos-control', '--page', 'accounts'], stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True))
+        box.pack_start(accounts, False, False, 4)
         return box
 
     # -- navigation --------------------------------------------------------------------

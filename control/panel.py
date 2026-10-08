@@ -81,6 +81,18 @@ def _apps_card(apps):
     return Card('apps', 'Apps', 'Up to date', f'Hermes {hermes["installed"]}' if hermes else '', 'ok', 'apps')
 
 
+def _accounts_card(accounts):
+    """Git needs a name and e-mail before the first commit, and GitHub a sign-in before the first push: both stop a
+    newcomer cold with a cryptic message, so the Overview says plainly when they are not done yet."""
+    state = accounts_state(accounts)
+    if state is None:
+        return Card('accounts', 'Accounts', 'Not checked yet', 'Git name and e-mail, GitHub sign-in.', 'info', 'accounts')
+    if state['done']:
+        return Card('accounts', 'Accounts', 'Ready', f'{state["git_text"]}. {state["github_text"]}.', 'ok', 'accounts')
+    todo = [t for t, ok in (('Git name and e-mail', state['git_ready']), ('GitHub sign-in', state['signed_in'])) if not ok]
+    return Card('accounts', 'Accounts', 'Needs setting up', ' and '.join(todo) + ' (one minute, no terminal).', 'warn', 'accounts')
+
+
 def _ollama_card(ollama):
     if not ollama.get('running'):
         return Card('ollama', 'Local AI', 'Not running',
@@ -125,6 +137,7 @@ def cards(status):
     return [
         Card('version', 'NoctraOS', f'Version {status.get("version", "?")}', status.get('os') or '', 'ok', 'about'),
         _updates_card(status.get('updates') or {}),
+        _accounts_card(status.get('accounts')),
         _apps_card(status.get('apps')),
         _ollama_card(status.get('ollama') or {}),
         _gpu_card(status.get('gpu')),
@@ -512,6 +525,58 @@ def offline_message(updates):
     if updates and not updates.get('online', True):
         return 'No internet connection. Updates need the network; local AI keeps working offline.'
     return ''
+
+
+# ---- Accounts (Git identity, GitHub sign-in) --------------------------------------------------
+
+ACCOUNTS = '/usr/local/bin/noc-accounts'
+ACCOUNTS_LOGIN = [ACCOUNTS, 'github', 'login', '--json']
+_EMAIL = re.compile(r'^[^@\s<>]+@[^@\s<>]+\.[^@\s<>]+$')
+
+
+def accounts_state(accounts):
+    """What the Accounts page and card say, from `noc accounts status --json`; None when it did not answer."""
+    if not isinstance(accounts, dict) or 'git' not in accounts:
+        return None
+    git, hub = accounts.get('git') or {}, accounts.get('github') or {}
+    git_ready = bool(git.get('name') and git.get('email'))
+    signed = bool(hub.get('signed_in'))
+    return {'git_ready': git_ready, 'signed_in': signed, 'done': git_ready and signed,
+            'name': git.get('name') or '', 'email': git.get('email') or '', 'login': hub.get('login') or '',
+            'gh_installed': bool(hub.get('installed')),
+            'git_text': f'Git signs your work as {git["name"]}' if git_ready else 'Git does not know your name yet',
+            'github_text': (f'Signed in to GitHub as {hub["login"]}' if hub.get('login') else 'Signed in to GitHub')
+            if signed else ('Not signed in to GitHub' if hub.get('installed') else 'GitHub\'s tool is not installed')}
+
+
+def identity_problem(name, email):
+    """Why the name/e-mail cannot be saved, in words for a newcomer, or ''. The saving command checks again."""
+    name, email = (name or '').strip(), (email or '').strip()
+    if not name:
+        return 'Type your name.'
+    if len(name) > 100 or re.search(r'[\x00-\x1f<>]', name):
+        return 'That name has characters Git cannot use.'
+    if not _EMAIL.match(email):
+        return 'That does not look like an e-mail address.'
+    return ''
+
+
+def suggested_identity(suggestion, private=True):
+    """(name, e-mail) to fill in from `noc accounts github suggest --json`. GitHub's private address is the default: it
+    works even when the person hides their e-mail, and GitHub refuses pushes that would reveal a private one."""
+    if not isinstance(suggestion, dict) or not suggestion.get('login'):
+        return None
+    email = suggestion.get('private_email') if private or not suggestion.get('public_email') else suggestion['public_email']
+    return suggestion.get('name') or suggestion['login'], email
+
+
+def parse_event(line):
+    """One line of `noc accounts github login --json` as an event dict, or None for anything else."""
+    try:
+        event = json.loads(line)
+    except ValueError:
+        return None
+    return event if isinstance(event, dict) and 'event' in event else None
 
 
 # ---- Apps (upstream releases) ----------------------------------------------------------------

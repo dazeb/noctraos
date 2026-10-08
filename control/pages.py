@@ -427,6 +427,222 @@ class UpdatesPage(Page):
         self.refresh()
 
 
+# ---- Accounts --------------------------------------------------------------------------------
+
+class AccountsPage(Page):
+    """The two things that stop a newcomer's first git commit and push, done without a terminal: the name and e-mail
+    Git signs work with, and signing in to GitHub (the browser device flow: a short code, approved on github.com)."""
+
+    def __init__(self, window):
+        super().__init__(window)
+        self.loaded = False
+        self.signing = False
+        self.cancelled = False
+        self.proc = None
+        self.state = None
+        self.spinner = Gtk.Spinner()
+        self.pack_start(header('Accounts', self.spinner,
+                               button('Refresh', on_click=lambda *_: self.refresh(), tooltip='Check again (Ctrl+R)')),
+                        False, False, 0)
+        self.headline = label('', 'lede')
+        self.pack_start(self.headline, False, False, 0)
+        self.note = self.make_note()
+
+        # -- Git: who the work is signed as
+        self.pack_start(label('Your name for Git', 'section'), False, False, 6)
+        self.pack_start(label('Git stamps every change you save with a name and an e-mail address. Without them it '
+                              'refuses to save anything. It is only a label: nothing is sent anywhere by entering it.',
+                              'card-detail', chars=80), False, False, 0)
+        grid = Gtk.Grid(column_spacing=12, row_spacing=8)
+        self.name = Gtk.Entry(placeholder_text='Your name', hexpand=True, width_chars=34)
+        self.email = Gtk.Entry(placeholder_text='you@example.com', hexpand=True, width_chars=34)
+        for row, (text, entry) in enumerate((('Name', self.name), ('E-mail', self.email))):
+            grid.attach(label(text, 'muted', xalign=0, wrap=False), 0, row, 1, 1)
+            grid.attach(entry, 1, row, 1, 1)
+            entry.connect('activate', lambda *_: self.save())
+        self.pack_start(grid, False, False, 0)
+        self.save_button = button('Save', 'suggested', on_click=lambda *_: self.save())
+        self.save_button.set_halign(Gtk.Align.START)
+        self.pack_start(self.save_button, False, False, 0)
+        self.git_note = label('', 'card-detail', chars=80)
+        self.pack_start(self.git_note, False, False, 0)
+
+        # -- GitHub: signing in
+        self.pack_start(label('GitHub', 'section'), False, False, 10)
+        self.pack_start(label('GitHub is where projects live online. Sign in once and your AI tools can save and share '
+                              'your work. You approve it in your browser; no password is typed here.', 'card-detail',
+                              chars=80), False, False, 0)
+        self.github_status = label('', 'row-title')
+        self.pack_start(self.github_status, False, False, 0)
+        buttons = Gtk.Box(spacing=10)
+        self.signin = button('Sign in to GitHub', 'suggested', on_click=lambda *_: self.sign_in())
+        self.signout = button('Sign out', on_click=lambda *_: self.sign_out())
+        self.use_github = button('Use my GitHub name and e-mail', on_click=lambda *_: self.use_github_details(),
+                                 tooltip='Fills in and saves the name and e-mail from your GitHub account.')
+        for b in (self.signin, self.use_github, self.signout):
+            buttons.pack_start(b, False, False, 0)
+        self.pack_start(buttons, False, False, 0)
+        self.private = Gtk.CheckButton(label='Keep my e-mail private (recommended)', active=True)
+        self.private.set_tooltip_text("Uses GitHub's private address, which works even when your e-mail is hidden on GitHub.")
+        self.pack_start(self.private, False, False, 0)
+
+        # -- the one-time code, shown while the person approves in the browser
+        self.code_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8, no_show_all=True)
+        self.code_box.get_style_context().add_class('card')
+        self.code_box.add(label('1. Copy this code', 'row-title'))
+        self.code = Gtk.Label(selectable=True, xalign=0.0)
+        self.code_box.add(self.code)
+        row = Gtk.Box(spacing=10)
+        self.copy_code = button('Copy code', on_click=lambda *_: self._copy())
+        self.open_github = button('Open GitHub', 'suggested', on_click=lambda *_: self._open())
+        row.pack_start(self.copy_code, False, False, 0)
+        row.pack_start(self.open_github, False, False, 0)
+        self.code_box.add(row)
+        self.code_box.add(label('2. On the GitHub page, paste the code and press Authorize. This window finishes by itself.',
+                                'card-detail', chars=70))
+        self.cancel = button('Cancel', on_click=lambda *_: self._cancel())
+        self.cancel.set_halign(Gtk.Align.START)
+        self.code_box.add(self.cancel)
+        self.pack_start(self.code_box, False, False, 6)
+        self.code_text = self.code_url = ''
+
+    def on_show(self):
+        if not self.loaded:
+            self.refresh()
+
+    def refresh(self):
+        if self.signing:
+            return
+        self.loaded = True
+        self.spinner.start()
+        background(lambda: panel.noc_json('accounts', 'status', '--json', timeout=60), self._loaded)
+
+    def _loaded(self, data):
+        self.spinner.stop()
+        state = panel.accounts_state(data)
+        self.state = state
+        if state is None:
+            self.headline.set_text('The accounts helper did not answer. Update the NoctraOS features (Updates page) first.')
+            return
+        self.headline.set_text('Everything is set up.' if state['done'] else
+                               'Two quick things to do once, so your AI tools can save and share your work.')
+        if not self.name.get_text().strip():
+            self.name.set_text(state['name'])
+        if not self.email.get_text().strip():
+            self.email.set_text(state['email'])
+        self.git_note.set_text(('✓ ' + state['git_text'] + (f' <{state["email"]}>.' if state['email'] else '.'))
+                               if state['git_ready'] else 'Not set yet.')
+        self.github_status.set_text(('✓ ' + state['github_text'] + '.') if state['signed_in'] else state['github_text'] + '.')
+        busy = self.signing
+        self.signin.set_visible(not state['signed_in'] and state['gh_installed'])
+        self.signin.set_sensitive(not busy)
+        self.signout.set_visible(state['signed_in'])
+        self.use_github.set_visible(state['signed_in'])
+        self.private.set_visible(state['signed_in'] or self.signing)
+
+    # -- Git identity ----------------------------------------------------------------------
+    def save(self, quiet=False):
+        name, email = self.name.get_text().strip(), self.email.get_text().strip()
+        problem = panel.identity_problem(name, email)
+        if problem:
+            self.say(self.note, problem)
+            return
+        self.save_button.set_sensitive(False)
+
+        def done(result):
+            ok, message = result
+            self.save_button.set_sensitive(True)
+            self.say(self.note, (f'Saved. Git will sign your work as {name}.' if ok else f'Could not save: {message}'))
+            self.refresh()
+        background(lambda: panel.run_ok([panel.NOC, 'accounts', 'git', 'set', '--name', name, '--email', email]), done)
+
+    def use_github_details(self):
+        self.say(self.note, 'Reading your GitHub account…')
+        self.use_github.set_sensitive(False)
+        background(lambda: panel.noc_json('accounts', 'github', 'suggest', '--json', timeout=60), self._suggested)
+
+    def _suggested(self, suggestion):
+        self.use_github.set_sensitive(True)
+        fill = panel.suggested_identity(suggestion, self.private.get_active())
+        if fill is None:
+            self.say(self.note, 'Could not read your GitHub account. Check the connection and try again.')
+            return
+        self.name.set_text(fill[0])
+        self.email.set_text(fill[1])
+        self.save()
+
+    # -- GitHub sign-in --------------------------------------------------------------------
+    def sign_in(self):
+        if self.signing:
+            return
+        self.signing = True
+        self.cancelled = False
+        self.signin.set_sensitive(False)
+        self.say(self.note, 'Starting the sign-in…')
+
+        def work():
+            result = {'ok': False, 'message': 'The sign-in did not finish.'}
+            try:
+                self.proc = subprocess.Popen(panel.ACCOUNTS_LOGIN, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                             text=True, bufsize=1)
+            except OSError as error:
+                return {'ok': False, 'message': str(error)}
+            for line in self.proc.stdout:
+                event = panel.parse_event(line)
+                if not event:
+                    continue
+                if event['event'] == 'code':
+                    GLib.idle_add(self._show_code, event['code'], event['url'])
+                elif event['event'] == 'done':
+                    result = event
+            self.proc.wait()
+            return result
+        background(work, self._signed_in)
+
+    def _show_code(self, code, url):
+        self.code_text, self.code_url = code, url
+        self.code.set_markup(f'<span size="xx-large" weight="bold" font_family="monospace">{GLib.markup_escape_text(code)}</span>')
+        self.say(self.note, '')
+        self.reveal(self.code_box)
+        self._copy()                      # the code is already on the clipboard: they only have to paste it
+        self._open()                      # and the page to paste it on is the next thing they need
+        return False
+
+    def _copy(self):
+        if self.code_text:
+            copy_to_clipboard(self.code_text)
+
+    def _open(self):
+        if self.code_url:
+            Gtk.show_uri_on_window(self.window, self.code_url, Gdk.CURRENT_TIME)
+
+    def _cancel(self):
+        self.cancelled = True
+        if self.proc and self.proc.poll() is None:
+            self.proc.terminate()
+
+    def _signed_in(self, result):
+        self.signing = False
+        self.proc = None
+        self.code_box.set_no_show_all(True)
+        self.code_box.hide()
+        if result.get('ok'):
+            self.say(self.note, f'Signed in to GitHub as {result.get("login") or "your account"}.')
+            self.refresh()
+            if not (self.state and self.state['git_ready']) and not self.email.get_text().strip():
+                self.use_github_details()            # also fills in the Git name and e-mail, in the same click
+        else:
+            self.say(self.note, 'Sign-in cancelled.' if self.cancelled else
+                     f'Could not sign in: {result.get("message") or "the sign-in did not finish"}')
+            self.refresh()
+
+    def sign_out(self):
+        self.say(self.note, 'Signing out…')
+        background(lambda: panel.run_ok([panel.NOC, 'accounts', 'github', 'logout']),
+                   lambda result: (self.say(self.note, 'Signed out of GitHub.' if result[0] else f'Could not sign out: {result[1]}'),
+                                   self.refresh()))
+
+
 # ---- Apps ------------------------------------------------------------------------------------
 
 class AppsPage(Page):
@@ -997,6 +1213,6 @@ def page_title(page_id):
     return next((title for pid, title, _ in PAGES if pid == page_id), page_id)
 
 
-PAGES = [('overview', 'Overview', OverviewPage), ('updates', 'Updates', UpdatesPage),
-         ('apps', 'Apps', AppsPage), ('models', 'AI models', ModelsPage), ('hardware', 'Hardware', HardwarePage),
+PAGES = [('overview', 'Overview', OverviewPage), ('accounts', 'Accounts', AccountsPage),
+         ('updates', 'Updates', UpdatesPage), ('apps', 'Apps', AppsPage), ('models', 'AI models', ModelsPage), ('hardware', 'Hardware', HardwarePage),
          ('health', 'Health', HealthPage), ('privacy', 'Privacy', PrivacyPage), ('about', 'About', AboutPage)]

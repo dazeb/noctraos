@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # noc — noctraos workstation management CLI.
 #   noc update        apt + Flatpak + NoctraOS features + mise runtimes + Hermes/agents + AI models  [--json] [--only apt,flatpak,noctraos,mise,apps,models]
+#   noc accounts      Git name/e-mail and GitHub sign-in: status [--json] | git set --name N --email E | github login|logout|suggest
 #   noc apps          tracked upstream apps (Hermes, Ollama, AppManager, coding agents): installed vs latest release  [--json] [--refresh]
 #   noc doctor        health check of the whole stack  [--json]
 #   noc status        Overview data as JSON (versions, updates, Ollama, GPU, disk, Hermes)
@@ -303,6 +304,9 @@ step_mise() {
 # noc-upstream resolves the newest published release of each and moves the installed copy to exactly that.
 UPSTREAM=/usr/local/bin/noc-upstream
 [ "$(id -u)" -eq 0 ] || UPSTREAM="${NOC_UPSTREAM:-$UPSTREAM}"   # tests only
+ACCOUNTS=/usr/local/bin/noc-accounts
+[ "$(id -u)" -eq 0 ] || ACCOUNTS="${NOC_ACCOUNTS:-$ACCOUNTS}"   # tests only
+
 step_apps() {
   if [ ! -x "$UPSTREAM" ]; then
     bad "this install has no upstream tracker yet; update the NoctraOS features first"
@@ -633,6 +637,12 @@ cmd_updates() {
       models:{installed:$models}, noctraos:$noctraos, apps:$apps, reboot_required:$reboot}'
 }
 
+# noc accounts ...: the first-time setup people trip over (who Git says you are, signing in to GitHub), no terminal needed.
+cmd_accounts() {
+  if [ ! -x "$ACCOUNTS" ]; then bad "the accounts helper is not installed on this system yet"; return 1; fi
+  "$ACCOUNTS" "$@"
+}
+
 # noc apps [--json] [--refresh]: the tracked upstream apps. The panel reads the same JSON.
 cmd_apps() {
   if [ ! -x "$UPSTREAM" ]; then bad "the upstream tracker is not installed on this system yet"; return 1; fi
@@ -663,6 +673,10 @@ cmd_status() {
 
   [ -f "$idx" ] && idx_age=$(( $(date +%s) - $(stat -c %Y "$idx") ))
 
+  local accounts=null
+  if [ -x "$ACCOUNTS" ]; then accounts="$(timeout 15 "$ACCOUNTS" status --json 2>/dev/null)" || accounts=null; fi
+  printf '%s' "$accounts" | jq -e . >/dev/null 2>&1 || accounts=null
+
   local apps=null
   if [ -x "$UPSTREAM" ]; then apps="$(timeout 20 "$UPSTREAM" list --json --offline 2>/dev/null)" || apps=null; fi
   printf '%s' "$apps" | jq -e . >/dev/null 2>&1 || apps=null
@@ -675,7 +689,7 @@ cmd_status() {
     --arg model "$(effective_model)" --argjson gpu "$gpu" \
     --argjson free "$(df -B1 --output=avail / | awk 'NR==2 {print $1}')" \
     --argjson total "$(df -B1 --output=size / | awk 'NR==2 {print $1}')" \
-    --argjson ram "$(ram_gb)" --arg hmode "$hmode" --argjson hready "$hready" --argjson idx "$idx_age" --argjson apps "$apps" \
+    --argjson ram "$(ram_gb)" --arg hmode "$hmode" --argjson hready "$hready" --argjson idx "$idx_age" --argjson apps "$apps" --argjson accounts "$accounts" \
     '{version:$version, os:$os,
       updates:{apt:$apt, flatpak:$flatpak, reboot_required:$reboot},
       ollama:{running:$ollama, version:(if $oversion=="" then null else $oversion end), models:$nmodels, default_model:$model},
@@ -683,7 +697,7 @@ cmd_status() {
       disk:{root_free_bytes:$free, root_total_bytes:$total},
       ram_gb:$ram,
       hermes:{installed:$hready, mode:(if $hmode=="" then null else $hmode end)},
-      apps:$apps,
+      apps:$apps, accounts:$accounts,
       search_index_age_seconds:$idx}'
 }
 
@@ -694,6 +708,7 @@ main() {
     status) shift; cmd_status "$@" ;;
     updates) shift; cmd_updates "$@" ;;
     apps) shift; cmd_apps "$@" ;;
+    accounts) shift; cmd_accounts "$@" ;;
     models) shift; cmd_models "$@" ;;
     bg)     shift; cmd_bg "$@" ;;
     gpu)    shift; have noc-gpu && exec noc-gpu "$@" \
