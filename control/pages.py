@@ -427,6 +427,121 @@ class UpdatesPage(Page):
         self.refresh()
 
 
+# ---- Apps ------------------------------------------------------------------------------------
+
+class AppsPage(Page):
+    """The apps NoctraOS takes from their publishers (Hermes, Ollama, AppManager, the coding agents): the version
+    that is installed, the newest release, and a button to move to it."""
+
+    def __init__(self, window):
+        super().__init__(window)
+        self.loaded = False
+        self.running = False
+        self.buttons = []
+        self.spinner = Gtk.Spinner()
+        self.pack_start(header('Apps', self.spinner,
+                               button('Check now', on_click=lambda *_: self.refresh(force=True),
+                                      tooltip='Look up the newest releases again (Ctrl+R)')), False, False, 0)
+        self.headline = label('', 'lede')
+        self.pack_start(self.headline, False, False, 0)
+        self.note = self.make_note()
+        self.holder = self.scroller()
+        self.run = RunLog()
+        self.pack_start(self.run, False, False, 0)
+
+    def on_show(self):
+        if not self.loaded and not self.running:
+            self.refresh()
+
+    def refresh(self, force=False):
+        if self.running:
+            return
+        self.loaded = True
+        self.spinner.start()
+        self.headline.set_text('Checking the newest releases…' if force else 'Reading the app versions…')
+        args = ['apps', '--json'] + (['--refresh'] if force else [])
+        background(lambda: panel.noc_json(*args, timeout=150), self._loaded)
+
+    def _loaded(self, data):
+        self.spinner.stop()
+        self.headline.set_text(panel.apps_headline(data))
+        self.buttons = []
+        if data is None:
+            self.swap(self.holder, label('`noc apps` did not answer. Update the NoctraOS features first (Updates page), '
+                                         'then press Check now.', 'muted'))
+            return
+        body = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10, margin_end=8)
+        agents_started = False
+        for row in panel.apps_rows(data):
+            if row['agent'] and not agents_started:
+                agents_started = True
+                body.add(label('Coding agents', 'section'))
+            body.add(self._row(row))
+        self.swap(self.holder, body)
+
+    def _row(self, row):
+        box = Gtk.Box(spacing=12, margin_top=6)
+        mark = label('●', 'mark', f'status-{row["level"]}', wrap=False)
+        box.pack_start(mark, False, False, 0)
+        text = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        text.add(label(row['title'] + (f'   {row["about"]}' if row['about'] else ''), 'row-title'))
+        text.add(label(row['status'], 'card-detail', chars=70))
+        if row['detail']:
+            text.add(label(row['detail'], 'muted', chars=70))
+        box.pack_start(text, True, True, 0)
+        if row['argv']:
+            update = button('Update', 'suggested', on_click=lambda *_: self.update(row))
+            self.buttons.append(update)
+            box.pack_end(update, False, False, 0)
+        return box
+
+    def update(self, row):
+        if self.running or not row['argv']:
+            return
+        if row['confirm']:
+            dialog = Gtk.MessageDialog(transient_for=self.window, modal=True, message_type=Gtk.MessageType.QUESTION,
+                                       buttons=Gtk.ButtonsType.NONE, text=f'Update {row["title"]}?')
+            dialog.format_secondary_text(row['confirm'])
+            dialog.add_buttons('Cancel', Gtk.ResponseType.CANCEL, 'Update', Gtk.ResponseType.OK)
+            answer = dialog.run()
+            dialog.destroy()
+            if answer != Gtk.ResponseType.OK:
+                return
+        self.running = True
+        for b in self.buttons:
+            b.set_sensitive(False)
+        self.say(self.note, '')
+        self.run.begin(f'Updating {row["title"]}…')
+
+        def work():
+            code = 1
+            for event in panel.run_events(row['argv']):
+                if event['event'] == 'exit':
+                    code = event['code']
+                elif event.get('line'):
+                    GLib.idle_add(self._tick, event['line'])
+            return code
+
+        background(work, lambda code: self._finished(row, code))
+
+    def _tick(self, line):
+        self.run.set_status(line[:120])
+        self.run.append(line)
+        return False
+
+    def _finished(self, row, code):
+        self.running = False
+        self.run.hide()
+        problem = panel.exit_message(code)
+        if problem:
+            self.say(self.note, problem)
+        elif code == 0:
+            self.say(self.note, f'{row["title"]} is up to date.')
+        else:
+            self.say(self.note, f'{row["title"]} could not be updated. Open Show details next time for the reason.')
+        self.refresh(force=True)
+
+
 # ---- AI models -------------------------------------------------------------------------------
 
 class ModelsPage(Page):
@@ -883,5 +998,5 @@ def page_title(page_id):
 
 
 PAGES = [('overview', 'Overview', OverviewPage), ('updates', 'Updates', UpdatesPage),
-         ('models', 'AI models', ModelsPage), ('hardware', 'Hardware', HardwarePage),
+         ('apps', 'Apps', AppsPage), ('models', 'AI models', ModelsPage), ('hardware', 'Hardware', HardwarePage),
          ('health', 'Health', HealthPage), ('privacy', 'Privacy', PrivacyPage), ('about', 'About', AboutPage)]

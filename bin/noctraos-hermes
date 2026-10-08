@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # noctraos-hermes — Hermes Desktop launcher and installer.
 #   noctraos-hermes            launch the app (installs it first if missing)
-#   noctraos-hermes install    idempotent: runtime + desktop app + model defaults
+#   noctraos-hermes install    idempotent: runtime + desktop app + model defaults (a fresh install is the newest release)
+#   noctraos-hermes update     move to the newest published release: the old code is set aside, the release is installed,
+#                              and the old code comes back if anything fails (your ~/.hermes data is never touched)
 #   noctraos-hermes local [--no-launch]   local-only: Ollama is the primary and the Nous free tier stays off,
 #                              so nothing typed to Hermes leaves this computer (persistent)
 #   noctraos-hermes cloud     back to the Nous free tier (undoes `local`; never touches your own provider)
@@ -31,7 +33,8 @@ OLLAMA_API="${NOCTRAOS_OLLAMA_API:-http://127.0.0.1:11434}"
 # Default model: NOCTRAOS_MODEL, then the file `noc models default` writes, then the shipped model.
 OLLAMA_MODEL="${NOCTRAOS_MODEL:-$(head -n 1 "${XDG_CONFIG_HOME:-$HOME/.config}/noctraos/model" 2>/dev/null)}"
 OLLAMA_MODEL="${OLLAMA_MODEL:-qwen2.5-coder:7b}"
-INSTALLER_URL="https://hermes-agent.nousresearch.com/install.sh"
+INSTALLER_URL="${NOCTRAOS_HERMES_INSTALLER_URL:-https://hermes-agent.nousresearch.com/install.sh}"
+NOC_UPSTREAM="${NOC_UPSTREAM:-/usr/local/bin/noc-upstream}"
 NOUS_URL="https://portal.nousresearch.com"
 ONBOARD_FILE="${NOCTRAOS_HERMES_ONBOARDING:-/usr/local/share/noctraos/hermes/onboarding.md}"
 ONBOARD_DONE="$HERMES_HOME/.noctraos-onboarded"
@@ -108,12 +111,33 @@ hide_hermes_own_launcher() {
 
 hermes_set() { "$HERMES_BIN" config set "$@" >/dev/null 2>&1; }
 
+# The newest published release, read from GitHub Releases by noc-upstream: its git tag, and its version.
+# Hermes' own `hermes update` can only follow a branch (main is days ahead of the last release) and its release
+# channels are not published yet, so NoctraOS pins the official installer to the release tag itself.
+release_tag() { [ -x "$NOC_UPSTREAM" ] && "$NOC_UPSTREAM" latest hermes --tag 2>/dev/null; }
+release_version() { [ -x "$NOC_UPSTREAM" ] && "$NOC_UPSTREAM" latest hermes 2>/dev/null; }
+
+# The installed version ("0.21.6"), whatever else `hermes --version` prints after it.
+installed_version() {
+  [ -x "$HERMES_BIN" ] || return 1
+  "$HERMES_BIN" --version 2>/dev/null | head -n 1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n 1
+}
+
 install_runtime() {
   runtime_ready && { say "OK: Hermes runtime present"; return 0; }
-  say "Installing the Hermes runtime (official installer)..."
-  curl -fsSL "$INSTALLER_URL" | bash -s -- --skip-setup || return 1
+  local tag
+  tag="$(release_tag)" || tag=""
+  if [ -n "$tag" ]; then
+    say "Installing the Hermes runtime (official installer, release $tag)..."
+  else
+    say "WARNING: could not read the latest Hermes release; installing the installer's default branch instead"
+  fi
+  curl -fsSL "$INSTALLER_URL" | bash -s -- --skip-setup ${tag:+--branch "$tag"} || return 1
   runtime_ready
 }
+
+# True while Hermes (the desktop app, its background service, a terminal session) runs from the runtime directory.
+hermes_running() { pgrep -f "$RUNTIME/" >/dev/null 2>&1; }
 
 build_app() {
   app_ready && { say "OK: Hermes Desktop app already built"; return 0; }
@@ -183,6 +207,54 @@ cmd_install() {
   seed_ollama_fallback
   seed_vm_electron_flags
   hide_hermes_own_launcher
+}
+
+# Move an existing install to the newest published release. The runtime directory (code, venv, Electron app) is the only
+# thing replaced: it is set aside first and put back if the new one does not come up, so a failed update leaves Hermes as
+# it was. Everything a person made (config, memories, sessions, SOUL.md) lives in ~/.hermes outside that directory.
+cmd_update() {
+  if ! runtime_ready; then
+    say "Hermes is not installed yet: installing the newest release."
+    cmd_install
+    return
+  fi
+  local tag want have previous free_kb
+  tag="$(release_tag)" || tag=""
+  want="$(release_version)" || want=""
+  if [ -z "$tag" ] || [ -z "$want" ]; then
+    say "ERROR: could not read the newest Hermes release (no connection, or GitHub is limiting requests). Nothing was changed."
+    return 1
+  fi
+  have="$(installed_version)" || have=""
+  if [ -n "$have" ] && [ "$(printf '%s\n%s\n' "$want" "$have" | sort -V | tail -n 1)" = "$have" ]; then
+    say "OK: Hermes $have is already the newest release ($want)."
+    return 0
+  fi
+  if hermes_running; then
+    say "ERROR: Hermes is running. Close Hermes Desktop (and any Hermes terminal session), then update. Nothing was changed."
+    return 75
+  fi
+  free_kb="$(df -Pk "$HERMES_HOME" | awk 'NR==2 {print $4}')"
+  if [ "${free_kb:-0}" -lt "${NOCTRAOS_HERMES_MIN_FREE_KB:-4000000}" ]; then
+    say "ERROR: not enough free disk space for the update (about 4 GB needed). Nothing was changed."
+    return 1
+  fi
+  say "Updating Hermes ${have:-?} to $want (release $tag)..."
+  previous="$RUNTIME.previous"
+  rm -rf "$previous"
+  mv "$RUNTIME" "$previous" || { say "ERROR: cannot set the current Hermes aside. Nothing was changed."; return 1; }
+  if install_runtime && build_app; then
+    seed_ollama_fallback
+    seed_vm_electron_flags
+    hide_hermes_own_launcher
+    rm -rf "$previous"
+    say "OK: Hermes is now $(installed_version || echo "$want")."
+    return 0
+  fi
+  say "ERROR: the update did not finish; putting the previous Hermes back."
+  rm -rf "$RUNTIME"
+  mv "$previous" "$RUNTIME" || { say "ERROR: could not restore $previous. Re-run: noctraos-hermes install"; return 1; }
+  return 1
 }
 
 # Where prompts go: "cloud" (Nous free tier, they leave this computer), "local" (this machine's
@@ -277,7 +349,8 @@ case "${1:-launch}" in
   cloud)   cmd_cloud ;;
   mode)    hermes_mode ;;
   install) cmd_install ;;
+  update)  cmd_update ;;
   ready)   runtime_ready && app_ready ;;
   status)  cmd_status ;;
-  *) echo "usage: noctraos-hermes [launch|local|cloud|mode|install|ready|status]" >&2; exit 1 ;;
+  *) echo "usage: noctraos-hermes [launch|local|cloud|mode|install|update|ready|status]" >&2; exit 1 ;;
 esac

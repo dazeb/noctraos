@@ -331,6 +331,33 @@ class UpdatesCommandTests(unittest.TestCase):
         self.assertEqual(data["noctraos"]["status"], "available")
         self.assertEqual(data["noctraos"]["available"]["serial"], 4)
 
+    def test_apps_is_null_without_the_tracker_and_passed_through_with_it(self):
+        e = Env(self)
+        e.stub("ollama", "true")
+        self.assertIsNone(self.run_updates(e)["apps"])
+        e.stub("tracker", 'echo \'{"updates": 1, "user_updates": 1, "online": true, "apps": [{"id": "hermes", "status": "outdated"}]}\'')
+        data = json.loads(e.noc("updates", NOC_ONLINE_URLS=e.url + "/api/version", NOC_UPSTREAM=str(e.bin / "tracker")).stdout)
+        self.assertEqual(data["apps"]["apps"][0]["id"], "hermes")
+        e.stub("tracker", "echo not-json")
+        data = json.loads(e.noc("updates", NOC_ONLINE_URLS=e.url + "/api/version", NOC_UPSTREAM=str(e.bin / "tracker")).stdout)
+        self.assertIsNone(data["apps"])
+
+    def test_status_carries_the_cached_app_versions_and_never_goes_online_for_them(self):
+        e = Env(self)
+        e.stub("tracker", 'echo "$*" >> "$TRACKER_LOG"; echo \'{"updates": 0, "apps": []}\'')
+        log = e.home / "tracker.log"
+        data = json.loads(e.noc("status", "--json", NOC_UPSTREAM=str(e.bin / "tracker"), TRACKER_LOG=str(log)).stdout)
+        self.assertEqual(data["apps"], {"updates": 0, "apps": []})
+        self.assertIn("--offline", log.read_text())
+        self.assertIsNone(json.loads(e.noc("status", "--json").stdout)["apps"])
+
+    def test_noc_apps_runs_the_tracker_with_its_arguments(self):
+        e = Env(self)
+        e.stub("tracker", 'echo "ran: $*"')
+        r = e.noc("apps", "--json", "--refresh", NOC_UPSTREAM=str(e.bin / "tracker"))
+        self.assertEqual(r.stdout.strip(), "ran: list --json --refresh")
+        self.assertNotEqual(e.noc("apps", NOC_UPSTREAM="/nonexistent").returncode, 0)
+
     def test_a_garbled_updater_answer_becomes_null_not_a_broken_document(self):
         e = Env(self)
         e.stub("selfupdate", "echo not-json")
@@ -354,6 +381,21 @@ class UpdateTests(unittest.TestCase):
         result = e.noc("update", "--json", *args, **extra)
         lines = [json.loads(line) for line in result.stdout.splitlines()]
         return result, lines
+
+    def test_apps_step_runs_the_tracker_update_and_reports_failure(self):
+        e = Env(self)
+        e.stub("tracker", 'echo "Hermes is now 0.21.7."; [ "$1" = update ] || exit 9; [ -z "${TRACKER_FAIL:-}" ]')
+        result, ev = self.events(e, "--only", "apps", NOC_UPSTREAM=str(e.bin / "tracker"))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        step = [x for x in ev if x["event"] == "step"][0]
+        self.assertEqual((step["id"], step["label"]), ("apps", "Hermes and coding agents (latest upstream releases)"))
+        self.assertTrue(any("0.21.7" in x.get("line", "") for x in ev))
+        self.assertTrue([x for x in ev if x["event"] == "step_done"][0]["ok"])
+        result, ev = self.events(e, "--only", "apps", NOC_UPSTREAM=str(e.bin / "tracker"), TRACKER_FAIL="1")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse([x for x in ev if x["event"] == "step_done"][0]["ok"])
+        result, ev = self.events(e, "--only", "apps", NOC_UPSTREAM="/nonexistent")
+        self.assertFalse([x for x in ev if x["event"] == "step_done"][0]["ok"])
 
     def test_noctraos_step_runs_the_updater_and_reports_failure(self):
         e = Env(self)

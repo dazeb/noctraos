@@ -83,7 +83,7 @@ class SmokeTests(unittest.TestCase):
         result = self.run_driver(scale)
         self.assertEqual(result.returncode, 0, result.stderr[-2000:])
         self.assertNotIn("Traceback", result.stderr)
-        self.assertIn("PAGES overview,updates,models,hardware,health,privacy,about", result.stdout)
+        self.assertIn("PAGES overview,updates,apps,models,hardware,health,privacy,about", result.stdout)
 
     def test_every_page_survives_a_machine_where_nothing_works(self):
         self.check(1)

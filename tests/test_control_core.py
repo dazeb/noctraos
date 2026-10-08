@@ -48,7 +48,7 @@ class CardTests(unittest.TestCase):
 
     def test_ids_are_unique_and_ordered(self):
         ids = [c.id for c in panel.cards(STATUS)]
-        self.assertEqual(ids, ["version", "updates", "ollama", "gpu", "disk", "hermes", "search"])
+        self.assertEqual(ids, ["version", "updates", "apps", "ollama", "gpu", "disk", "hermes", "search"])
 
     def test_updates(self):
         self.assertEqual(by_id(STATUS)["updates"].value, "3 updates available")
@@ -101,7 +101,90 @@ class CardTests(unittest.TestCase):
         self.assertEqual(by_id({**STATUS, "search_index_age_seconds": None})["search"].value, "Not built yet")
 
     def test_sparse_status_does_not_raise(self):
-        self.assertEqual(len(panel.cards({})), 7)
+        self.assertEqual(len(panel.cards({})), 8)
+
+
+APPS = {"checked_at": "2026-10-08T10:00:00Z", "online": True, "updates": 2, "user_updates": 1, "apps": [
+    {"id": "codex", "title": "Codex", "agent": True, "critical": False, "installed": "1.0.0", "latest": "1.2.0",
+     "status": "outdated", "updater": "user", "module": None, "about": "", "url": "u", "updated_at": "", "stale": False},
+    {"id": "ollama", "title": "Ollama", "agent": False, "critical": True, "installed": "0.32.5", "latest": "0.40.1",
+     "status": "outdated", "updater": "root", "module": "03b_ollama_update.sh", "about": "Runs the local AI models",
+     "url": "u", "updated_at": "", "stale": False},
+    {"id": "hermes", "title": "Hermes", "agent": False, "critical": True, "installed": "0.21.6", "latest": "0.21.6",
+     "status": "current", "updater": "user", "module": None, "about": "", "url": "u", "updated_at": "2026-10-08T09:00:00Z",
+     "stale": False},
+    {"id": "claude", "title": "Claude Code", "agent": True, "critical": False, "installed": None, "latest": "2.0.0",
+     "status": "absent", "updater": "user", "module": None, "about": "", "url": "u", "updated_at": "", "stale": False},
+    {"id": "gemini", "title": "Gemini CLI", "agent": True, "critical": False, "installed": "0.5.0", "latest": None,
+     "status": "unknown", "updater": "user", "module": None, "about": "", "url": "u", "updated_at": "", "stale": True},
+]}
+
+
+class AppsTests(unittest.TestCase):
+    def rows(self, data=APPS):
+        return {r["id"]: r for r in panel.apps_rows(data)}
+
+    def test_order_critical_first_agents_last(self):
+        self.assertEqual([r["id"] for r in panel.apps_rows(APPS)], ["hermes", "ollama", "claude", "codex", "gemini"])
+
+    def test_status_text_and_level(self):
+        rows = self.rows()
+        self.assertEqual((rows["codex"]["status"], rows["codex"]["level"]), ("Update available: 1.0.0 → 1.2.0", "warn"))
+        self.assertEqual((rows["hermes"]["status"], rows["hermes"]["level"]), ("Up to date", "ok"))
+        self.assertIn("installs the first time", rows["claude"]["status"])
+        self.assertIn("Could not check", rows["gemini"]["status"])
+        self.assertIn("earlier check", rows["gemini"]["detail"])
+        self.assertIn("Version 0.21.6", rows["hermes"]["detail"])
+        self.assertIn("changed", rows["hermes"]["detail"])
+
+    def test_user_apps_update_as_the_person_and_root_ones_through_the_helper(self):
+        rows = self.rows()
+        self.assertEqual(rows["codex"]["argv"], [panel.UPSTREAM, "update", "--only", "codex"])
+        self.assertEqual(rows["codex"]["confirm"], "")
+        self.assertEqual(rows["ollama"]["argv"], [panel.PKEXEC, panel.HELPER, "module", "03b_ollama_update.sh"])
+        self.assertIn("restarts the local AI service", rows["ollama"]["confirm"])
+        for r in ("hermes", "claude", "gemini"):
+            self.assertIsNone(rows[r]["argv"], r)           # nothing to do, nothing to offer
+        for r in panel.apps_rows(APPS):
+            self.assertNotIn("sudo", r["argv"] or [])
+
+    def test_root_apps_use_only_allowlisted_modules(self):
+        import re
+        helper = (Path(__file__).resolve().parents[1] / "bin/noc-privileged").read_text()
+        allowed = re.search(r"^MODULES=\((.*)\)", helper, re.M).group(1).split()
+        for r in panel.apps_rows(APPS):
+            if r["argv"] and r["argv"][0] == panel.PKEXEC:
+                self.assertIn(r["argv"][-1], allowed)
+
+    def test_headline(self):
+        self.assertIn("2 updates available", panel.apps_headline(APPS))
+        self.assertIn("Last checked", panel.apps_headline(APPS))
+        self.assertIn("newest release", panel.apps_headline({**APPS, "updates": 0}))
+        self.assertIn("No internet", panel.apps_headline({**APPS, "online": False}))
+        self.assertIn("Could not read", panel.apps_headline(None))
+
+    def test_sparse_input_does_not_raise(self):
+        self.assertEqual(panel.apps_rows(None), [])
+        self.assertEqual(panel.apps_rows({}), [])
+
+    def test_overview_card(self):
+        card = by_id({**STATUS, "apps": APPS})["apps"]
+        self.assertEqual((card.value, card.level, card.page), ("2 updates available", "warn", "apps"))
+        self.assertIn("Ollama 0.32.5 → 0.40.1", card.detail.replace("Codex 1.0.0 → 1.2.0, ", ""))
+        ok = by_id({**STATUS, "apps": {**APPS, "apps": [APPS["apps"][2]]}})["apps"]
+        self.assertEqual((ok.value, ok.level, ok.detail), ("Up to date", "ok", "Hermes 0.21.6"))
+        self.assertEqual(by_id(STATUS)["apps"].value, "Not checked yet")
+
+    def test_updates_row_for_hermes_and_agents(self):
+        rows = rows_by_id({**UPDATES, "apps": APPS})
+        self.assertTrue(rows["apps"]["available"] and rows["apps"]["checked"])
+        self.assertIn("Codex 1.0.0 → 1.2.0", rows["apps"]["detail"])
+        self.assertNotIn("Ollama", rows["apps"]["detail"])      # root apps are never part of the user-level step
+        done = rows_by_id({**UPDATES, "apps": {**APPS, "apps": [APPS["apps"][2]]}})["apps"]
+        self.assertFalse(done["available"])
+        self.assertIn("Up to date", done["detail"])
+        off = rows_by_id({**UPDATES, "apps": {**APPS, "online": False, "apps": []}})["apps"]
+        self.assertFalse(off["available"])
 
 
 class DiagnosticsTests(unittest.TestCase):
@@ -310,7 +393,7 @@ def rows_by_id(updates):
 class UpdateRowTests(unittest.TestCase):
     def test_rows(self):
         rows = rows_by_id(UPDATES)
-        self.assertEqual(list(rows), ["apt", "flatpak", "noctraos", "mise", "models"])
+        self.assertEqual(list(rows), ["apt", "flatpak", "noctraos", "mise", "apps", "models"])
         self.assertEqual(rows["apt"]["detail"], "3 updates, 690.5 MB to download")
         self.assertTrue(rows["apt"]["checked"])
         self.assertEqual(rows["flatpak"]["detail"], "1 update")
@@ -331,7 +414,7 @@ class UpdateRowTests(unittest.TestCase):
             self.assertFalse(rows[step]["checked"])
 
     def test_sparse_input_does_not_raise(self):
-        self.assertEqual(len(panel.update_rows({})), 5)
+        self.assertEqual(len(panel.update_rows({})), 6)
 
     def test_noctraos_row_follows_the_updater_status(self):
         def row(nu):
@@ -351,10 +434,10 @@ class UpdateRowTests(unittest.TestCase):
     def test_offline_zero_is_not_up_to_date(self):
         zero = {**UPDATES, "apt": {"count": 0, "download_bytes": 0}, "flatpak": {"count": 0}, "mise": {"count": 0}}
         for step, row in rows_by_id({**zero, "online": False}).items():
-            if step not in ("models", "noctraos"):
+            if step not in ("models", "noctraos", "apps"):
                 self.assertEqual(row["detail"], "Could not check without internet.")
         for step, row in rows_by_id(zero).items():
-            if step not in ("models", "noctraos"):
+            if step not in ("models", "noctraos", "apps"):
                 self.assertEqual(row["detail"], "Up to date.")
 
     def test_offline_still_shows_known_pending_updates(self):
@@ -368,10 +451,10 @@ class UpdateRowTests(unittest.TestCase):
 
 class PlanTests(unittest.TestCase):
     def test_root_steps_share_one_prompt_and_run_first(self):
-        chunks = panel.plan_chunks(["models", "flatpak", "noctraos", "apt", "mise"])
+        chunks = panel.plan_chunks(["models", "flatpak", "noctraos", "apt", "mise", "apps"])
         self.assertEqual(chunks[0], (["apt", "flatpak", "noctraos"],
                                      [panel.PKEXEC, panel.HELPER, "update", "apt,flatpak,noctraos"]))
-        self.assertEqual(chunks[1], (["mise", "models"], [panel.NOC, "update", "--json", "--only", "mise,models"]))
+        self.assertEqual(chunks[1], (["mise", "apps", "models"], [panel.NOC, "update", "--json", "--only", "mise,apps,models"]))
         self.assertEqual(len(chunks), 2)
 
     def test_only_what_was_chosen(self):

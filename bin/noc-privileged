@@ -16,7 +16,7 @@ set -uo pipefail
 SNAPSHOT=/usr/local/share/noctraos/repo
 NOC=/usr/local/bin/noc
 # Modules the panel may re-run. Add a name here only if it is idempotent and safe to run unattended.
-MODULES=(04d_appmanager.sh)
+MODULES=(04d_appmanager.sh 03b_ollama_update.sh)
 UPDATE_STEPS=(apt flatpak noctraos)
 SELFUPDATE=/usr/local/libexec/noctraos/noc-selfupdate
 UPDATE_CHANNELS=(stable nightly)
