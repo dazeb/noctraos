@@ -91,9 +91,10 @@ site/                       project website (static, deployed via wrangler.jsonc
 scripts/render-social.py    renders the OG cards, the X promo images (assets/promo/x/) and the favicons with headless Chrome,
                             from assets/social/fonts (local woff2); rerun it when a page title or a screenshot changes
 docs/launch/                launch copy: x-posts.md (the thread, standalone posts, alt text, length-checked)
-.gitlab-ci.yml              the working CI (homelab GitLab, project dazeb/noctraos, Docker runner): shell checks,
-                            VERSION match, unit tests, theme check. No deploy: Cloudflare deploys site/ itself
-                            when GitHub main updates. Push to GitLab with `git push gitlab <branch>`
+.gitlab-ci.yml              the working CI (homelab GitLab, project dazeb/noctraos, Docker runner): shell checks, VERSION match,
+                            unit tests, theme check. A pushed tag vX.Y.Z also runs release-build -> release-publish ->
+                            release-site on the `noctraos-release` runner (docs/release-runbook.md). The site itself is
+                            deployed by Cloudflare when GitHub main updates. Push to GitLab with `git push gitlab <branch>`
 .github/workflows/ci.yml    shell + VERSION checks only; GitHub Actions does not run on this account
 .agents/skills, skills-lock.json  vendored pstack agent skills (.claude/skills symlinks into them); not product code
 configs/
@@ -122,6 +123,13 @@ assets/boot/                boot-chain artwork: plymouth/noctraos (two-step them
                             (outputs are committed; JetBrains Mono, OFL)
 iso/strip-census.sh         sourced by the build script: removes Zorin's census (installer checkbox, cron jobs)
 iso/rebrand-labels.sh       sourced by the build script: user-facing Zorin names (About, sessions, banner, launchers, live user)
+iso/build-release.sh        release build: ISOs -> VM -> provisioned disk -> qcow2/vmdk/torrent/SHA256SUMS -> boot test (RELEASE_REHEARSAL=1 to try it)
+iso/publish-release.sh      upload to dl.noctraos.dev, verify through the public hostname, create the GitHub release; never overwrites a version
+iso/vm-image.sh, r2-env.sh, boot-test-image.sh   shared by nightly and release: the VM provisioning, rclone env, exported-disk boot test
+iso/setup-release-runner.sh doctor|install|status|remove the GitLab runner (user service, tag noctraos-release, protected refs) that runs the above
+scripts/update-site-release.py, release-site-pr.sh, make-torrent.py   rewrite the site for a release, open+merge the PR, wait for the deploy
+iso/bake-shell.sh           sourced by the build script: copies the Shell extensions, search app, schemas and the two setup
+                            autostarts into the squashfs so the FIRST session has Super+Space and the Start panel
 iso/boot-theme.sh           sourced by the build script: themes the extracted ISO
                             tree, the live initrd and the squashfs
 iso/initrd-theme.py         swaps the Plymouth theme inside casper/initrd.zstd
@@ -339,6 +347,16 @@ tail -f /root/noctraos-build.log
   "Try/Install ${RELEASE}". The old `sed 's/Zorin OS/…/'` never matched; it is now
   `s/^Zorin[- ]OS/NoctraOS/`. The two pictures on that page are
   `usr/share/ubiquity/pixmaps/{cd_in_tray,ubuntu_installed}.png`.
+- **Clamp every radius spelling, not just `border-radius`.** Zorin rounds headerbars and titlebars with
+  `border-top-left-radius: 15px` and the `-gtk-outline-*-radius` variants. `scripts/build-desktop-theme.py`
+  only clamped `border-radius:`, so with `radius: 0` the window frame was square but the headerbar corner
+  stayed round and showed as a dark wedge at the top-left of every GTK3 window (Welcome, Software Updater).
+  The clamp now covers the per-corner longhands too (`RADIUS_DECLARATION`; tests pin it).
+- **GNOME Shell scans for extensions once, at start.** Anything the first-boot provisioner installs into
+  the running session is invisible until the next login on Wayland, so the extensions, schemas, search app
+  and setup autostarts are baked into the squashfs (`iso/bake-shell.sh`, tests/test_bake_shell.py). Module 09
+  still installs them (a no-op on a baked image) for `boot.sh` installs on an existing system, where the
+  sign-out/in is still needed. Keep the file lists of the two in step.
 - **Zorin's theme defaults live in `:zorin` session groups** (e.g.
   `[org.gnome.desktop.interface:zorin] gtk-theme`, `[org.gnome.shell.extensions.user-theme:zorin] name`
   in `50_zorin-desktop-session.gschema.override`), and a session group beats a plain
@@ -546,6 +564,24 @@ tail -f /root/noctraos-build.log
    screen (live session gets DHCP = squashfs valid), then restore VM 114.
 6. Push, then verify the remote SHA server-side.
 
+## Release pipeline (2026-10-07)
+
+A release is a tag: `git tag vX.Y.Z origin/main && git push gitlab vX.Y.Z` (docs/release-runbook.md, top section).
+`.gitlab-ci.yml` runs `release-build` (iso/build-release.sh), `release-publish` (iso/publish-release.sh) and
+`release-site` (scripts/release-site-pr.sh) on a project runner tagged `noctraos-release` that lives on the
+workstation (`iso/setup-release-runner.sh`); the checks stay on the TrueNAS Docker runner, which is unprivileged,
+has no spare RAM and cannot do loop mounts or KVM. Rules that keep it safe:
+
+- The release runner is ref-protected and `v*` tags are protected: a branch or MR pipeline can never reach the
+  workstation's Docker, KVM or `~/secrets`. Do not add `tags: [noctraos-release]` to a job that runs on branches.
+- `build-release.sh` builds from GitHub `main` (the ISO build clones it and first boot fetches it) and refuses a tag
+  that is not main's head or a VERSION that is not the tag. `RELEASE_REHEARSAL=1 REHEARSAL_BRANCH=<b>` builds a
+  branch into `release/vX-rehearsal/`, which `publish-release.sh` will not publish.
+- `publish-release.sh` never overwrites `releases/vX/` in the bucket and verifies through the PUBLIC hostname.
+- The site is changed only by `scripts/update-site-release.py` (tested on copies of the real files; it raises on a
+  page it does not recognise). If you restructure `site/download.html`, run `tests/test_update_site_release.py`.
+- Do not edit a build script while a build is running: bash reads scripts incrementally.
+
 ## Control Panel (built 2026-10-06, PRs #40 to #48)
 
 The zenity `noc-menu` is gone; `noctraos-control` is the GUI for `noc` (docs/control-panel.md). Pages:
@@ -571,8 +607,11 @@ steps and scripts are the same for any version).
   ISO changes (torf in a throwaway venv; same trackers, 4 MiB pieces). `v0.3.0` stays published beside it.
 - Released: tag `v0.3.1` (the release merge commit: it adds the torrent and the download page to the
   `main` the ISO was built from, 95c5097) and the GitHub release with links and checksums
-  only (GitHub caps assets at 2 GiB). Do not move the tag; later fixes go in the next version. Known nit
-  shipped in 0.3.1: the Control Panel's card tooltip reads "Open Ai Models" (should be "AI models").
+  only (GitHub caps assets at 2 GiB). Do not move the tag; later fixes go in the next version. Known
+  issues shipped in 0.3.1, fixed on main afterwards (they ship in the next release): the card tooltip read
+  "Open Ai Models"; Super+Space and the Start panel needed one sign-out/in on the first login (extensions installed
+  by the first-boot provisioner are not seen by the running shell; now baked into the ISO, `iso/bake-shell.sh`);
+  windows had a dark wedge in the top-left corner (see the pitfall on per-corner radii).
 - Never published: the unattended/appliance ISO. The old unattended test ISO that was public at
   the bucket root was deleted.
 - Tested: `proxmox-install.sh` against the public files on a PVE 9.2 node, both modes (the image boots to the

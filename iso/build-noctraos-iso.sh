@@ -69,6 +69,8 @@ source "$(cd "$(dirname "$0")" && pwd)/boot-theme.sh"
 source "$(cd "$(dirname "$0")" && pwd)/strip-census.sh"
 # shellcheck source=iso/rebrand-labels.sh
 source "$(cd "$(dirname "$0")" && pwd)/rebrand-labels.sh"
+# shellcheck source=iso/bake-shell.sh
+source "$(cd "$(dirname "$0")" && pwd)/bake-shell.sh"
 
 need() { command -v "$1" >/dev/null 2>&1 || { echo "missing dependency: $1" >&2; exit 1; }; }
 need xorriso; need unsquashfs; need mksquashfs; need git; need openssl
@@ -103,6 +105,9 @@ unsquashfs -no-progress -d "$SQ_ROOT" "$ISO_TREE/casper/filesystem.squashfs" >/d
 step "4/7 injecting provisioner"
 rm -rf "$SQ_ROOT/opt/noctraos"
 git clone --depth 1 --branch "$BRANCH" "$REPO" "$SQ_ROOT/opt/noctraos" >/dev/null 2>&1
+# The snapshot loses its .git, but first boot falls back to it when there is no git/network: keep the commit it
+# is, so a release build can still prove which commit the provisioned VM ran (iso/vm-image.sh reads this file).
+git -C "$SQ_ROOT/opt/noctraos" rev-parse HEAD > "$SQ_ROOT/opt/noctraos/.noctraos-commit"
 rm -rf "$SQ_ROOT/opt/noctraos/.git"
 
 # The release version comes from the provisioner snapshot (VERSION), never from the
@@ -230,6 +235,7 @@ boot_theme_initrd "$ISO_TREE"
 boot_theme_squashfs "$SQ_ROOT"
 strip_census "$SQ_ROOT"
 rebrand_labels "$SQ_ROOT" "$RELEASE_VERSION"
+bake_shell "$SQ_ROOT" "$SQ_ROOT/opt/noctraos"
 
 if [ "$UNATTENDED" = 1 ]; then
 step "4/7 adding unattended boot entries (BIOS isolinux + UEFI grub)"

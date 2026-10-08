@@ -9,6 +9,10 @@ import shutil
 import tempfile
 
 
+# border-radius, border-top-left-radius and the -gtk-outline-* variants, with their values.
+RADIUS_DECLARATION = re.compile(r"(?:border|-gtk-outline)(?:-(?:top|bottom)-(?:left|right))?-radius\s*:[^;]+;")
+
+
 def load_remap(remap_path, palette_path):
     """Resolve a recolour map to literal values.
 
@@ -66,10 +70,11 @@ def compose(base, output, overlay, css_name, radius=4, remap=None):
     with tempfile.TemporaryDirectory(prefix="noctraos-theme-") as tmp:
         stage = Path(tmp) / "theme"
         shutil.copytree(base, stage)
-        # Clamp each px radius, including multi-value declarations. Keep small radii.
+        # Clamp each px radius, including multi-value declarations and the per-corner
+        # longhands (Zorin rounds a headerbar with `border-top-left-radius`). Keep small radii.
         for css_path in stage.glob("*.css"):
             css = re.sub(
-                r"border-radius\s*:[^;]+;",
+                RADIUS_DECLARATION,
                 lambda match: re.sub(r"\b(\d+)px\b",
                                      lambda value: f"{min(int(value[1]), radius)}px", match[0]),
                 css_path.read_text(),

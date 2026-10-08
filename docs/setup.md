@@ -232,8 +232,10 @@ upload, tag, website) are in the [release runbook](release-runbook.md).
 ## Troubleshooting
 
 - **Menu changes didn't appear** — the shell caches the menu tree per session, and
-  a newly installed Shell extension loads at the next login on Wayland;
-  log out/in (or reboot). Super+Space says so in the Welcome during first-boot setup.
+  a Shell extension installed into a running session loads at the next login on Wayland;
+  log out/in (or reboot). The ISO ships the Super+Space and Start-panel extensions already in
+  place, so this only applies to a machine set up with `boot.sh`/`install.sh` on an existing
+  system, where Super+Space says so in the Welcome during setup.
 - **"Ask AI to Explain" is slow the first time** — the model loads into RAM on
   first use (~30 s warm-up; longer on CPU-only machines).
 - **Ollama runs on CPU** — expected with no supported GPU. Run `noc gpu detect`

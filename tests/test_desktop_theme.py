@@ -37,6 +37,24 @@ class DesktopThemeTests(unittest.TestCase):
             self.assertNotIn("custom controls", (output / "gtk.css").read_text())
             self.assertEqual((output / "gtk.css").read_text().count("updated controls"), 1)
 
+    def test_per_corner_radii_are_clamped_too(self):
+        # Zorin rounds the headerbar with longhands; left at 15px they show as a dark wedge.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            base, output = root / "base", root / "output"
+            base.mkdir()
+            css = ("headerbar { border-top-left-radius: 15px; border-top-right-radius: 15px; "
+                   "-gtk-outline-top-left-radius: 9px; -gtk-outline-radius: 9px; border-color: #fff; }")
+            (base / "gtk.css").write_text(css)
+            overlay = root / "override.css"
+            overlay.write_text("")
+            MODULE.compose(base, output, overlay, "gtk.css", radius=0)
+            composed = (output / "gtk.css").read_text()
+            self.assertNotIn("15px", composed)
+            self.assertNotIn("9px", composed)
+            self.assertIn("border-top-left-radius: 0px", composed)
+            self.assertIn("-gtk-outline-top-left-radius: 0px", composed)
+
     def test_missing_base_never_creates_a_partial_theme(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

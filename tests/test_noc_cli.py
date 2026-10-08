@@ -237,6 +237,7 @@ class UpdatesCommandTests(unittest.TestCase):
         e.stub("apt-get", 'case "$*" in *print-uris*) printf "\'http://x/a.deb\' a.deb 1500 MD5Sum:aa\\n\'http://x/b.deb\' b.deb 9000000 MD5Sum:bb\\n";; *) printf "Inst a\\nInst b\\nConf a\\n";; esac')
         e.stub("flatpak", "printf 'org.a\\norg.b\\n'")
         e.stub("mise", 'echo \'{"node":{},"go":{}}\'')
+        e.stub("ollama", "true")  # `noc updates` only asks the API when the binary exists; CI has none
         data = self.run_updates(e)
         self.assertEqual(data["online"], True)
         self.assertEqual(data["apt"], {"count": 2, "download_bytes": 9_001_500})
