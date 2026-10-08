@@ -4,6 +4,22 @@ Written 2026-10-05 as a handoff. Read `AGENTS.md` first (rules, pitfalls). This 
 ordered list of what is left to ship 0.3.0 and exactly how. Everything below was done by hand
 once; the scripts named here exist so you do not have to repeat the discovery.
 
+## Rolling updates for installed systems (between releases)
+
+A release is an ISO and VM disks for new machines. Machines that are already installed get new features through a
+signed update channel instead: `iso/publish-update.sh nightly|stable|renew` (design, safety and the promotion path in
+[updates.md](updates.md)). It is **not** part of the tag pipeline yet. The usual flow after merging to `main`:
+
+```bash
+iso/publish-update.sh nightly --ref origin/main --notes "what changed, one line"   # next serial, both stores, read back and verified
+# a few days later, after nightly testers are happy:
+iso/publish-update.sh stable --rollout 10 && iso/publish-update.sh stable --from stable --rollout 100
+iso/publish-update.sh renew stable                                                  # at least every 2 weeks (manifests expire after 30)
+```
+
+Needs `~/secrets/noctraos-update-signing` (private; never commit) and the usual store credentials. Do not publish an
+update while a release build runs from the same `main` (the same rule as merging).
+
 ## Releasing with the GitLab pipeline (the normal way)
 
 A release is one tag. The homelab GitLab builds, tests and publishes everything and updates the site.

@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=NoctraOS update catch-up
+Comment=Apply per-account changes from NoctraOS updates
+Exec=/usr/local/libexec/noctraos/noc-selfupdate migrate --scope user
+NoDisplay=true
+X-GNOME-Autostart-enabled=true
+OnlyShowIn=GNOME;

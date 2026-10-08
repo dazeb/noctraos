@@ -1,0 +1,8 @@
+[Unit]
+Description=Look for a NoctraOS update (one small signed file, nothing is sent)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/libexec/noctraos/noc-selfupdate notify
+Nice=19
+IOSchedulingClass=idle

@@ -310,7 +310,7 @@ def rows_by_id(updates):
 class UpdateRowTests(unittest.TestCase):
     def test_rows(self):
         rows = rows_by_id(UPDATES)
-        self.assertEqual(list(rows), ["apt", "flatpak", "mise", "models"])
+        self.assertEqual(list(rows), ["apt", "flatpak", "noctraos", "mise", "models"])
         self.assertEqual(rows["apt"]["detail"], "3 updates, 690.5 MB to download")
         self.assertTrue(rows["apt"]["checked"])
         self.assertEqual(rows["flatpak"]["detail"], "1 update")
@@ -331,15 +331,30 @@ class UpdateRowTests(unittest.TestCase):
             self.assertFalse(rows[step]["checked"])
 
     def test_sparse_input_does_not_raise(self):
-        self.assertEqual(len(panel.update_rows({})), 4)
+        self.assertEqual(len(panel.update_rows({})), 5)
+
+    def test_noctraos_row_follows_the_updater_status(self):
+        def row(nu):
+            return {r["id"]: r for r in panel.update_rows({**UPDATES, "noctraos": nu})}["noctraos"]
+        avail = row({"status": "available", "available": {"serial": 5, "version": "0.3.3", "notes": "New menu.",
+                                                           "relogin": True, "reboot": False}})
+        self.assertTrue(avail["available"] and avail["checked"])
+        self.assertIn("0.3.3", avail["detail"])
+        self.assertIn("sign out", avail["detail"])
+        for status in ("current", "staged", "unverified", "unreachable", "expired"):
+            r = row({"status": status})
+            self.assertFalse(r["available"], status)
+            self.assertFalse(r["checked"], status)
+        self.assertIn("verify", row({"status": "unverified"})["detail"])
+        self.assertFalse(row(None)["available"])
 
     def test_offline_zero_is_not_up_to_date(self):
         zero = {**UPDATES, "apt": {"count": 0, "download_bytes": 0}, "flatpak": {"count": 0}, "mise": {"count": 0}}
         for step, row in rows_by_id({**zero, "online": False}).items():
-            if step != "models":
+            if step not in ("models", "noctraos"):
                 self.assertEqual(row["detail"], "Could not check without internet.")
         for step, row in rows_by_id(zero).items():
-            if step != "models":
+            if step not in ("models", "noctraos"):
                 self.assertEqual(row["detail"], "Up to date.")
 
     def test_offline_still_shows_known_pending_updates(self):
@@ -353,8 +368,9 @@ class UpdateRowTests(unittest.TestCase):
 
 class PlanTests(unittest.TestCase):
     def test_root_steps_share_one_prompt_and_run_first(self):
-        chunks = panel.plan_chunks(["models", "flatpak", "apt", "mise"])
-        self.assertEqual(chunks[0], (["apt", "flatpak"], [panel.PKEXEC, panel.HELPER, "update", "apt,flatpak"]))
+        chunks = panel.plan_chunks(["models", "flatpak", "noctraos", "apt", "mise"])
+        self.assertEqual(chunks[0], (["apt", "flatpak", "noctraos"],
+                                     [panel.PKEXEC, panel.HELPER, "update", "apt,flatpak,noctraos"]))
         self.assertEqual(chunks[1], (["mise", "models"], [panel.NOC, "update", "--json", "--only", "mise,models"]))
         self.assertEqual(len(chunks), 2)
 

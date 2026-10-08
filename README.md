@@ -91,6 +91,7 @@ Questions, press, or a security report: **[admin@noctraos.dev](mailto:admin@noct
 | The project's direction and principles | [Objectives](docs/objectives.md) |
 | The welcome, dock, Start panel, and search experience | [Onboarding](docs/onboarding.md) · [Desktop layout](docs/desktop-layout.md) |
 | The Control Panel: updates, models, hardware, health, privacy | [Control Panel](docs/control-panel.md) |
+| How an installed system gets new features: signed, staged rolling updates | [Updates](docs/updates.md) |
 | Themes and the included app set | [Theme design](docs/theme-design.md) · [App comparison](docs/omarchy-parity.md) |
 | Testing and your first change | [Contributing](CONTRIBUTING.md) |
 | Release progress and remaining validation | [Release runbook](docs/release-runbook.md) |

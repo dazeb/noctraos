@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # noc-privileged — the root side of the Control Panel, run through pkexec (one polkit prompt).
 #
-#   noc-privileged update <apt|flatpak>[,<...>]   noc update --json for the system-level steps
+#   noc-privileged update <apt|flatpak|noctraos>[,<...>]   noc update --json for the system-level steps
+#   noc-privileged update-channel <stable|nightly>  choose which NoctraOS update channel this machine follows
+#   noc-privileged update-rollback                put the previous NoctraOS layer back (code only; migrations stay)
 #   noc-privileged module <module-file>           re-run one install module (allowlist below)
 #   noc-privileged gpu-install <nvidia|amd|all>   noc-gpu install for one vendor (drivers + CUDA/ROCm/Vulkan)
 #
@@ -15,7 +17,9 @@ SNAPSHOT=/usr/local/share/noctraos/repo
 NOC=/usr/local/bin/noc
 # Modules the panel may re-run. Add a name here only if it is idempotent and safe to run unattended.
 MODULES=(04d_appmanager.sh)
-UPDATE_STEPS=(apt flatpak)
+UPDATE_STEPS=(apt flatpak noctraos)
+SELFUPDATE=/usr/local/libexec/noctraos/noc-selfupdate
+UPDATE_CHANNELS=(stable nightly)
 GPU=/usr/local/bin/noc-gpu
 GPU_VENDORS=(nvidia amd all)
 
@@ -30,6 +34,8 @@ validate_update() {
   IFS=',' read -ra want <<<"$steps"
   for s in "${want[@]}"; do in_list "$s" "${UPDATE_STEPS[@]}" || return 1; done
 }
+
+validate_channel() { in_list "${1:-}" "${UPDATE_CHANNELS[@]}"; }
 
 validate_vendor() { in_list "${1:-}" "${GPU_VENDORS[@]}"; }
 
@@ -51,7 +57,19 @@ main() {
     update)
       validate_update "${2:-}" || refuse "update: steps must be a comma list of: ${UPDATE_STEPS[*]}"
       [ $# -eq 2 ] || refuse "update: unexpected arguments"
-      clean_env "$NOC" update --json --only "$2" ;;
+      # The NoctraOS step also needs to know which desktop user asked (module 07 refuses to run for bare root).
+      local who=""
+      who="$(invoking_user)" || who=""
+      clean_env ${who:+SUDO_USER="$who"} "$NOC" update --json --only "$2" ;;
+    update-channel)
+      [ $# -eq 2 ] || refuse "update-channel: expected one channel"
+      validate_channel "$2" || refuse "update-channel: channel must be one of: ${UPDATE_CHANNELS[*]}"
+      clean_env "$SELFUPDATE" set-channel "$2" ;;
+    update-rollback)
+      [ $# -eq 1 ] || refuse "update-rollback: takes no arguments"
+      local rb_user
+      rb_user="$(invoking_user)" || refuse "update-rollback: cannot tell which user asked (run it through pkexec)"
+      clean_env SUDO_USER="$rb_user" "$SELFUPDATE" rollback ;;
     module)
       [ $# -eq 2 ] || refuse "module: expected one module name"
       validate_module "$2" || refuse "module: '$2' is not an allowed module"
@@ -67,7 +85,7 @@ main() {
       gpu_user="$(invoking_user)" || refuse "gpu-install: cannot tell which user asked (run it through pkexec)"
       # noc-gpu adds this user to the render/video groups; it is also what `sudo noc gpu install` uses.
       clean_env SUDO_USER="$gpu_user" TARGET_USER="$gpu_user" "$GPU" install --vendor "$2" ;;
-    *) refuse "usage: noc-privileged update <apt|flatpak>[,...] | module <name> | gpu-install <vendor>" ;;
+    *) refuse "usage: noc-privileged update <apt|flatpak|noctraos>[,...] | update-channel <channel> | update-rollback | module <name> | gpu-install <vendor>" ;;
   esac
 }
 

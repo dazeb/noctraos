@@ -64,7 +64,9 @@ bin/
                             | bg [list|next|set] | gpu. Sourceable (tests call its functions); NOC_OLLAMA_URL overrides the Ollama URL
   noc-gpu                   GPU detect [--json] | install | status [--json] (NVIDIA driver+CUDA, AMD ROCm); VERSION must match noc
   noctraos-control          wrapper that execs the system-Python Control Panel (control/)
-  noc-privileged            root side of the panel, run through pkexec: allowlisted `update apt,flatpak`, `module <name>`, `gpu-install <vendor>`
+  noc-selfupdate            updates the NoctraOS layer itself (signed manifest + bundle, staged rollout, migrations, rollback);
+                            installed to /usr/local/libexec/noctraos by module 07; check/status/notify/migrate user-side, apply/rollback as root
+  noc-privileged            root side of the panel, run through pkexec: allowlisted `update apt,flatpak,noctraos`, `update-channel`, `update-rollback`, `module <name>`, `gpu-install <vendor>`
                             (installed to /usr/local/libexec/noctraos; policy in configs/polkit/)
   noctraos-hermes           Hermes Desktop launcher/installer: launch | local [--no-launch] | cloud | mode | install | ready | status.
                             Sets HERMES_GUEST_ONBOARDING=1 (free tier), seeds the Ollama fallback
@@ -82,7 +84,9 @@ control/                    Control Panel (docs/control-panel-plan.md): panel.py
                             (unit-tested, no GTK), main.py = GTK3 window; installed to /usr/local/share/noctraos-control
 search/                     search app: file index (SQLite), CopyQ bridge, browser history, settings window
 help/index.html             "New users start here" page the Start panel opens
-scripts/                    render-theme.py, build-desktop-theme.py, seed-password-store.py
+scripts/                    render-theme.py, build-desktop-theme.py, seed-password-store.py, make-update.py (update bundles + signed manifests)
+migrations/                 system/ and user/ scripts a machine runs once when it updates (README has the rules); in the update bundle
+configs/update/             update-signers: the PUBLIC update key every machine trusts (the private key never enters the repo)
 tests/                      unittest: theme composition (test_desktop_theme), GPU detection (test_gpu_detect),
                             noc/noctraos-hermes JSON modes (test_noc_cli), Control Panel cards (test_control_core)
 site/                       project website (static, deployed via wrangler.jsonc); keep claims in step with README
@@ -125,6 +129,8 @@ iso/strip-census.sh         sourced by the build script: removes Zorin's census 
 iso/rebrand-labels.sh       sourced by the build script: user-facing Zorin names (About, sessions, banner, launchers, live user)
 iso/build-release.sh        release build: ISOs -> VM -> provisioned disk -> qcow2/vmdk/torrent/SHA256SUMS -> boot test (RELEASE_REHEARSAL=1 to try it)
 iso/publish-release.sh      upload to dl.noctraos.dev, verify through the public hostname, create the GitHub release; never overwrites a version
+iso/publish-update.sh       rolling updates for installed systems: build/promote/renew a signed update on the nightly/stable channel,
+                            both stores, read back and verified (docs/updates.md); needs ~/secrets/noctraos-update-signing
 iso/vm-image.sh, r2-env.sh, boot-test-image.sh   shared by nightly and release: the VM provisioning, rclone env, exported-disk boot test
 iso/setup-release-runner.sh doctor|install|status|remove the GitLab runner (user service, tag noctraos-release, protected refs) that runs the above
 scripts/update-site-release.py, release-site-pr.sh, make-torrent.py   rewrite the site for a release, open+merge the PR, wait for the deploy
@@ -220,6 +226,21 @@ iso/vm-sysprep.sh           run inside a fully provisioned VM before exporting i
   `iso/pve-console-shot.py`, then delete the VM. ISOs for this are kept in the
   `noctraos-isos` directory storage (`/local-zfs/noctraos-isos`; `local` has no room). The
   node has ~4 GiB free RAM: one 3 GiB test VM at a time, nothing else.
+- **Hetzner Object Storage release bucket** (created 2026-10-08): `noctraos-releases` in Falkenstein, S3 endpoint
+  `https://fsn1.your-objectstorage.com`, public base `https://noctraos-releases.fsn1.your-objectstorage.com`
+  (anonymous GET and Range verified; the bucket root lists as 403). Credentials: `~/secrets/noctraos-s3.env`
+  (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`), never print them. `iso/publish-release.sh` publishes there with
+  `RELEASE_STORE=hetzner` (default stays `r2` = dl.noctraos.dev); `store_env` in `iso/r2-env.sh` does the switch. The site,
+  `proxmox-install.sh` and `scripts/release-site-pr.sh` still point at `dl.noctraos.dev`, so a Hetzner-only publish is not
+  yet what downloaders get: moving the canonical URL (custom domain or a redirect) is a separate decision.
+- **Rolling updates of the NoctraOS layer** (built 2026-10-08, `docs/updates.md`): `noc update` step `noctraos` runs
+  `/usr/local/libexec/noctraos/noc-selfupdate apply`. Rules: (1) the item list in `install/07_persistence.sh`, `BUNDLE_ITEMS`
+  in `bin/noc-selfupdate` and `ITEMS` in `scripts/make-update.py` must stay equal (a test pins it), (2) migrations are
+  idempotent and additive (`migrations/README.md`), (3) never give the updater or `noc-privileged` a path, URL or command
+  from the caller, (4) the private key `~/secrets/noctraos-update-signing` is used only by `iso/publish-update.sh` on the
+  release workstation, (5) a published bundle `updates/bundles/noctraos-N.tar.gz` is never replaced: publish the next serial,
+  (6) manifests expire after 30 days, so `iso/publish-update.sh renew stable` at least every 2 weeks once machines follow it.
+  Not wired into the tag pipeline yet; machines installed from 0.3.2 or earlier need the one-line installer once to get the updater.
 - **Preferred ISO build is local** (`iso/build-local.sh`, see docs/release-runbook.md): about 2
   minutes versus 35 to 45 on the node. Building on the node loads the HDD pool that the test VMs
   live on and crashed VM 114 once; do not run builds and VMs on the node at the same time.
