@@ -7,12 +7,34 @@ import gi
 
 gi.require_version('Gtk', '3.0')
 gi.require_version('Gdk', '3.0')
-from gi.repository import Gdk, GLib, Gtk  # noqa: E402
+from gi.repository import Gdk, GdkPixbuf, GLib, Gtk  # noqa: E402
 
 import panel  # noqa: E402
 
 LINKS = [('Website', 'https://noctraos.dev'), ('Source code', 'https://github.com/dazeb/noctraos'),
          ('Contact', 'mailto:admin@noctraos.dev')]
+
+
+LOGO_FILES = ['/usr/local/share/icons/hicolor/scalable/apps/noctraos-logo.svg',
+              '/usr/share/icons/hicolor/scalable/apps/noctraos-logo.svg',
+              os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'assets', 'icons', 'noctraos-logo.svg')]
+
+
+def logo_image(size):
+    """The NoctraOS mark, `size` px tall at most. The icon theme first (it follows the screen scale); when the
+    theme does not have it (a checkout, a machine without the icon installed) the SVG file itself, so the panel
+    never shows a blank or a broken-image placeholder where the logo belongs."""
+    if Gtk.IconTheme.get_default().has_icon('noctraos-logo'):
+        image = Gtk.Image.new_from_icon_name('noctraos-logo', Gtk.IconSize.DIALOG)
+        image.set_pixel_size(size)
+        return image
+    for path in LOGO_FILES:
+        if os.path.isfile(path):
+            try:
+                return Gtk.Image.new_from_pixbuf(GdkPixbuf.Pixbuf.new_from_file_at_size(path, size, size))
+            except GLib.Error:
+                continue
+    return Gtk.Image()
 
 
 def label(text, *classes, xalign=0.0, wrap=True, selectable=False, chars=-1):
@@ -821,7 +843,7 @@ class AboutPage(Page):
         self.set_valign(Gtk.Align.START)
         self.status = None
         row = Gtk.Box(spacing=16)
-        row.pack_start(Gtk.Image.new_from_icon_name('noctraos-logo', Gtk.IconSize.DIALOG), False, False, 0)
+        row.pack_start(logo_image(96), False, False, 0)
         col = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         col.add(label('NoctraOS', 'title'))
         self.version = label('', 'lede')
