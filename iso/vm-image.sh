@@ -69,7 +69,9 @@ vm_image_finish() {
   fi
   # `noc doctor` always exits 0 and flags problems with "!!", so the log is what gets checked
   vm_ssh 'noc doctor' | tee "$dir/$label-doctor.log"
-  if grep -q '!!' "$dir/$label-doctor.log"; then
+  # The Flatpak security row is advisory about the distribution's patch state (Ubuntu 24.04 ships Flatpak 1.14
+  # and may never reach 1.18.4), not about whether this image is healthy: it must not block a release.
+  if grep '!!' "$dir/$label-doctor.log" | grep -v 'Flatpak security' >/dev/null; then
     echo "FAIL: noc doctor reported problems (see $dir/$label-doctor.log); no image written" >&2; return 1
   fi
 
