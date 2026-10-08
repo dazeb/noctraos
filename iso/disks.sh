@@ -15,10 +15,14 @@ NOCTRAOS_MIN_FREE_GB="${NOCTRAOS_MIN_FREE_GB:-100}"
 
 _nearest_dir() { local d="$1"; while [ ! -d "$d" ] && [ "$d" != / ]; do d="$(dirname "$d")"; done; printf '%s' "$d"; }
 
+# NOCTRAOS_EXTRA_FS: more filesystem type names (as `stat -f -c %T` prints them) to accept, space separated. For tests that run
+# in a checkout on tmpfs and for unusual setups; the defaults are what a VM disk should live on.
 linux_fs() {
-  case "$(stat -f -c %T "$(_nearest_dir "$1")" 2>/dev/null)" in
+  local fs
+  fs="$(stat -f -c %T "$(_nearest_dir "$1")" 2>/dev/null)"
+  case "$fs" in
     ext2/ext3|ext4|xfs|btrfs|zfs|f2fs|overlayfs) return 0 ;;
-    *) return 1 ;;
+    *) [ -n "$fs" ] && case " ${NOCTRAOS_EXTRA_FS:-} " in *" $fs "*) return 0 ;; esac; return 1 ;;
   esac
 }
 
