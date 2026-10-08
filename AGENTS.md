@@ -581,6 +581,13 @@ has no spare RAM and cannot do loop mounts or KVM. Rules that keep it safe:
 - The site is changed only by `scripts/update-site-release.py` (tested on copies of the real files; it raises on a
   page it does not recognise). If you restructure `site/download.html`, run `tests/test_update_site_release.py`.
 - Do not edit a build script while a build is running: bash reads scripts incrementally.
+- **Do not merge to GitHub `main` while a release build runs** (from the tag push to `release-build` success, about
+  90 minutes): the VM's first boot fetches `main` and the build fails if that is not the tagged commit.
+- First real run (v0.3.2) found three things, all fixed: GitLab's shell executor starts a login shell and Ubuntu's
+  `~/.bash_logout` runs `clear_console` at SHLVL 1, so the runner unit sets `SHLVL=2` ("prepare environment: exit
+  status 1"); a 17 GB stream through the CDN can drop (curl 92), so verification downloads with resume; R2 answers
+  an occasional 501 to a copy that succeeds on rclone's retry (harmless). A failed `release-publish` is safe to
+  retry: it hashes what is already in the bucket and uploads only what is missing.
 
 ## Control Panel (built 2026-10-06, PRs #40 to #48)
 
@@ -589,10 +596,15 @@ Overview, Updates, AI models, Hardware, Health, Privacy, About. Root work goes t
 `noc-privileged` only. Merge the stacked PRs in order and release them together: between the phases
 update and GPU setup had no GUI.
 
-## Current state (2026-10-06)
+## Current state (2026-10-08)
 
-Version **0.3.1** (`VERSION`), released. `docs/release-runbook.md` is the procedure (written for 0.3.0; the
-steps and scripts are the same for any version).
+Version **0.3.2** (`VERSION`), released by the pipeline: tag `v0.3.2` (a0ba2c5), files at
+`https://dl.noctraos.dev/releases/v0.3.2/` (ISO, QCOW2, VMDK, SHA256SUMS, each verified through the public hostname),
+GitHub release, site and torrent updated by `release-site` (PR #59). `v0.3.1` and `v0.3.0` stay published. The text
+below describes 0.3.1 and the 0.3.0-era runbook; the steps and scripts are the same for any version, and
+`docs/release-runbook.md` (top section) is the pipeline procedure. What 0.3.2 fixed from the 0.3.1 known issues: the
+window-corner wedge, the "Open Ai Models" tooltip, and Super+Space/Start panel needing a sign-out/in (extensions are
+baked into the ISO). Still untested: a full interactive ISO install, real hardware, NVIDIA/ROCm.
 
 - On `main`: provisioner modules 00 to 11 (Hermes Desktop last), the app policy
   (`04c_app_policy.sh`: Flatpak/AppImage first, unwanted apps removed, launchers hidden), the
