@@ -123,16 +123,26 @@ installed_version() {
   "$HERMES_BIN" --version 2>/dev/null | head -n 1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n 1
 }
 
+# install_runtime [strict]: a fresh install prefers the newest release, and falls back to the installer's default branch when
+# the release cannot be installed (the official installer is coupled to current code and has failed on older release tags),
+# so a new machine is never left without Hermes because of an upstream mismatch. `strict` (used by an update) never falls back:
+# an update must not silently move someone onto the development branch, it keeps what they have instead.
 install_runtime() {
   runtime_ready && { say "OK: Hermes runtime present"; return 0; }
-  local tag
+  local tag strict="${1:-}"
   tag="$(release_tag)" || tag=""
   if [ -n "$tag" ]; then
     say "Installing the Hermes runtime (official installer, release $tag)..."
+    if curl -fsSL "$INSTALLER_URL" | bash -s -- --skip-setup --branch "$tag" && runtime_ready; then
+      return 0
+    fi
+    [ "$strict" != strict ] || return 1
+    say "WARNING: release $tag did not install with the current installer; trying its default branch instead"
   else
+    [ "$strict" != strict ] || { say "ERROR: could not read the newest Hermes release"; return 1; }
     say "WARNING: could not read the latest Hermes release; installing the installer's default branch instead"
   fi
-  curl -fsSL "$INSTALLER_URL" | bash -s -- --skip-setup ${tag:+--branch "$tag"} || return 1
+  curl -fsSL "$INSTALLER_URL" | bash -s -- --skip-setup || return 1
   runtime_ready
 }
 
@@ -243,7 +253,7 @@ cmd_update() {
   previous="$RUNTIME.previous"
   rm -rf "$previous"
   mv "$RUNTIME" "$previous" || { say "ERROR: cannot set the current Hermes aside. Nothing was changed."; return 1; }
-  if install_runtime && build_app; then
+  if install_runtime strict && build_app; then
     seed_ollama_fallback
     seed_vm_electron_flags
     hide_hermes_own_launcher
