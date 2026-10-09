@@ -11,12 +11,12 @@ source "$REPO_ROOT/install/lib.sh"
 # Keep this list to packages from the Ubuntu/Zorin archive. Check each package
 # before installing so a renamed package cannot break the rest of the setup.
 APT_APPS=(
-  avahi-daemon bat btop brightnessctl clang cups cups-filters
+  avahi-daemon bat btop brightnessctl cups cups-filters
   cups-pk-helper ddcutil docker.io docker-compose-v2 eza
   exfatprogs fd-find ffmpeg ffmpegthumbnailer fzf gh
   gnome-disk-utility gnome-sushi gnome-tweaks gvfs-backends
   imagemagick inotify-tools inxi libsecret-tools
-  man-db ncdu plocate qrencode ripgrep ruby
+  man-db ncdu plocate qrencode ripgrep
   socat system-config-printer tesseract-ocr tldr tmux whois
   wl-clipboard yt-dlp zoxide
 )

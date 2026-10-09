@@ -134,6 +134,9 @@ some stock icons) are tracked in the coverage table in `theme-design.md`.
   holds secrets is left alone and can still prompt (see `AGENTS.md`).
 - **Flatpak and AppImage first.** apt is for CLI tools, system tools and
   host-integration apps; the app set and the removals are in `install/04c_app_policy.sh`.
+- **Install only what NoctraOS itself needs.** Node.js is the one language (the coding-agent launchers and Hermes Desktop use it);
+  Python, Go and Ruby are not installed, and no local model is downloaded. The apps are a deliberate selection (Flatpak and AppImage first)
+  and stay. People add their own languages with mise.
 - **Ollama starts with the computer only if the person turns that on.** The
   vendor's installer enables the service at boot; the setup switches it off
   again and an update of Ollama puts back whatever the person chose (AI models

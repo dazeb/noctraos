@@ -8,7 +8,7 @@ changing anything; the pitfalls section saves real debugging time.
 NoctraOS (`noctraos`) is an **AI development workstation OS**, on an Ubuntu base — Omarchy's idea without
 the tiling-WM learning curve. It is delivered as a bootable **ISO**; the
 Omakub-style provisioner (`install.sh`) is the engine baked into it. Contents:
-local Ollama stack, a six-agent start menu, mise-managed runtimes, a dark +
+optional local Ollama stack, a six-agent start menu, mise-managed Node, a dark +
 amber theme, and the **Super+Space** system search as the headline feature.
 
 NoctraOS is **one product shipped in flavours**: `zorin` (GNOME on Zorin OS 18.1, shipped) and
@@ -51,7 +51,7 @@ install/
   01_system.sh              apt core + python build deps, Flathub, Nerd Font
   01b_vm_guest.sh           VM guest tools, FIRST in install.sh (before the preflight): qemu-guest-agent + spice-vdagent (KVM/Proxmox), open-vm-tools (VMware), VirtualBox
                             guest utils, Hyper-V daemons; a no-op on bare metal; NOCTRAOS_VM_GUEST=all installs every set (images)
-  02_mise.sh                mise binary, profile.d + bash.bashrc hooks, runtimes,
+  02_mise.sh                mise binary, profile.d + bash.bashrc hooks, Node LTS (the only language: agents + Hermes build need it),
                             Herdr, Starship, lazygit, lazydocker
   optional/local_llm.sh     OPTIONAL, run later by `noc llm setup` (install.sh --only): GPU stack (bin/noc-gpu, before Ollama
                             so it sees the GPU), Ollama engine + service, LLMFIT (pipx). Downloads NO model: the person picks one
@@ -129,7 +129,7 @@ docs/launch/                launch copy: x-posts.md (the thread, standalone post
 .github/workflows/ci.yml    shell + VERSION checks only; GitHub Actions does not run on this account
 .agents/skills, skills-lock.json  vendored pstack agent skills (.claude/skills symlinks into them); not product code
 configs/
-  mise/config.toml          node=lts, python=3.12, go=latest, terminal tools
+  mise/config.toml          node=lts + terminal tools (no python/go: nothing needs them)
   vscode/                   settings.json, extensions.list, continue_config.yaml,
                             vscode.sources (Microsoft apt repo)
   copyq/copyq.conf          clipboard history preseed (1000 entries, silent, tray)
@@ -353,7 +353,7 @@ bash -n boot.sh install.sh install/*.sh install/optional/*.sh bin/noc bin/noc-gp
 docker run --rm -v "$PWD:/mnt" koalaman/shellcheck:stable --severity=warning \
   boot.sh install.sh install/*.sh install/optional/*.sh bin/noc bin/noc-gpu bin/noc-privileged bin/noctraos-control bin/noctraos-agent \
   bin/noctraos-copyq bin/noctraos-hermes configs/nautilus-scripts/*     # same list as CI
-python3 -m unittest discover -s tests                # 600 tests: theme, GPU detection, noc JSON modes, root helper, Control Panel
+python3 -m unittest discover -s tests                # 606 tests: theme, GPU detection, noc JSON modes, root helper, Control Panel
 python3 scripts/render-theme.py --check              # committed theme outputs match palette.json
 
 # wallpaper iteration (venv at ~/workspace/scratch/zorin-img-venv: pillow+numpy)
@@ -604,7 +604,12 @@ tail -f /root/noctraos-build.log
   they are skippable); (2) anything that costs memory, sends data off the machine or belongs to the person is an opt-in with a
   `noc` twin, never a default we silently choose; (3) an update or a re-run of an installer module must keep the person's choices (see
   Ollama below) and ship reversibly; (4) say it in plain words: `docs/what-we-do.md` is the user-facing statement of what NoctraOS does
-  and does not do, and `docs/objectives.md` principle 6 holds it. Keep both current when a default changes.
+  and does not do, and `docs/objectives.md` principle 6 holds it. Keep both current when a default changes; (5) install only what NoctraOS
+  itself needs (user's rule, 2026-10-09: "if languages does not need to be in it should not be in", no heavy stuff like local models): Node is
+  the only language (the agent launchers' npm and the Hermes desktop build use it); no mise Python or Go, no Ruby, clang or Python build libraries,
+  no Go VS Code extension; people add languages with `mise use -g`. The apps themselves are a deliberate, specific selection: keep them.
+  New installs only: existing machines keep whatever they have, nothing is removed behind anyone's back. `noc doctor` shows Python and Go as
+  `info` when absent, never `fail`.
 - **Ollama starts with the computer only if the person turns that on.** Ollama's own installer enables `ollama.service` at boot (it also
   starts it). `install/optional/local_llm.sh` and `install/03b_ollama_update.sh` therefore bracket the vendor installer with
   `ollama_boot_choice` / `ollama_boot_restore` (`install/lib.sh`): a first install ends with it OFF at boot but running now (so a model can
@@ -709,7 +714,7 @@ tail -f /root/noctraos-build.log
   launcher every run; the wrapper hides it and sets `desktop.manage_launcher_entry=false`.
 
 - **Python GUI apps must pin `#!/usr/bin/python3`.** In a real session a mise-managed `python3`
-  is first on PATH and has no PyGObject, so `#!/usr/bin/env python3` dies with `No module named
+  is first on PATH (only where the person added one: mise no longer installs Python by default) and has no PyGObject, so `#!/usr/bin/env python3` dies with `No module named
   'gi'` at autostart while working fine from an SSH shell (different PATH). `noctraos-welcome`
   and `noctraos-appearance` hit this; `noctraos-search` already execs `/usr/bin/python3`.
 - **`retire_apt` judges each package alone and only by collateral removals.** Batching them let one

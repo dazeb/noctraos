@@ -2,10 +2,10 @@
 # Managed by the noctraos provisioner; user-level overrides go in
 # ~/.config/mise/config.toml.
 
+# Only what NoctraOS itself needs. Node runs the coding-agent launchers (npm) and builds Hermes Desktop. Python and Go are not
+# here: nothing in NoctraOS uses them, so people add the languages they want (`mise use -g python@3.12`, `mise use -g go`).
 [tools]
 node = "lts"
-python = "3.12"
-go = "latest"
 herdr = "latest"
 starship = "latest"
 lazygit = "latest"

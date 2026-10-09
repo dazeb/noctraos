@@ -638,8 +638,9 @@ cmd_doctor() {
     py_v="$(mise exec -- python --version 2>/dev/null || true)"
     go_v="$(mise exec -- go version 2>/dev/null | awk '{print $3}' || true)"
     [ -n "$node_v" ] && chk ok node "Node.js" "$node_v (mise)"   || chk fail node "Node.js" "not resolving via mise"
-    [ -n "$py_v" ]   && chk ok python "Python" "$py_v (mise)"    || chk fail python "Python" "not resolving via mise"
-    [ -n "$go_v" ]   && chk ok go "Go" "$go_v (mise)"            || chk fail go "Go" "not resolving via mise"
+    # Python and Go are not part of the install (nothing in NoctraOS uses them; people add the ones they want with mise).
+    [ -n "$py_v" ]   && chk ok python "Python" "$py_v"           || chk info python "Python" "not installed (optional: mise use -g python)"
+    [ -n "$go_v" ]   && chk ok go "Go" "$go_v"                   || chk info go "Go" "not installed (optional: mise use -g go)"
     herdr_v="$(mise where herdr >/dev/null 2>&1 && mise exec herdr -- herdr --version 2>/dev/null | head -n 1 || true)"
     [ -n "$herdr_v" ] && chk ok herdr "Herdr" "$herdr_v" || chk warn herdr "Herdr" "missing from mise"
     starship_v="$(mise where starship >/dev/null 2>&1 && mise exec starship -- starship --version 2>/dev/null | head -n 1 || true)"

@@ -38,5 +38,30 @@ class CoreInstallTests(unittest.TestCase):
         self.assertLess(text.index('noc-gpu" install'), text.index("ollama.com/install.sh"), "GPU must come before Ollama")
 
 
+class LanguageTests(unittest.TestCase):
+    """NoctraOS installs only what it needs itself: Node (the coding-agent launchers and the Hermes build) and the terminal tools.
+    A language nothing uses, and what only it needed, stays out; people add theirs with mise."""
+
+    def test_the_mise_baseline_is_node_and_the_terminal_tools(self):
+        import tomllib
+        tools = tomllib.loads((ROOT / "configs/mise/config.toml").read_text())["tools"]
+        self.assertEqual(set(tools), {"node", "herdr", "starship", "lazygit", "lazydocker"})
+
+    def test_node_is_still_needed_by_what_installs_it(self):
+        self.assertIn("npm install -g", (ROOT / "bin/noctraos-agent").read_text())
+        self.assertIn("noctraos-mise.sh", (ROOT / "bin/noctraos-hermes").read_text())     # the desktop build
+
+    def test_no_apt_language_or_compiler_for_one_and_no_python_build_libraries(self):
+        text = (ROOT / "install/04_workstation_apps.sh").read_text()
+        apt = set(re.search(r"APT_APPS=\((.*?)\n\)", text, re.S).group(1).split())
+        self.assertFalse({"ruby", "clang", "golang", "golang-go", "python3-pip"} & apt, apt)
+        self.assertNotIn("PYTHON_BUILD_PKGS", (ROOT / "install/01_system.sh").read_text())
+
+    def test_the_editor_gets_no_extension_for_a_language_that_is_not_installed(self):
+        ids = [line.split("#")[0].strip() for line in (ROOT / "configs/vscode/extensions.list").read_text().splitlines()]
+        self.assertNotIn("golang.go", ids)
+        self.assertIn("continue.continue", ids)
+
+
 if __name__ == "__main__":
     unittest.main()

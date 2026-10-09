@@ -336,6 +336,26 @@ class DoctorStatusTests(unittest.TestCase):
         rows = json.loads(e.noc("doctor", "--json").stdout)
         self.assertEqual({r["id"]: r["status"] for r in rows}["ollama"], "fail")
 
+    def doctor_languages(self, mise_script):
+        e = Env(self, ollama=False)
+        e.stub("mise", mise_script)
+        return {r["id"]: r for r in json.loads(e.noc("doctor", "--json").stdout)}
+
+    def test_doctor_does_not_fail_a_machine_that_has_node_but_no_python_or_go(self):
+        # NoctraOS installs Node (the agent launchers and the Hermes build need it) and leaves other languages to the person.
+        rows = self.doctor_languages('case "$*" in --version) echo 2026.1.0 ;; "exec -- node --version") echo v24.1.0 ;; esac')
+        self.assertEqual(rows["node"]["status"], "ok")
+        for language in ("python", "go"):
+            self.assertEqual(rows[language]["status"], "info", language)
+            self.assertIn("mise use -g", rows[language]["detail"])
+
+    def test_doctor_still_fails_a_machine_without_node_and_shows_languages_that_are_there(self):
+        rows = self.doctor_languages('case "$*" in --version) echo 2026.1.0 ;; "exec -- python --version") echo Python 3.12.3 ;; '
+                                     '"exec -- go version") echo go version go1.27.1 linux/amd64 ;; esac')
+        self.assertEqual(rows["node"]["status"], "fail")
+        self.assertEqual((rows["python"]["status"], rows["python"]["detail"]), ("ok", "Python 3.12.3"))
+        self.assertEqual((rows["go"]["status"], rows["go"]["detail"]), ("ok", "go1.27.1"))
+
     @unittest.skipIf(shutil.which("ollama"), "the test needs a machine without Ollama")
     def test_doctor_json_ollama_not_set_up_is_information_not_a_failure(self):
         rows = json.loads(Env(self, ollama=False).noc("doctor", "--json").stdout)

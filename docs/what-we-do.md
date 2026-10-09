@@ -8,7 +8,7 @@ When you install, NoctraOS prepares a complete AI workstation so you do not have
 
 - **The desktop.** The dark and amber theme, the dock and Start panel, and **Super + Space** search for apps, files, clipboard history and the web.
 - **The everyday apps.** A browser, office apps, media tools, a task manager, VS Code, and support for Flatpaks and AppImages.
-- **Programming languages and tools.** Node, Python and Go through mise, plus terminal tools such as lazygit and Starship.
+- **Node.js**, because the coding-agent launchers and Hermes Desktop need it, and terminal tools such as lazygit and Starship, through mise.
 - **Hermes Desktop**, an AI assistant that works on first launch. Its free tier is a cloud service, so what you type there leaves your computer. The Privacy page switches it to local only.
 - **Launchers for the coding agents** (Codex, Claude Code, OpenCode, Grok, Gemini CLI, Qwen Code) in the Start panel.
 - **Guest tools** when NoctraOS runs inside a virtual machine.
@@ -16,6 +16,7 @@ When you install, NoctraOS prepares a complete AI workstation so you do not have
 ## What stays yours
 
 - **The coding agents.** A launcher installs the program the first time you open it. Signing in, API keys, subscriptions and each tool's own settings are yours: we do not set them up, store them or manage them.
+- **Your languages.** Only Node.js is installed, because NoctraOS itself uses it. Python, Go and the rest are yours to add with mise (for example `mise use -g python@3.12`), so nothing you do not use sits on the disk.
 - **Your AI models.** No model is downloaded until you pick one on the AI models page.
 - **Local AI itself.** It is not part of the install. You set it up from the AI models page when you want it, and only then does the GPU driver step get offered, with a summary and a yes first.
 - **Whether Ollama starts with your computer.** It does not, unless you turn that on (AI models page, "Start with this computer", or `noc llm autostart on`). Start and stop it there whenever you like. A computer that already had Ollama set up keeps whatever it had.
