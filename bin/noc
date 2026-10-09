@@ -624,9 +624,17 @@ cmd_doctor() {
   vmpkg="$(vm_guest_primary "$virt")"
   if [ "$virt" = parallels ]; then
     chk info vm-guest "VM guest tools" "Parallels VM: install Parallels Tools from the Parallels Desktop menu"
+  elif [ -n "$vmpkg" ] && [ -e "${XDG_CONFIG_HOME:-$HOME/.config}/noctraos/no-vm-guest" ]; then
+    # The person removed them (NOCTRAOS_VM_GUEST=remove): no nagging. rm the file and re-run module 01b to bring them back.
+    chk info vm-guest "VM guest tools" "turned off by you (rm ~/.config/noctraos/no-vm-guest to turn them back on)"
   elif [ -n "$vmpkg" ]; then
     if dpkg-query -W -f='${Status}' "$vmpkg" 2>/dev/null | grep -Fx 'install ok installed' >/dev/null; then
-      chk ok vm-guest "VM guest tools" "$vmpkg ($virt)"
+      if [ "$vmpkg" = qemu-guest-agent ] && [ ! -e "${NOC_QGA_CHANNEL:-/dev/virtio-ports/org.qemu.guest_agent.0}" ]; then
+        # Installed, but the host never opened the agent's channel: this is why Proxmox shows no address. Nothing to fix in here.
+        chk warn vm-guest "VM guest tools" "$vmpkg is installed but this VM has no agent channel — Proxmox: VM > Options > QEMU Guest Agent > Enabled, then shut the VM down and start it again"
+      else
+        chk ok vm-guest "VM guest tools" "$vmpkg ($virt)"
+      fi
     else
       chk warn vm-guest "VM guest tools" "$vmpkg missing — the host cannot shut this VM down cleanly or see its address (run: bash ~/.local/share/noctraos/install.sh --only 01b_vm_guest.sh)" "module:01b_vm_guest.sh"
     fi

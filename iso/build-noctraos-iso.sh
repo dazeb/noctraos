@@ -11,6 +11,7 @@
 #                                          the user's first desktop login
 #        boot menus (BIOS isolinux + UEFI grub), live-boot splash, installed
 #        splash/GRUB theme and the dark installer session (iso/boot-theme.sh)
+#        qemu-guest-agent baked in (iso/bake-guest-tools.sh), so Proxmox sees the VM's IP from the first boot
 #        .disk/info rebranded to "NoctraOS"
 #   4. repacks the squashfs with the original compressor
 #   5. writes a new ISO with xorriso, replaying the original boot equipment
@@ -71,6 +72,8 @@ source "$(cd "$(dirname "$0")" && pwd)/strip-census.sh"
 source "$(cd "$(dirname "$0")" && pwd)/rebrand-labels.sh"
 # shellcheck source=iso/bake-shell.sh
 source "$(cd "$(dirname "$0")" && pwd)/bake-shell.sh"
+# shellcheck source=iso/bake-guest-tools.sh
+source "$(cd "$(dirname "$0")" && pwd)/bake-guest-tools.sh"
 
 need() { command -v "$1" >/dev/null 2>&1 || { echo "missing dependency: $1" >&2; exit 1; }; }
 need xorriso; need unsquashfs; need mksquashfs; need git; need openssl
@@ -146,12 +149,29 @@ echo "  noctraos :: setting up your AI workstation"
 echo "  (you will be asked for your password to install software)"
 echo "======================================================"
 
+# A fresh install has no git yet (module 01 installs it), so the latest code also comes as a tarball: curl is always there.
+fetch_tarball() {
+  local tmp
+  tmp="$(mktemp -d)" || return 1
+  if curl -fsSL --max-time 300 "${REPO_URL%.git}/archive/refs/heads/$REPO_BRANCH.tar.gz" | tar -xz -C "$tmp" --strip-components=1 \
+     && [ -f "$tmp/install.sh" ]; then
+    chmod 755 "$tmp" && mv "$tmp" "$DEST"
+  else
+    rm -rf "$tmp"
+    return 1
+  fi
+}
+
 rm -rf "$DEST"
-if command -v git >/dev/null 2>&1 \
-   && curl -fsSI --max-time 8 https://github.com >/dev/null 2>&1 \
-   && git clone --depth 1 --branch "$REPO_BRANCH" "$REPO_URL" "$DEST" >/dev/null 2>&1; then
+if ! curl -fsSI --max-time 8 https://github.com >/dev/null 2>&1; then
+  cp -r /opt/noctraos "$DEST"
+  echo "noctraos: GitHub not reachable, using the provisioner snapshot baked into this ISO"
+elif command -v git >/dev/null 2>&1 && git clone --depth 1 --branch "$REPO_BRANCH" "$REPO_URL" "$DEST" >/dev/null 2>&1; then
   echo "noctraos: provisioner fetched from GitHub (latest)"
+elif rm -rf "$DEST" && fetch_tarball; then
+  echo "noctraos: provisioner downloaded from GitHub (latest, without git)"
 else
+  rm -rf "$DEST"
   cp -r /opt/noctraos "$DEST"
   echo "noctraos: using the provisioner snapshot baked into this ISO"
 fi
@@ -242,6 +262,7 @@ boot_theme_squashfs "$SQ_ROOT"
 strip_census "$SQ_ROOT"
 rebrand_labels "$SQ_ROOT" "$RELEASE_VERSION"
 bake_shell "$SQ_ROOT" "$SQ_ROOT/opt/noctraos"
+bake_guest_tools "$SQ_ROOT"
 
 if [ "$UNATTENDED" = 1 ]; then
 step "4/7 adding unattended boot entries (BIOS isolinux + UEFI grub)"

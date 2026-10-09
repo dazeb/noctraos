@@ -3,6 +3,7 @@ and the doctor row, the install order, the panel's Fix button and the root helpe
 
 Nothing real runs: systemd-detect-virt, dpkg-query, apt-get, apt-cache, sudo and systemctl are stubs on PATH that record what was asked.
 """
+import getpass
 import os
 from pathlib import Path
 import subprocess
@@ -52,7 +53,7 @@ class Machine:
 
     def env(self, **extra):
         env = {k: v for k, v in os.environ.items() if not k.startswith("NOCTRAOS_")}
-        env.update(PATH=f"{self.bin}:{os.environ['PATH']}", REPO_ROOT=str(ROOT), TARGET_USER="tester",
+        env.update(PATH=f"{self.bin}:{os.environ['PATH']}", REPO_ROOT=str(ROOT), TARGET_USER=getpass.getuser(),
                    TARGET_UID="1000", TARGET_HOME=str(self.dir))
         env.update(extra)
         return env
@@ -154,15 +155,77 @@ class ModuleTests(unittest.TestCase):
         self.assertEqual(m.installs(), [])
         self.assertIn("Parallels Tools", result.stderr)
 
+    def test_a_fresh_install_refreshes_the_package_index_once_when_the_agent_is_not_found(self):
+        m = Machine(self, virt="kvm", available=[])
+        result = m.run_module()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        updates = [l for l in m.log.read_text().splitlines() if l.startswith("apt-get update")]
+        self.assertEqual(len(updates), 1)
+        self.assertEqual(m.installs(), [])                                      # still not available: skipped, not fatal
+        self.assertIn("not available", result.stderr)
+
+    def test_nothing_is_refreshed_when_everything_is_already_there(self):
+        m = Machine(self, virt="kvm", installed=["qemu-guest-agent", "spice-vdagent"])
+        m.run_module()
+        self.assertNotIn("apt-get update", m.log.read_text())
+
+    def test_skip_does_nothing(self):
+        m = Machine(self, virt="kvm")
+        result = m.run_module(NOCTRAOS_VM_GUEST="skip")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(m.log.read_text(), "")
+
+    def test_remove_uninstalls_and_remembers_the_choice(self):
+        m = Machine(self, virt="kvm", installed=["qemu-guest-agent", "spice-vdagent"])
+        result = m.run_module(NOCTRAOS_VM_GUEST="remove")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        removes = [l for l in m.log.read_text().splitlines() if l.startswith("apt-get remove")]
+        self.assertEqual(len(removes), 1)
+        self.assertIn("qemu-guest-agent spice-vdagent", removes[0])
+        self.assertNotIn("purge", m.log.read_text())
+        self.assertTrue((m.dir / ".config/noctraos/no-vm-guest").exists())
+
+    def test_a_remembered_choice_stops_every_later_run_until_the_file_is_removed(self):
+        m = Machine(self, virt="kvm")
+        (m.dir / ".config/noctraos").mkdir(parents=True)
+        (m.dir / ".config/noctraos/no-vm-guest").write_text("")
+        result = m.run_module()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(m.log.read_text(), "")
+        self.assertIn("turned off by you", result.stdout)
+        (m.dir / ".config/noctraos/no-vm-guest").unlink()
+        m.run_module()
+        self.assertEqual(m.installs(), ["qemu-guest-agent", "spice-vdagent"])    # rm brings it back
+
+    def test_a_disk_image_build_ignores_the_choice(self):
+        m = Machine(self, virt="none")
+        (m.dir / ".config/noctraos").mkdir(parents=True)
+        (m.dir / ".config/noctraos/no-vm-guest").write_text("")
+        m.run_module(NOCTRAOS_VM_GUEST="all")
+        self.assertTrue(m.installs())
+
+    def test_kvm_without_the_host_channel_says_how_to_turn_it_on(self):
+        m = Machine(self, virt="kvm")
+        result = m.run_module(NOC_QGA_CHANNEL=str(m.dir / "no-such-channel"))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("QEMU Guest Agent > Enabled", result.stderr)
+        quiet = m.run_module(NOC_QGA_CHANNEL=str(m.log))                          # any existing path stands in for the channel
+        self.assertNotIn("Guest Agent > Enabled", quiet.stderr)
+
 
 class WiringTests(unittest.TestCase):
-    def test_install_runs_it_after_the_system_base_and_never_fatally(self):
+    def test_install_runs_it_first_and_never_fatally(self):
         install = (ROOT / "install.sh").read_text()
-        self.assertLess(install.index("run_module 01_system.sh"), install.index("run_module 01b_vm_guest.sh"))
-        self.assertLess(install.index("run_module 01b_vm_guest.sh"), install.index("run_module 02_mise.sh"))
+        # before the preflight: a setup that stops early (small disk, no network) must still leave a VM the host can see
+        self.assertLess(install.index("run_module 01b_vm_guest.sh"), install.index("run_module 00_preflight.sh"))
         self.assertRegex(install, r"run_module 01b_vm_guest\.sh \\\n\s+\|\| warn")
         # --skip-gui must not skip it: the agent is not part of the desktop
         self.assertLess(install.index("run_module 01b_vm_guest.sh"), install.index('if [ "$SKIP_GUI" -eq 1 ]'))
+
+    def test_the_iso_bakes_in_the_kvm_agent(self):
+        build = (ROOT / "iso/build-noctraos-iso.sh").read_text()
+        self.assertIn('source "$(cd "$(dirname "$0")" && pwd)/bake-guest-tools.sh"', build)
+        self.assertIn('bake_guest_tools "$SQ_ROOT"', build)
 
     def test_the_root_helper_and_the_panel_know_the_module(self):
         import re
@@ -186,9 +249,12 @@ class WiringTests(unittest.TestCase):
 class DoctorRowTests(unittest.TestCase):
     """`noc doctor --json` inside a pretend VM: a row that says whether the agent is there and, when it is not, offers the fix."""
 
-    def doctor(self, virt, installed):
+    def doctor(self, virt, installed, marker=False, **extra):
         m = Machine(self, virt=virt, installed=installed)
-        env = {**m.env(), "HOME": str(m.dir), "XDG_CONFIG_HOME": str(m.dir / ".config"), "NOC_OLLAMA_URL": "http://127.0.0.1:9", "NOC_TEST_HOOKS": "1"}
+        if marker:
+            (m.dir / ".config/noctraos").mkdir(parents=True)
+            (m.dir / ".config/noctraos/no-vm-guest").write_text("")
+        env = {**m.env(), "HOME": str(m.dir), "XDG_CONFIG_HOME": str(m.dir / ".config"), "NOC_OLLAMA_URL": "http://127.0.0.1:9", "NOC_TEST_HOOKS": "1", **extra}
         out = subprocess.run([str(NOC), "doctor", "--json"], capture_output=True, text=True, env=env, timeout=180).stdout
         import json
         return {r["id"]: r for r in json.loads(out)}
@@ -202,12 +268,73 @@ class DoctorRowTests(unittest.TestCase):
         row = self.doctor("vmware", ["open-vm-tools"])["vm-guest"]
         self.assertEqual((row["status"], row["fix"]), ("ok", None))
 
+    def test_agent_installed_but_no_host_channel_explains_proxmox(self):
+        row = self.doctor("kvm", ["qemu-guest-agent"], NOC_QGA_CHANNEL="/nonexistent/channel")["vm-guest"]
+        self.assertEqual((row["status"], row["fix"]), ("warn", None))
+        self.assertIn("QEMU Guest Agent > Enabled", row["detail"])
+
+    def test_agent_installed_with_the_channel_is_ok(self):
+        row = self.doctor("kvm", ["qemu-guest-agent"], NOC_QGA_CHANNEL="/dev/null")["vm-guest"]
+        self.assertEqual(row["status"], "ok")
+
+    def test_a_removed_agent_is_not_nagged_about(self):
+        row = self.doctor("kvm", [], marker=True)["vm-guest"]
+        self.assertEqual((row["status"], row["fix"]), ("info", None))
+        self.assertIn("turned off by you", row["detail"])
+
     def test_bare_metal_has_no_row(self):
         self.assertNotIn("vm-guest", self.doctor("none", []))
 
     def test_parallels_is_information_only(self):
         row = self.doctor("parallels", [])["vm-guest"]
         self.assertEqual((row["status"], row["fix"]), ("info", None))
+
+
+class BakeTests(unittest.TestCase):
+    """iso/bake-guest-tools.sh: the agent goes into the image through the image's own apt, and a failure never stops the build."""
+
+    SCRIPT = ROOT / "iso/bake-guest-tools.sh"
+
+    def bake(self, chroot_exit=0, preinstalled=False):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        d = Path(tmp.name)
+        root = d / "root"
+        (root / "etc").mkdir(parents=True)
+        (root / "var/lib/apt/lists").mkdir(parents=True)
+        (root / "var/lib/apt/lists/stale").write_text("x")
+        (root / "etc/resolv.conf").write_text("image resolver\n")
+        if preinstalled:
+            (root / "usr/sbin").mkdir(parents=True)
+            (root / "usr/sbin/qemu-ga").write_text("")
+            (root / "usr/sbin/qemu-ga").chmod(0o755)
+        bindir = d / "bin"
+        bindir.mkdir()
+        log = d / "chroot.log"
+        stub = bindir / "chroot"
+        stub.write_text(f'#!/bin/sh\necho "$@" >> "{log}"\nexit {chroot_exit}\n')
+        stub.chmod(0o755)
+        result = subprocess.run(["bash", "-c", f'source "{self.SCRIPT}"; bake_guest_tools "{root}"'], capture_output=True, text=True,
+                                env={**os.environ, "PATH": f"{bindir}:{os.environ['PATH']}"})
+        return root, log, result
+
+    def test_installs_the_agent_in_the_image_and_restores_the_resolver(self):
+        root, log, result = self.bake()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("apt-get install -y --no-install-recommends qemu-guest-agent", log.read_text())
+        self.assertEqual((root / "etc/resolv.conf").read_text(), "image resolver\n")
+        self.assertFalse((root / "etc/resolv.conf.noctraos-bak").exists())
+        self.assertEqual(list((root / "var/lib/apt/lists").iterdir()), [])
+
+    def test_a_failed_bake_warns_and_does_not_fail_the_build(self):
+        _, _, result = self.bake(chroot_exit=100)
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("WARNING", result.stderr)
+
+    def test_an_image_that_has_it_is_left_alone(self):
+        _, log, result = self.bake(preinstalled=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse(log.exists())
 
 
 if __name__ == "__main__":
