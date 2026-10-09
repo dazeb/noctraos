@@ -67,6 +67,29 @@ Adding a setup chore to the panel means: an id in `SKIPPABLE` (panel.py) and `SK
 skipped state on its page, a `TERMINAL` entry. Actions that are already opt-in (updates, apps, models, privacy) need only the
 Terminal button.
 
+## The terminal does everything the panel does
+
+The panel is a front end for `noc`, so a machine whose panel breaks (no display, a GTK problem) still has every option. Each
+panel action and the command that does the same:
+
+| Panel | `noc` |
+|---|---|
+| Updates: update | `noc update [--only apt,flatpak,noctraos,mise,apps,models]` |
+| Updates: channel, Go back | `noc channel [stable\|nightly]`, `noc channel rollback` |
+| Apps: Update | `noc apps update [app,app]` (Ollama and AppManager ask for sudo) |
+| AI models: Set up local AI, Download, Remove, Make default | `noc llm setup`, `noc models pull <model>`, `noc models rm <model>`, `noc models default <model>` |
+| Hardware: GPU setup, Use all the disk space | `noc gpu install`, `sudo noc disk grow` |
+| Health: Fix | `noc repair appmanager\|vm-guest\|hermes` (the doctor row says which) |
+| Privacy: Hermes, Remote login, Clipboard history | `noc privacy hermes local\|cloud`, `noc privacy remote on\|off`, `noc privacy clipboard clear` |
+| Accounts | `noc accounts git set`, `noc accounts github login\|logout` |
+| "No, I'll do it myself" | `noc skip add\|rm <id>` |
+
+`noc privacy status [--json]` is also what the Privacy page reads, so the page and the terminal cannot disagree. The panel's root
+steps go through `noc-privileged` (pkexec, no terminal) and `noc` reaches the same code through `sudo`.
+`tests/test_noc_cli.py` (`PanelParityTests`) fails when a root verb, an allowed module or a Health fix has no `noc` command, so a
+panel feature cannot be added without its terminal twin. Search settings and the weather city are windows of their own
+(`noctraos-search --settings`, `noctraos-weather --setup`).
+
 ## How it works
 
 ```
@@ -76,8 +99,8 @@ noctraos-control (wrapper, pins /usr/bin/python3)
     └ control/panel.py everything testable without GTK: cards, rows, plans, progress
           │
           ├ noc status | updates | doctor --json | models list|presets --json | update --json | skip list --json
+          ├ noc privacy status --json | clipboard clear | hermes local|cloud
           ├ noc-gpu detect|status --json
-          ├ noctraos-hermes mode | local --no-launch | cloud
           └ pkexec noc-privileged  update <apt,flatpak> | module <name> | gpu-install <vendor> | disk-grow | remote-access <on|off>
 ```
 
@@ -95,7 +118,7 @@ user's editable clone. To allow another module, add it to `MODULES` in the helpe
 
 These outputs are a contract; `tests/test_noc_cli.py` and `tests/test_gpu_detect.py` pin them:
 `noc doctor --json`, `noc status`, `noc updates`, `noc models list|presets --json`,
-`noc update --json --only <steps>` (an event stream), `noc-gpu detect|status --json`.
+`noc update --json --only <steps>` (an event stream), `noc privacy status --json`, `noc-gpu detect|status --json`.
 
 ## Testing a change
 

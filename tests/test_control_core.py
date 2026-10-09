@@ -1,8 +1,6 @@
 """The Control Panel's formatting logic: `noc status` JSON in, cards out. No GTK needed."""
 from http.server import BaseHTTPRequestHandler, HTTPServer
-import importlib.util
 import json
-import os
 from pathlib import Path
 import stat
 import sys
@@ -364,7 +362,7 @@ class HealthTests(unittest.TestCase):
         self.assertEqual(panel.health_headline([]), ("Everything checks out", "ok"))
 
     def test_fix_commands(self):
-        self.assertEqual(panel.fix_command("hermes:install"), [panel.HERMES, "install"])
+        self.assertEqual(panel.fix_command("hermes:install"), [panel.NOC, "repair", "hermes"])
         # root work only ever goes through the allowlisted helper, never a bare sudo
         self.assertEqual(panel.fix_command("module:04d_appmanager.sh"),
                          [panel.PKEXEC, panel.HELPER, "module", "04d_appmanager.sh"])
@@ -374,7 +372,7 @@ class HealthTests(unittest.TestCase):
             self.assertNotIn("sudo", argv)
 
     def test_run_hint_is_dropped_only_when_there_is_a_button(self):
-        hint = "missing (run: bash ~/.local/share/noctraos/install.sh --only 04d_appmanager.sh)"
+        hint = "missing (run: noc repair appmanager)"
         self.assertEqual(panel.clean_detail(hint, True), "missing")
         self.assertEqual(panel.clean_detail(hint, False), hint)
         self.assertEqual(panel.clean_detail(None, True), "")
@@ -888,7 +886,7 @@ class TerminalTipTests(unittest.TestCase):
             if words[0] == "sudo":                 # a command that needs root: the program is the next word
                 words = words[1:]
             program = words[0]
-            if program in ("git", "gh", "systemctl", "copyq", "seahorse"):    # tools of the system, not of this repo
+            if program in ("git", "gh"):    # tools of the system, not of this repo
                 continue
             self.assertTrue((ROOT / "bin" / program).is_file(), f"{key}: {program} is not a program of this system")
             if program == "noc":
@@ -937,15 +935,12 @@ class PrivacyTests(unittest.TestCase):
         self.assertFalse(panel.hermes_privacy(None)["can_switch"])
 
     def test_switch_command(self):
-        self.assertEqual(panel.switch_command("local", "cloud"), [panel.HERMES, "local", "--no-launch"])
-        self.assertEqual(panel.switch_command("cloud", "local"), [panel.HERMES, "cloud"])
+        self.assertEqual(panel.switch_command("local", "cloud"), [panel.NOC, "privacy", "hermes", "local"])
+        self.assertEqual(panel.switch_command("cloud", "local"), [panel.NOC, "privacy", "hermes", "cloud"])
         self.assertIsNone(panel.switch_command("local", "local"))
         self.assertIsNone(panel.switch_command("cloud", "other"))     # never touch the user's own provider
         self.assertIsNone(panel.switch_command("local", None))
         self.assertIsNone(panel.switch_command("bogus", "cloud"))
-
-    def test_local_never_launches_the_app(self):
-        self.assertIn("--no-launch", panel.HERMES_LOCAL)
 
     def test_run_ok(self):
         self.assertEqual(panel.run_ok(["/bin/sh", "-c", "echo a; echo b; exit 1"]), (False, "b"))
@@ -953,12 +948,6 @@ class PrivacyTests(unittest.TestCase):
         ok, message = panel.run_ok(["/nonexistent/x"])
         self.assertFalse(ok)
         self.assertTrue(message)
-
-    def test_hermes_mode_when_missing(self):
-        original = panel.HERMES
-        panel.HERMES = "/nonexistent/hermes"
-        self.addCleanup(setattr, panel, "HERMES", original)
-        self.assertIsNone(panel.hermes_mode())
 
 
 def stub_program(directory, name, body):
@@ -970,28 +959,7 @@ def stub_program(directory, name, body):
 
 
 class RemoteLoginTests(unittest.TestCase):
-    def test_state_from_what_systemctl_prints(self):
-        self.assertEqual(panel.remote_access_from(["active", "inactive"], ["enabled", "disabled"]), "on")
-        self.assertEqual(panel.remote_access_from(["active"], ["disabled"]), "on")                       # running, not at boot
-        self.assertEqual(panel.remote_access_from(["inactive", "inactive"], ["disabled", "enabled"]), "on")   # starts at boot
-        self.assertEqual(panel.remote_access_from(["inactive"], ["enabled-runtime"]), "on")
-        self.assertEqual(panel.remote_access_from(["inactive", "inactive"], ["disabled", "disabled"]), "off")
-        self.assertEqual(panel.remote_access_from(["inactive"], ["indirect"]), "off")
-        self.assertIsNone(panel.remote_access_from(["inactive", "inactive"], []))                         # no unit file at all
-        self.assertIsNone(panel.remote_access_from([], []))
-
-    def test_state_asks_systemctl_about_both_units_and_survives_it_missing(self):
-        original = panel.SYSTEMCTL
-        self.addCleanup(setattr, panel, "SYSTEMCTL", original)
-        panel.SYSTEMCTL = "/nonexistent/systemctl"
-        self.assertIsNone(panel.remote_access_state())
-        with tempfile.TemporaryDirectory() as d:
-            log = Path(d) / "log"
-            panel.SYSTEMCTL = stub_program(d, "systemctl", f'''echo "$*" >> "{log}"
-case "$1" in is-active) echo inactive; echo active ;; is-enabled) echo disabled; echo enabled ;; esac''')
-            self.assertEqual(panel.remote_access_state(), "on")
-            self.assertEqual(log.read_text().splitlines(),
-                             ["is-active ssh.socket ssh.service", "is-enabled ssh.socket ssh.service"])
+    """The state is `noc privacy status --json` (tests/test_noc_cli.py); the panel words it and runs the fixed root verb."""
 
     def test_the_page_text_follows_the_state(self):
         on, off, none = (panel.remote_access_privacy(s) for s in ("on", "off", None))
@@ -1011,53 +979,6 @@ case "$1" in is-active) echo inactive; echo active ;; is-enabled) echo disabled;
 
 
 class ClipboardHistoryTests(unittest.TestCase):
-    def setUp(self):
-        self.dir = tempfile.TemporaryDirectory()
-        self.addCleanup(self.dir.cleanup)
-        for name in ("COPYQ", "COPYQ_SOCKET"):
-            self.addCleanup(setattr, panel, name, getattr(panel, name))
-        self.calls = Path(self.dir.name) / "calls"
-        panel.COPYQ_SOCKET = str(Path(self.dir.name) / ".copyq_s")
-
-    def copyq(self, output):
-        panel.COPYQ = stub_program(self.dir.name, "copyq", f'''echo "$QT_QPA_PLATFORM|$*" >> "{self.calls}"
-echo {output}''')
-
-    def test_not_installed(self):
-        panel.COPYQ = "/nonexistent/copyq"
-        state = panel.clipboard_state()
-        self.assertEqual(state, {"installed": False, "running": False, "count": None})
-        self.assertFalse(panel.clipboard_privacy(state)["can_clear"])
-        self.assertEqual(panel.clear_clipboard_history()[0], False)
-
-    def test_it_is_only_asked_while_it_runs_because_asking_would_start_it(self):
-        self.copyq(7)
-        self.assertEqual(panel.clipboard_state(), {"installed": True, "running": False, "count": None})
-        self.assertFalse(self.calls.exists())
-        Path(panel.COPYQ_SOCKET).write_text("")
-        self.assertEqual(panel.clipboard_state(), {"installed": True, "running": True, "count": 7})
-
-    def test_it_runs_as_the_x11_client_with_a_fixed_script(self):
-        self.copyq(3)
-        Path(panel.COPYQ_SOCKET).write_text("")
-        panel.clipboard_state()
-        platform, args = self.calls.read_text().strip().split("|", 1)
-        self.assertEqual(platform, "xcb")
-        self.assertEqual(args, "eval " + panel.COPYQ_COUNT)
-        for script in (panel.COPYQ_COUNT, panel.COPYQ_CLEAR):          # only the default history tab, nothing interpolated
-            self.assertIn("tab('&clipboard')", script)
-            self.assertNotIn("{", script)
-            self.assertNotIn("tab()", script)
-
-    def test_clearing_succeeds_only_when_the_tab_ends_up_empty(self):
-        self.copyq(0)
-        self.assertEqual(panel.clear_clipboard_history(), (True, "0"))
-        self.assertEqual(self.calls.read_text().strip(), "xcb|eval " + panel.COPYQ_CLEAR)
-        self.copyq(2)
-        self.assertFalse(panel.clear_clipboard_history()[0])
-        panel.COPYQ = stub_program(self.dir.name, "copyq", "echo boom >&2; exit 1")
-        self.assertEqual(panel.clear_clipboard_history(), (False, "boom"))
-
     def test_the_page_text(self):
         head = lambda **state: panel.clipboard_privacy({"installed": True, "running": True, **state})   # noqa: E731
         self.assertEqual(head(count=5)["headline"], "5 copies saved")
@@ -1069,33 +990,21 @@ echo {output}''')
         stopped = panel.clipboard_privacy({"installed": True, "running": False, "count": None})
         self.assertEqual((stopped["headline"], stopped["can_clear"]), ("CopyQ is not running", True))
         self.assertIn("stays after a restart", head(count=5)["text"])
+        gone = panel.clipboard_privacy({"installed": False})
+        self.assertFalse(gone["can_clear"])
+
+    def test_clearing_is_noc_privacy_clipboard_clear(self):
+        with tempfile.TemporaryDirectory() as d:
+            log = Path(d) / "log"
+            self.addCleanup(setattr, panel, "NOC", panel.NOC)
+            panel.NOC = stub_program(d, "noc", f'echo "$*" >> "{log}"; echo cleared')
+            self.assertEqual(panel.clear_clipboard_history(), (True, "cleared"))
+            self.assertEqual(log.read_text().strip(), "privacy clipboard clear")
+            panel.NOC = stub_program(d, "noc", "echo boom; exit 1")
+            self.assertEqual(panel.clear_clipboard_history(), (False, "boom"))
 
 
 class SavedPasswordTests(unittest.TestCase):
-    def read(self, data):
-        with tempfile.TemporaryDirectory() as d:
-            path = Path(d) / "login.keyring"
-            if data is not None:
-                path.write_bytes(data)
-            return panel.keyring_state(str(path))
-
-    def test_state_from_the_file_header(self):
-        self.assertEqual(self.read(b"[keyring]\ndisplay-name=Login\nlock-on-idle=false\n"), "unprotected")
-        self.assertEqual(self.read(panel.KEYRING_ENCRYPTED_MAGIC + b"\x00" * 200), "protected")
-        self.assertEqual(self.read(None), "none")
-        self.assertIsNone(self.read(b"something else entirely"))
-        self.assertIsNone(self.read(b""))
-
-    def test_an_unreadable_path_is_not_an_error(self):
-        with tempfile.TemporaryDirectory() as d:
-            self.assertIsNone(panel.keyring_state(d))            # a directory where the file should be
-
-    def test_the_magic_is_the_one_the_install_script_checks(self):
-        spec = importlib.util.spec_from_file_location("seed_password_store", ROOT / "scripts/seed-password-store.py")
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        self.assertEqual(panel.KEYRING_ENCRYPTED_MAGIC, module.ENCRYPTED_MAGIC)
-
     def test_the_page_says_what_it_is(self):
         plain = panel.keyring_privacy("unprotected", can_open=True)
         self.assertEqual(plain["level"], "warn")
@@ -1109,15 +1018,28 @@ class SavedPasswordTests(unittest.TestCase):
         self.assertEqual(panel.keyring_privacy("none")["level"], "info")
         self.assertEqual(panel.keyring_privacy(None)["text"], "")
 
-    def test_the_snapshot_survives_a_machine_where_nothing_works(self):
-        for name, value in (("HERMES", "/nonexistent/hermes"), ("SYSTEMCTL", "/nonexistent/systemctl"),
-                            ("COPYQ", "/nonexistent/copyq"), ("SEAHORSE", "/nonexistent/seahorse"),
-                            ("KEYRING_FILE", "/nonexistent/login.keyring")):
+
+class PrivacySnapshotTests(unittest.TestCase):
+    def setUp(self):
+        for name in ("NOC", "SEAHORSE"):
             self.addCleanup(setattr, panel, name, getattr(panel, name))
-            setattr(panel, name, value)
+
+    def test_it_is_what_noc_privacy_status_prints(self):
+        with tempfile.TemporaryDirectory() as d:
+            log = Path(d) / "log"
+            state = {"hermes": "cloud", "remote": "on", "clipboard": {"installed": True, "running": True, "count": 4},
+                     "keyring": "unprotected"}
+            panel.NOC = stub_program(d, "noc", f'echo "$*" >> "{log}"; echo \'{json.dumps(state)}\'')
+            panel.SEAHORSE = stub_program(d, "seahorse", "true")
+            self.assertEqual(panel.privacy_snapshot(), {**state, "can_open_keyring": True})
+            self.assertEqual(log.read_text().strip(), "privacy status --json")
+
+    def test_it_survives_a_machine_where_nothing_works(self):
+        panel.NOC = "/nonexistent/noc"
+        panel.SEAHORSE = "/nonexistent/seahorse"
         self.assertEqual(panel.privacy_snapshot(), {"hermes": None, "remote": None,
                                                     "clipboard": {"installed": False, "running": False, "count": None},
-                                                    "keyring": "none", "can_open_keyring": False})
+                                                    "keyring": None, "can_open_keyring": False})
 
 
 class SetupChecklistTests(unittest.TestCase):

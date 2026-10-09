@@ -218,12 +218,12 @@ TERMINAL = {
     'github': ['gh auth login --web', 'gh auth setup-git'],
     'gpu': ['noc gpu status', 'noc gpu install'],
     'disk': ['noc disk status', 'sudo noc disk grow'],
-    'updates': ['noc update', 'noc update --only mise,models', 'noc channel', 'noc channel nightly'],
-    'apps': ['noc apps', 'noc-upstream update --only <app>'],
+    'updates': ['noc update', 'noc update --only mise,models', 'noc channel', 'noc channel nightly', 'noc channel rollback'],
+    'apps': ['noc apps', 'noc apps update', 'noc apps update <app>'],
     'models': ['noc llm setup', 'noc llm fit', 'noc models list', 'noc models pull <model>', 'noc models default <model>', 'noc models rm <model>'],
-    'privacy': ['noctraos-hermes local', 'noctraos-hermes cloud', 'noctraos-search --settings', 'noctraos-weather --setup',
-                'systemctl status ssh', 'sudo systemctl disable --now ssh.socket ssh.service', 'copyq show', 'seahorse'],
-    'health': ['noc doctor'],
+    'privacy': ['noc privacy status', 'noc privacy remote off', 'noc privacy clipboard clear', 'noc privacy hermes local',
+                'noc privacy hermes cloud', 'noctraos-search --settings', 'noctraos-weather --setup'],
+    'health': ['noc doctor', 'noc repair <name>'],
 }
 
 
@@ -266,7 +266,7 @@ SEVERITY = {'fail': 0, 'warn': 1, 'info': 2, 'ok': 3}
 PKEXEC = '/usr/bin/pkexec'
 HELPER = '/usr/local/libexec/noctraos/noc-privileged'
 FIXES = {
-    'hermes:install': [HERMES, 'install'],
+    'hermes:install': [NOC, 'repair', 'hermes'],
     # Through the allowlisted root helper: one polkit prompt, never a terminal or a bare sudo.
     'module:04d_appmanager.sh': [PKEXEC, HELPER, 'module', '04d_appmanager.sh'],
     'module:01b_vm_guest.sh': [PKEXEC, HELPER, 'module', '01b_vm_guest.sh'],
@@ -974,19 +974,10 @@ def gpu_install_argv(detect):
 
 # ---- Privacy ---------------------------------------------------------------------------------
 
-HERMES_LOCAL = [HERMES, 'local', '--no-launch']
-HERMES_CLOUD = [HERMES, 'cloud']
+HERMES_LOCAL = [NOC, 'privacy', 'hermes', 'local']
+HERMES_CLOUD = [NOC, 'privacy', 'hermes', 'cloud']
 SEARCH_SETTINGS = ['/usr/local/bin/noctraos-search', '--settings']
 WEATHER_SETUP = ['/usr/local/bin/noctraos-weather', '--setup']
-
-
-def hermes_mode():
-    """cloud | local | other, or None when Hermes is not installed."""
-    try:
-        out = subprocess.run([HERMES, 'mode'], capture_output=True, text=True, timeout=10).stdout.strip()
-    except (OSError, subprocess.SubprocessError):
-        return None
-    return out if out in ('cloud', 'local', 'other') else None
 
 
 def hermes_privacy(mode):
@@ -1015,29 +1006,8 @@ def switch_command(target, current):
 
 # Three more things the installer arranges without asking, stated plainly on the Privacy page: the SSH server is installed
 # (and started), CopyQ keeps the clipboard history on disk, and the saved-password store is not locked by a password. They are
-# settings, not setup chores: no "do it myself" button and no Overview nag.
-
-SYSTEMCTL = '/usr/bin/systemctl'
-SSH_UNITS = ('ssh.socket', 'ssh.service')    # Ubuntu 24.04 starts sshd from the socket; older releases use the service
-
-
-def remote_access_from(active, enabled):
-    """'on' | 'off' | None (no SSH server) from the words `systemctl is-active` and `is-enabled` print for the SSH units.
-    A missing unit prints nothing to is-enabled, so an empty answer for both means there is no server."""
-    if 'active' in active or any(word.startswith('enabled') or word == 'alias' for word in enabled):
-        return 'on'
-    return 'off' if enabled else None
-
-
-def remote_access_state():
-    """'on' | 'off' | None: whether the SSH server is running or starts at boot (no root needed to ask)."""
-    def words(verb):
-        try:
-            return subprocess.run([SYSTEMCTL, verb, *SSH_UNITS], capture_output=True, text=True, timeout=10).stdout.split()
-        except (OSError, subprocess.SubprocessError):
-            return []
-    return remote_access_from(words('is-active'), words('is-enabled'))
-
+# settings, not setup chores: no "do it myself" button and no Overview nag. The state is read by `noc privacy status --json`
+# and the clearing is `noc privacy clipboard clear`: the panel only words them. Root work is noc-privileged, like the rest.
 
 def remote_access_privacy(state):
     """What the Privacy page says about SSH for each state."""
@@ -1060,34 +1030,6 @@ def remote_access_command(target, current):
     return [PKEXEC, HELPER, 'remote-access', target]
 
 
-COPYQ = '/usr/bin/copyq'
-COPYQ_SOCKET = os.path.join(os.environ.get('XDG_CONFIG_HOME') or os.path.expanduser('~/.config'), 'copyq', '.copyq_s')
-# Fixed scripts: nothing from the person or from the clipboard is ever put into them. Only the default history tab is
-# cleared, never a tab the person made.
-COPYQ_COUNT = "tab('&clipboard'); print(size());"
-COPYQ_CLEAR = "tab('&clipboard'); while (size() > 0) remove(0); print(size());"
-
-
-def copyq_run(script, timeout):
-    """Run a CopyQ script; the server must be the X11 one (see bin/noctraos-copyq), also when this call starts it."""
-    return subprocess.run([COPYQ, 'eval', script], capture_output=True, text=True, timeout=timeout,
-                          env={**os.environ, 'QT_QPA_PLATFORM': 'xcb'})
-
-
-def clipboard_state():
-    """{'installed', 'running', 'count'} for CopyQ's history. It is only asked while CopyQ runs: asking would start it."""
-    installed = os.access(COPYQ, os.X_OK)
-    running = installed and os.path.exists(COPYQ_SOCKET)
-    count = None
-    if running:
-        try:
-            out = copyq_run(COPYQ_COUNT, 5).stdout.strip()
-            count = int(out) if out.isdigit() else None
-        except (OSError, subprocess.SubprocessError):
-            pass
-    return {'installed': installed, 'running': running, 'count': count}
-
-
 def clipboard_privacy(state):
     """What the Privacy page says about the clipboard history."""
     state = state or {}
@@ -1105,34 +1047,11 @@ def clipboard_privacy(state):
 
 
 def clear_clipboard_history():
-    """Delete everything in CopyQ's default history tab. Returns (ok, last line)."""
-    try:
-        out = copyq_run(COPYQ_CLEAR, 30)
-    except (OSError, subprocess.SubprocessError) as error:
-        return False, str(error)
-    text = (out.stdout + out.stderr).strip().splitlines()
-    return out.returncode == 0 and out.stdout.strip() == '0', (text[-1] if text else '')
+    """Empty CopyQ's default history tab. Returns (ok, last line of output)."""
+    return noc_run('privacy', 'clipboard', 'clear', timeout=60)
 
 
-KEYRING_FILE = os.path.expanduser('~/.local/share/keyrings/login.keyring')
-# The first bytes of gnome-keyring's encrypted file; scripts/seed-password-store.py has the same constant (a test keeps the two equal).
-KEYRING_ENCRYPTED_MAGIC = b'GnomeKeyring\n\r\x00\n\x00'
 SEAHORSE = '/usr/bin/seahorse'
-
-
-def keyring_state(path=None):
-    """'protected' (encrypted, needs a password) | 'unprotected' (plain file, the NoctraOS setup) | 'none' (no login keyring yet)
-    | None (unreadable or a format this panel does not know)."""
-    try:
-        with open(path or KEYRING_FILE, 'rb') as handle:
-            head = handle.read(len(KEYRING_ENCRYPTED_MAGIC))
-    except FileNotFoundError:
-        return 'none'
-    except OSError:
-        return None
-    if head.startswith(KEYRING_ENCRYPTED_MAGIC):
-        return 'protected'
-    return 'unprotected' if head.startswith(b'[keyring]') else None
 
 
 def keyring_privacy(state, can_open=False):
@@ -1155,9 +1074,12 @@ def keyring_privacy(state, can_open=False):
 
 
 def privacy_snapshot():
-    """Everything the Privacy page shows, read on a thread (the CopyQ count can take a moment)."""
-    return {'hermes': hermes_mode(), 'remote': remote_access_state(), 'clipboard': clipboard_state(),
-            'keyring': keyring_state(), 'can_open_keyring': os.access(SEAHORSE, os.X_OK)}
+    """Everything the Privacy page shows: `noc privacy status --json` (the CopyQ count can take a moment, so call this on a
+    thread) plus whether Passwords and Keys is installed. When noc cannot answer, every section reads as not found."""
+    state = noc_json('privacy', 'status', '--json', timeout=30) or {}
+    return {'hermes': state.get('hermes'), 'remote': state.get('remote'),
+            'clipboard': state.get('clipboard') or {'installed': False, 'running': False, 'count': None},
+            'keyring': state.get('keyring'), 'can_open_keyring': os.access(SEAHORSE, os.X_OK)}
 
 
 # ---- Setup checklist -------------------------------------------------------------------------

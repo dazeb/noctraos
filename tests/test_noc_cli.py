@@ -386,12 +386,12 @@ class LocalLlmTests(unittest.TestCase):
         log = Path(e.tmp.name) / "installer-args"
         stand_in = Path(e.tmp.name) / "install.sh"
         stand_in.write_text(f'#!/bin/sh\nprintf "%s\\n" "$@" > "{log}"\n')
-        result = e.noc("llm", "setup", NOC_LLM_INSTALLER=str(stand_in))
+        result = e.noc("llm", "setup", NOC_INSTALLER=str(stand_in))
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(log.read_text().split(), ["--only", "optional/local_llm.sh"])
 
     def test_setup_refuses_when_the_installer_snapshot_is_missing(self):
-        result = Env(self).noc("llm", "setup", NOC_LLM_INSTALLER="/nonexistent/install.sh")
+        result = Env(self).noc("llm", "setup", NOC_INSTALLER="/nonexistent/install.sh")
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("not in place", result.stdout)
 
@@ -412,11 +412,13 @@ class LocalLlmTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("usage: noc llm", result.stdout)
 
-    def test_models_pull_names_the_setup_step_when_nothing_is_installed(self):
-        e = Env(self, ollama=False)
-        result = e.noc("models", "pull", "llama3.2:3b", PATH=str(e.bin) + ":/usr/bin:/bin")
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("noc llm setup", result.stdout)
+    def test_models_pull_and_rm_name_the_setup_step_when_nothing_is_installed(self):
+        for verb in ("pull", "rm"):
+            with self.subTest(verb=verb):
+                e = Env(self, ollama=False)
+                result = e.noc("models", verb, "llama3.2:3b", PATH=str(e.bin) + ":/usr/bin:/bin")
+                self.assertEqual(result.returncode, 1)
+                self.assertIn("noc llm setup", result.stdout)
 
     def test_update_has_no_models_step_failure_without_local_ai(self):
         e = Env(self, ollama=False)
@@ -762,6 +764,356 @@ class ChannelTests(unittest.TestCase):
         result = e.noc("channel", NOC_SELFUPDATE="/nonexistent/su")
         self.assertEqual(result.returncode, 1)
         self.assertIn("no NoctraOS updater", result.stdout + result.stderr)
+
+
+def stand_in_installer(e):
+    """A stand-in for the snapshot's install.sh: logs its arguments, one run per line. Returns (extra env, log path)."""
+    log = Path(e.tmp.name) / "installer-args"
+    script = Path(e.tmp.name) / "install.sh"
+    script.write_text(f'#!/bin/sh\necho "$*" >> "{log}"\n')
+    return {"NOC_INSTALLER": str(script)}, log
+
+
+class RepairTests(unittest.TestCase):
+    """`noc repair`: what the Health page's Fix buttons do, from a terminal."""
+
+    def test_each_name_runs_its_module_from_the_installer(self):
+        for name, module in (("appmanager", "04d_appmanager.sh"), ("vm-guest", "01b_vm_guest.sh")):
+            with self.subTest(name=name):
+                e = Env(self, ollama=False)
+                extra, log = stand_in_installer(e)
+                self.assertEqual(e.noc("repair", name, **extra).returncode, 0)
+                self.assertEqual(log.read_text().split(), ["--only", module])
+
+    def test_hermes_runs_its_own_installer(self):
+        e = Env(self, ollama=False)
+        e.stub("noctraos-hermes", f'echo "hermes $*" >> "{e.home}/calls"')
+        self.assertEqual(e.noc("repair", "hermes").returncode, 0)
+        self.assertEqual((e.home / "calls").read_text().strip(), "hermes install")
+
+    def test_anything_else_is_a_usage_message_and_runs_nothing(self):
+        e = Env(self, ollama=False)
+        extra, log = stand_in_installer(e)
+        for args in ((), ("bogus",), ("03b_ollama_update.sh",), ("../install.sh",)):
+            result = e.noc("repair", *args, **extra)
+            self.assertEqual(result.returncode, 1, args)
+            self.assertIn("usage: noc repair", result.stdout)
+        self.assertFalse(log.exists())
+
+    def test_without_the_snapshot_it_says_so(self):
+        result = Env(self, ollama=False).noc("repair", "appmanager", NOC_INSTALLER="/nonexistent/install.sh")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("not in place", result.stdout)
+
+
+APPS_JSON = json.dumps({"online": True, "apps": [
+    {"id": "hermes", "updater": "user", "status": "current"},
+    {"id": "ollama", "updater": "root", "module": "03b_ollama_update.sh", "status": "outdated"},
+    {"id": "appmanager", "updater": "root", "module": "04d_appmanager.sh", "status": "current"},
+    {"id": "codex", "updater": "user", "status": "outdated"},
+    {"id": "claude", "updater": "user", "status": "outdated"},
+]})
+
+
+def tracker_stub(e, rows=APPS_JSON, listing_fails=False):
+    """A stand-in for noc-upstream: prints `rows` for `list`, logs every other call. Returns (extra env, log path)."""
+    calls = e.home / "tracker-calls"
+    listing = "exit 1" if listing_fails else f"echo '{rows}'"
+    e.stub("tracker", f'if [ "$1" = list ]; then {listing}; fi\nif [ "$1" != list ]; then echo "$*" >> "{calls}"; fi')
+    return {"NOC_UPSTREAM": str(e.bin / "tracker")}, calls
+
+
+class AppsUpdateTests(unittest.TestCase):
+    """`noc apps update`: the Apps page's Update buttons, including the root-owned apps the tracker only reports."""
+
+    def run_noc(self, *args, listing_fails=False):
+        e = Env(self, ollama=False)
+        extra, log = stand_in_installer(e)
+        tracker_env, calls = tracker_stub(e, listing_fails=listing_fails)
+        result = e.noc("apps", "update", *args, **extra, **tracker_env)
+        installer = log.read_text().splitlines() if log.exists() else []
+        tracker = calls.read_text().splitlines() if calls.exists() else []
+        return result, installer, tracker
+
+    def test_everything_behind_is_updated_the_root_app_through_its_module(self):
+        result, installer, tracker = self.run_noc()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(installer, ["--only 03b_ollama_update.sh"])          # only the one that is behind
+        self.assertEqual(tracker, ["update"])                                  # Hermes and the agents, as the person
+
+    def test_a_root_app_alone_never_calls_the_user_tracker(self):
+        result, installer, tracker = self.run_noc("ollama")
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual((installer, tracker), (["--only 03b_ollama_update.sh"], []))
+
+    def test_user_apps_alone_go_to_the_tracker_with_their_names(self):
+        result, installer, tracker = self.run_noc("codex,claude")
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual((installer, tracker), ([], ["update --only codex,claude"]))
+
+    def test_a_current_root_app_is_left_alone(self):
+        result, installer, tracker = self.run_noc("appmanager")
+        self.assertEqual((result.returncode, installer, tracker), (0, [], []))
+
+    def test_an_unknown_app_is_refused_before_anything_runs(self):
+        result, installer, tracker = self.run_noc("ollama,nope")
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("unknown app: nope", result.stdout)
+        self.assertEqual((installer, tracker), ([], []))
+
+    def test_no_connection_is_an_error_not_a_silent_success(self):
+        result, installer, tracker = self.run_noc(listing_fails=True)
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual((installer, tracker), ([], []))
+
+    def test_the_plain_listing_still_works(self):
+        e = Env(self, ollama=False)
+        e.stub("tracker", 'echo "tracker $*"')
+        self.assertEqual(e.noc("apps", "--json", NOC_UPSTREAM=str(e.bin / "tracker")).stdout.strip(), "tracker list --json")
+
+
+class ChannelRollbackTests(unittest.TestCase):
+    def test_rollback_asks_the_updater_to_put_the_previous_layer_back(self):
+        e, extra = ChannelTests.env(self)
+        self.assertEqual(e.noc("channel", "rollback", **extra).returncode, 0)
+        self.assertEqual((e.home / "calls").read_text().strip(), "rollback")
+
+
+class PrivacyStatusTests(unittest.TestCase):
+    """`noc privacy status`: the one place that reads remote login, clipboard history and the keyring for the panel."""
+
+    def setUp(self):
+        self.e = Env(self, ollama=False)
+        self.socket = self.e.home / ".config/copyq/.copyq_s"
+        self.keyring = self.e.home / "login.keyring"
+        self.calls = self.e.home / "calls"
+
+    def systemctl(self, active, enabled):
+        """A systemctl that answers is-active/is-enabled with one word per unit."""
+        self.e.stub("systemctl", f'echo "$*" >> "{self.calls}"\ncase "$1" in is-active) printf "%s\\n" {active} ;; '
+                                 f'is-enabled) printf "%s\\n" {enabled} ;; esac')
+
+    def copyq(self, output):
+        self.e.stub("copyq", f'echo "$QT_QPA_PLATFORM|$*" >> "{self.calls}"\necho {output}')
+
+    def status(self, **extra):
+        out = self.e.noc("privacy", "status", "--json", NOC_KEYRING_FILE=str(self.keyring), **extra)
+        self.assertEqual(out.returncode, 0, out.stderr)
+        return json.loads(out.stdout)
+
+    def test_the_keys_are_stable(self):
+        self.assertEqual(sorted(self.status()), ["clipboard", "hermes", "keyring", "remote"])
+
+    def test_remote_login_from_what_systemctl_prints(self):
+        cases = [("inactive active", "disabled enabled", "on"),
+                 ("active", "disabled", "on"),                            # running, not at boot
+                 ("inactive inactive", "disabled enabled", "on"),         # starts at boot
+                 ("inactive", "enabled-runtime", "on"),
+                 ("inactive inactive", "disabled disabled", "off"),
+                 ("inactive", "indirect", "off"),
+                 ("inactive inactive", "", None)]                         # no unit file at all
+        for active, enabled, want in cases:
+            with self.subTest(active=active, enabled=enabled):
+                self.systemctl(active, enabled)
+                self.assertEqual(self.status()["remote"], want)
+
+    def test_remote_login_asks_about_both_units(self):
+        self.systemctl("inactive", "disabled")
+        self.status()
+        self.assertEqual(self.calls.read_text().splitlines(),
+                         ["is-active ssh.socket ssh.service", "is-enabled ssh.socket ssh.service"])
+
+    def test_clipboard_is_only_asked_while_copyq_runs_because_asking_would_start_it(self):
+        self.assertEqual(self.status()["clipboard"], {"installed": False, "running": False, "count": None})
+        self.copyq(7)
+        self.assertEqual(self.status()["clipboard"], {"installed": True, "running": False, "count": None})
+        self.assertFalse(self.calls.exists())
+        self.socket.parent.mkdir(parents=True)
+        self.socket.write_text("")
+        self.assertEqual(self.status()["clipboard"], {"installed": True, "running": True, "count": 7})
+        platform, args = self.calls.read_text().strip().split("|", 1)
+        self.assertEqual(platform, "xcb")                                  # the X11 client, as bin/noctraos-copyq runs it
+        self.assertEqual(args, "eval tab('&clipboard'); print(size());")
+
+    def test_the_keyring_from_the_file_header(self):
+        self.assertEqual(self.status()["keyring"], "none")
+        self.keyring.write_bytes(b"[keyring]\ndisplay-name=Login\nlock-on-idle=false\n")
+        self.assertEqual(self.status()["keyring"], "unprotected")
+        self.keyring.write_bytes(self.encrypted_magic() + b"\x00" * 200)
+        self.assertEqual(self.status()["keyring"], "protected")
+        for other in (b"something else entirely", b""):
+            self.keyring.write_bytes(other)
+            self.assertIsNone(self.status()["keyring"], other)
+
+    @staticmethod
+    def encrypted_magic():
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("seed_password_store", ROOT / "scripts/seed-password-store.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module.ENCRYPTED_MAGIC                                       # the bytes the install script checks
+
+    def test_hermes_comes_from_its_wrapper(self):
+        self.assertIsNone(self.status()["hermes"])                          # not installed
+        for mode in ("cloud", "local", "other"):
+            self.e.stub("noctraos-hermes", f'[ "$1" = mode ] && echo {mode}')
+            self.assertEqual(self.status()["hermes"], mode)
+        self.e.stub("noctraos-hermes", "echo nonsense")
+        self.assertIsNone(self.status()["hermes"])
+
+    def test_the_text_form_says_each_thing_in_words(self):
+        self.systemctl("active", "enabled")
+        self.copyq(212)
+        self.socket.parent.mkdir(parents=True)
+        self.socket.write_text("")
+        self.keyring.write_bytes(b"[keyring]\n")
+        out = self.e.noc("privacy", "status", NOC_KEYRING_FILE=str(self.keyring)).stdout
+        for want in ("Remote login", "on (other computers can sign in", "212 saved by CopyQ", "not locked by a password"):
+            self.assertIn(want, out)
+
+
+class PrivacyActionTests(unittest.TestCase):
+    def setUp(self):
+        self.e = Env(self, ollama=False)
+        self.calls = self.e.home / "calls"
+        self.e.stub("sudo", 'exec "$@"')                                    # a real sudo would ask for a password in a test
+        self.e.stub("privileged", f'echo "privileged $*" >> "{self.calls}"')
+
+    def systemctl(self, active, enabled):
+        self.e.stub("systemctl", f'case "$1" in is-active) printf "%s\\n" {active} ;; is-enabled) printf "%s\\n" {enabled} ;; esac')
+
+    def remote(self, *args):
+        return self.e.noc("privacy", "remote", *args, NOC_PRIVILEGED=str(self.e.bin / "privileged"))
+
+    def logged(self):
+        return self.calls.read_text().splitlines() if self.calls.exists() else []
+
+    def test_remote_login_is_switched_by_the_privileged_helper_and_only_when_it_needs_to(self):
+        self.systemctl("active", "enabled")
+        self.assertEqual(self.remote("off").returncode, 0)
+        self.assertEqual(self.logged(), ["privileged remote-access off"])
+        self.assertIn("already on", self.remote("on").stdout)               # nothing to change
+        self.systemctl("inactive", "disabled")
+        self.assertEqual(self.remote("on").returncode, 0)
+        self.assertEqual(self.logged(), ["privileged remote-access off", "privileged remote-access on"])
+
+    def test_remote_login_shows_its_state_without_an_argument(self):
+        self.systemctl("active", "enabled")
+        self.assertEqual(self.remote().stdout.strip(), "remote login is on")
+
+    def test_no_server_is_an_error_that_changes_nothing(self):
+        self.systemctl("inactive", "")
+        result = self.remote("on")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("not installed", result.stdout)
+        self.assertEqual(self.logged(), [])
+
+    def test_anything_but_on_or_off_is_refused_before_the_helper_is_called(self):
+        self.systemctl("active", "enabled")
+        for word in ("maybe", "ON", "off; id", "--now"):
+            self.assertEqual(self.remote(word).returncode, 1, word)
+        self.assertEqual(self.logged(), [])
+
+    def copyq(self, output, code=0):
+        self.e.stub("copyq", f'echo "$QT_QPA_PLATFORM|$*" >> "{self.calls}"\necho {output}\nexit {code}')
+
+    def test_clearing_the_clipboard_empties_only_the_default_tab(self):
+        self.copyq(0)
+        result = self.e.noc("privacy", "clipboard", "clear")
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertEqual(self.logged(), ["xcb|eval tab('&clipboard'); while (size() > 0) remove(0); print(size());"])
+
+    def test_clearing_succeeds_only_when_the_tab_ends_up_empty(self):
+        self.copyq(2)
+        self.assertEqual(self.e.noc("privacy", "clipboard", "clear").returncode, 1)
+        self.copyq("boom", code=1)
+        result = self.e.noc("privacy", "clipboard", "clear")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("boom", result.stdout)
+
+    def test_clipboard_without_copyq_says_so(self):
+        for args in ((), ("clear",)):
+            result = self.e.noc("privacy", "clipboard", *args)
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("CopyQ is not installed", result.stdout)
+
+    def test_hermes_switches_without_launching_the_app(self):
+        self.e.stub("noctraos-hermes", f'echo "hermes $*" >> "{self.calls}"; [ "$1" = mode ] && echo cloud; exit 0')
+        self.assertEqual(self.e.noc("privacy", "hermes", "local").returncode, 0)
+        self.assertEqual(self.e.noc("privacy", "hermes", "cloud").returncode, 0)
+        self.assertEqual(self.e.noc("privacy", "hermes").stdout.strip(), "cloud")
+        self.assertEqual(self.logged(), ["hermes local --no-launch", "hermes cloud", "hermes mode"])
+
+    def test_hermes_missing_or_unknown_word(self):
+        self.assertEqual(self.e.noc("privacy", "hermes", "local").returncode, 1)
+        self.e.stub("noctraos-hermes", "true")
+        self.assertEqual(self.e.noc("privacy", "hermes", "bogus").returncode, 1)
+
+    def test_usage_for_anything_else(self):
+        result = self.e.noc("privacy", "bogus")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("usage: noc privacy", result.stdout)
+
+
+class PanelParityTests(unittest.TestCase):
+    """Whatever the Control Panel can do, `noc` can do, so a broken panel never leaves a machine without the option.
+    Every root verb of noc-privileged, every module it may run and every Health fix needs a `noc` command; adding one to the
+    panel without one fails here."""
+
+    HELPER = (ROOT / "bin/noc-privileged").read_text()
+    PANEL = (ROOT / "control/panel.py").read_text()
+
+    # noc-privileged verb -> the noc command (words after `noc`) that does the same; `module` is checked per module below
+    VERBS = {"update": "update", "update-channel": "channel", "update-rollback": "channel rollback", "module": None,
+             "gpu-install": "gpu install", "disk-grow": "disk grow", "remote-access": "privacy remote"}
+    # module the panel may run -> the noc command that runs the same module
+    MODULES = {"04d_appmanager.sh": ["repair", "appmanager"], "01b_vm_guest.sh": ["repair", "vm-guest"],
+               "03b_ollama_update.sh": ["apps", "update", "ollama"], "optional/local_llm.sh": ["llm", "setup"]}
+
+    def test_every_root_verb_has_a_noc_command(self):
+        import re
+        main = self.HELPER[self.HELPER.index("main() {"):]
+        verbs = set(re.findall(r"(?m)^    ([a-z][a-z-]*)\)", main))
+        self.assertEqual(verbs, set(self.VERBS), "a verb was added to or removed from noc-privileged: say which noc command does it")
+        noc = (ROOT / "bin/noc").read_text()
+        for verb, command in self.VERBS.items():
+            if command:
+                first = command.split()[0]
+                self.assertRegex(noc, rf"(?m)^\s+{first}\)", f"{verb}: noc has no '{first}'")
+
+    def test_every_module_the_panel_may_run_has_a_noc_command_that_runs_that_module(self):
+        import re
+        allowed = re.search(r"^MODULES=\((.*)\)", self.HELPER, re.M).group(1).split()
+        self.assertEqual(sorted(allowed), sorted(self.MODULES), "a module was added to or removed from noc-privileged's MODULES")
+        for module, command in self.MODULES.items():
+            with self.subTest(module=module):
+                e = Env(self, ollama=False)
+                extra, log = stand_in_installer(e)
+                tracker_env, _ = tracker_stub(e)                           # `noc apps update ollama` needs Ollama to be behind
+                result = e.noc(*command, **extra, **tracker_env)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertEqual(log.read_text().split(), ["--only", module])
+
+    def test_every_health_fix_names_a_noc_command(self):
+        import re
+        noc = (ROOT / "bin/noc").read_text()
+        block = self.PANEL[self.PANEL.index("FIXES = {"):]
+        for fix in re.findall(r"(?m)^    '([a-z]+:[A-Za-z0-9_.]+)':", block[:block.index("}")]):
+            hints = re.findall(rf'\(run: ([^)]*)\)"[^\n]*"{re.escape(fix)}"', noc)
+            self.assertEqual(len(hints), 1, f"{fix}: noc doctor has no (run: ...) hint for it")
+            self.assertTrue(hints[0].startswith("noc "), f"{fix}: the hint is '{hints[0]}', not a noc command")
+
+    def test_every_terminal_tip_is_a_noc_command_or_the_tool_for_it(self):
+        import sys
+        sys.path.insert(0, str(ROOT / "control"))
+        try:
+            import panel
+        finally:
+            sys.path.remove(str(ROOT / "control"))
+        plain = ("git ", "gh ", "noctraos-search ", "noctraos-weather ", "sudo noc ")   # tools with no noc front, or noc with sudo
+        for key, commands in panel.TERMINAL.items():
+            for command in commands:
+                self.assertTrue(command.startswith("noc ") or command.startswith(plain), f"{key}: '{command}'")
 
 
 if __name__ == "__main__":

@@ -125,7 +125,7 @@ manual and staged; `iso/renew-update-channels.sh` keeps the manifests alive.
 
 **On the machine.** The Updates page lists the NoctraOS step like any other, shows which update is installed and which channel
 it follows, lets a tester switch to **Nightly** (a confirmation: it can break things) or back to **Stable**, and offers **Go back to the
-previous update** when there is one. Terminal: `noc channel [stable|nightly]`, `noc update --only noctraos`.
+previous update** when there is one. Terminal: `noc channel [stable|nightly|rollback]`, `noc update --only noctraos`.
 
 ## Channels and promotion
 

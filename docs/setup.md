@@ -78,6 +78,13 @@ noc bg list|next|set <name>   # the wallpaper set
 noc gpu detect    # what GPU you have and what would be installed
 noc gpu install   # (re)run GPU driver + CUDA/ROCm setup — safe to repeat
 noc gpu status --smoke   # verify driver, CUDA/ROCm, and run a real device probe
+noc apps          # Hermes, Ollama, AppManager and the coding agents: installed vs newest release
+noc apps update   # bring them to the newest release (Ollama and AppManager ask for your password)
+noc repair appmanager   # run again what noc doctor found missing (appmanager | vm-guest | hermes)
+noc channel       # which NoctraOS update channel; noc channel nightly | stable | rollback
+noc privacy status      # remote login, clipboard history, saved passwords, where Hermes sends what you type
+noc privacy remote off  # turn the SSH server off (on to turn it back on)
+noc privacy clipboard clear   # empty the clipboard history
 noctraos-control  # the Control Panel: system state, mouse-driven (more pages coming)
 ```
 

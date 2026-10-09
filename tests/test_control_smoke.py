@@ -21,7 +21,7 @@ import gi
 gi.require_version("Gtk", "3.0"); gi.require_version("Gdk", "3.0")
 from gi.repository import Gdk, GLib, Gtk
 import panel
-for name in ("NOC", "GPU_BIN", "HERMES", "HELPER", "PKEXEC", "SYSTEMCTL", "COPYQ", "SEAHORSE", "KEYRING_FILE"):
+for name in ("NOC", "GPU_BIN", "HERMES", "HELPER", "PKEXEC", "SEAHORSE"):
     setattr(panel, name, "/nonexistent/" + name)
 panel.FIXES = {k: ["/nonexistent/fix"] for k in panel.FIXES}
 panel.OLLAMA_URL = "http://127.0.0.1:9"

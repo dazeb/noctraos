@@ -79,7 +79,8 @@ install/
                             (module order in install.sh: 01b 00 01 02 04 04_workstation 04c 04d 05 06 08 09 10 07 11 — the first run never downloads a model)
 bin/
   noc                       CLI: update [--json] [--only ..] | updates | doctor [--json] | status | models [list [--json]|default|presets|pull|rm] | llm [setup|fit]
-                            | skip [list [--json]|add|rm] | bg [list|next|set] | gpu. Sourceable (tests call its functions); NOC_OLLAMA_URL overrides the Ollama URL
+                            | skip [list [--json]|add|rm] | bg [list|next|set] | gpu | channel [stable|nightly|rollback] | apps [update] | repair <appmanager|vm-guest|hermes>
+                            | privacy [status [--json]|remote on|off|clipboard clear|hermes local|cloud]. Sourceable (tests call its functions); NOC_OLLAMA_URL overrides the Ollama URL
   noc-gpu                   GPU detect [--json] | install | status [--json] (NVIDIA driver+CUDA, AMD ROCm); VERSION must match noc
   noctraos-control          wrapper that execs the system-Python Control Panel (control/)
   noc-disk                  notices a disk bigger than the system partition (an enlarged VM disk) and uses the space: `status [--json]` (no root,
@@ -352,7 +353,7 @@ bash -n boot.sh install.sh install/*.sh install/optional/*.sh bin/noc bin/noc-gp
 docker run --rm -v "$PWD:/mnt" koalaman/shellcheck:stable --severity=warning \
   boot.sh install.sh install/*.sh install/optional/*.sh bin/noc bin/noc-gpu bin/noc-privileged bin/noctraos-control bin/noctraos-agent \
   bin/noctraos-copyq bin/noctraos-hermes configs/nautilus-scripts/*     # same list as CI
-python3 -m unittest discover -s tests                # 546 tests: theme, GPU detection, noc JSON modes, root helper, Control Panel
+python3 -m unittest discover -s tests                # 570 tests: theme, GPU detection, noc JSON modes, root helper, Control Panel
 python3 scripts/render-theme.py --check              # committed theme outputs match palette.json
 
 # wallpaper iteration (venv at ~/workspace/scratch/zorin-img-venv: pillow+numpy)
@@ -582,23 +583,33 @@ tail -f /root/noctraos-build.log
   `panel.GPU_NEEDS` are estimates shown as "about".
 - **Privacy page rules**: the Nous free tier is a cloud service and the page must never say otherwise;
   switching to cloud needs an explicit confirmation; a user's own Hermes provider (`mode: other`) is
-  never touched; `noctraos-hermes local --no-launch` switches without opening the app.
+`noc privacy hermes local` (`noctraos-hermes local --no-launch`) switches without opening the app.
   The page also states three things the installer arranges without asking (settings, not setup chores: no skip button, no
   Overview nag). **Remote login**: `openssh-server` comes from module 01; on Ubuntu 24.04 sshd starts from `ssh.socket`, so the
   state is "on" when either the socket or the service is active or enabled, and `noc-privileged remote-access off` disables
   both (disabling only `ssh.service` leaves the socket listening); `on` re-enables the socket (else the service) and
-  confirms first. **Clipboard history**: CopyQ keeps it on disk; the page counts and clears only the default `&clipboard` tab
+  confirms first. **Clipboard history**: CopyQ keeps it on disk; `noc privacy` counts and clears only the default `&clipboard` tab
   through fixed `copyq eval` scripts run as the X11 client, and asks CopyQ only while it runs (asking would start it).
   **Saved passwords**: `scripts/seed-password-store.py` makes the login keyring an unencrypted file, so the page reads the
   file header (`[keyring]` plain, `GnomeKeyring` encrypted) and only states the trade-off and offers Passwords and Keys; it never
   changes the keyring. Chromium and VS Code use `--password-store=basic`, so a keyring password would not cover them, and the
-  text says so. Untested on a real desktop so far: the `copyq eval` clear script and the `ssh.socket` switch.
+  text says so. The page reads all of it from `noc privacy status --json` (one implementation, in `bin/noc`; the page only words it);
+  tests stand in for `systemctl`, `copyq` and the keyring file with `NOC_KEYRING_FILE` and PATH stubs, and `noc privacy remote` reaches
+  `noc-privileged remote-access` through `sudo` (`NOC_PRIVILEGED` in tests). Untested on a real desktop so far: the `copyq eval` clear
+  script and the `ssh.socket` switch.
 - **Local AI is set up from the AI models page, never on its own.** When `noc status --json` says `ollama.installed` is false the page offers
   "Set up local AI…": a summary (Ollama about 1.4 GB, the GPU driver lines from `noc-gpu`, LLMFIT, "no model is downloaded"), a free-disk check
   (`panel.LOCAL_AI_NEEDS` plus the GPU's need) and a yes, then `pkexec noc-privileged module optional/local_llm.sh` (the exact name is in
   `MODULES`; it runs from the root-owned snapshot like every module). It is an option, not a setup chore: the Overview card and checklist step
   only point at the page (`waiting`, never `todo`), so there is no skip button. A failed run keeps its log open on the page. Untested on a real
   desktop so far: the pkexec run itself (the GTK flow is driven in `tests/test_control_smoke.py` with a stand-in for it).
+- **Everything the Control Panel can do, `noc` can do** (user's rule, 2026-10-09: "we should still have noc that should have all the
+  configuration options in case something on the user frontend breaks"). The panel is a front end: state comes from `noc ... --json`,
+  actions are a `noc` command or, for root, a `noc-privileged` verb that `noc` reaches through `sudo` (one implementation of each, never
+  a copy in Python). When you add a panel action: put the logic in `bin/noc` first, make the panel call it, add its `noc` form to
+  `TERMINAL` and to the table in `docs/control-panel.md`. `PanelParityTests` in `tests/test_noc_cli.py` fails when a `noc-privileged`
+  verb, an allowed module or a Health fix has no `noc` command. Installer modules a terminal runs go through `run_module` (the
+  root-owned snapshot, as the person, `NOC_INSTALLER` in tests): `noc llm setup`, `noc repair`, `noc apps update ollama`.
 - **The Control Panel is a GUI for `noc`, nothing more.** `control/main.py` calls `noc ... --json`
   on a thread (`background()`), never blocks GTK, and every page needs a "not ready yet" state
   (Ollama down, no network) rather than an exception. Put anything that can be tested without
