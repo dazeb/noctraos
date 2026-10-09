@@ -313,6 +313,7 @@ class DoctorStatusTests(unittest.TestCase):
         disk = json.loads(e.noc("status", **extra).stdout)["disk"]
         self.assertEqual((disk["can_grow"], disk["expandable_bytes"]), (True, 35433480192))
         self.assertEqual((disk["disk_bytes"], disk["partition_bytes"]), (68719476736, 33285996544))
+        self.assertIs(disk["needs_fdisk"], False)               # absent in the stub's answer: never guessed as true
         self.assertIn("root_free_bytes", disk)
 
     def test_status_json_without_the_tool_keeps_the_old_disk_shape(self):

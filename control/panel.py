@@ -843,6 +843,9 @@ def disk_grow_summary(disk):
                      'NoctraOS was installed.')
     lines.append(f'NoctraOS can take up all of it: {fmt_bytes(disk.get("expandable_bytes") or 0)} more room for apps, '
                  'models and files.')
+    if disk.get('needs_fdisk'):
+        lines.append('It first installs a small partition tool (fdisk) from the Ubuntu archive, which needs the internet and '
+                     'also updates a few system libraries that go with it.')
     lines.append('Your files are not touched and nothing is erased. It takes a few seconds and the computer stays on. '
                  'If it cannot finish live, you will be asked to restart once.')
     lines.append('Tip: if you keep important files only here, back them up first, as with any disk change.')

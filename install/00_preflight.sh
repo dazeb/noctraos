@@ -64,13 +64,18 @@ if [ "$avail_gb" -lt "$min_gb" ]; then
   # A virtual disk enlarged after install leaves the new space outside the system partition, so "18GiB free" on a
   # 64 GB disk is baffling. This runs before the Control Panel exists, in the terminal first boot opened (sudo is
   # already unlocked), so offer the fix right here. Nothing changes without a yes.
-  unused_gb=0
+  unused_gb=0 needs_fdisk=false
   if [ -f "$REPO_ROOT/bin/noc-disk" ] && disk_json="$(python3 "$REPO_ROOT/bin/noc-disk" status --json 2>/dev/null)"; then
-    unused_gb="$(printf '%s' "$disk_json" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(int(d["expandable_bytes"]/2**30) if d.get("can_grow") else 0)' 2>/dev/null || echo 0)"
+    read -r unused_gb needs_fdisk < <(printf '%s' "$disk_json" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(int(d["expandable_bytes"]/2**30) if d.get("can_grow") else 0, "true" if d.get("needs_fdisk") else "false")' 2>/dev/null || echo "0 false")
   fi
   if [ "${unused_gb:-0}" -gt 0 ]; then
     warn "The disk has ${unused_gb}GiB that the system is not using yet (the disk was made bigger after install)."
     if [ -t 0 ]; then
+      # Same disclosure as the Control Panel's dialog (which does not exist yet on this path): growing needs the sfdisk tool.
+      if [ "$needs_fdisk" = true ]; then
+        printf '  It first installs a small partition tool (fdisk) from the Ubuntu archive, which needs the internet and\n'
+        printf '  also updates a few system libraries that go with it.\n'
+      fi
       printf '  Use all of it now? Your files are not touched and nothing is erased. [Y/n] '
       read -r reply || reply=n
       case "${reply:-Y}" in

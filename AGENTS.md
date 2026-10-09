@@ -326,7 +326,7 @@ bash -n boot.sh install.sh install/*.sh bin/noc bin/noc-gpu bin/noc-privileged b
 docker run --rm -v "$PWD:/mnt" koalaman/shellcheck:stable --severity=warning \
   boot.sh install.sh install/*.sh bin/noc bin/noc-gpu bin/noc-privileged bin/noctraos-control bin/noctraos-agent \
   bin/noctraos-copyq bin/noctraos-hermes configs/nautilus-scripts/*     # same list as CI
-python3 -m unittest discover -s tests                # 484 tests: theme, GPU detection, noc JSON modes, root helper, Control Panel
+python3 -m unittest discover -s tests                # 501 tests: theme, GPU detection, noc JSON modes, root helper, Control Panel
 python3 scripts/render-theme.py --check              # committed theme outputs match palette.json
 
 # wallpaper iteration (venv at ~/workspace/scratch/zorin-img-venv: pillow+numpy)
@@ -538,7 +538,10 @@ tail -f /root/noctraos-build.log
   partition, so the first-boot preflight died with "Only 18GiB free" on a 64 GB disk (VM 106, 2026-10-09). `bin/noc-disk` reads the layout from sysfs
   (no root), supports only the plain installer layout (root on the LAST partition, ext4/xfs/btrfs; LVM, encryption and a partition behind root are
   reported and left alone), and `grow` does `sfdisk --no-reread --relocate gpt-bak-std`, `sfdisk --no-reread -N <n>` with `, +`, `partx -u`, then the
-  online filesystem grow. `--no-reread` is required: without it sfdisk refuses a disk with a mounted partition. It prints "re-reading the partition
+  online filesystem grow. A default install has NO `sfdisk` (Ubuntu 24.04 puts it in the separate `fdisk` package; found on VM 106, 2026-10-09,
+  not in the container tests), so `grow` first runs `apt-get install fdisk` (it pins 11 util-linux libraries to the same version, so those update
+  too; `status` reports `needs_fdisk`; the panel's consent dialog and the preflight's Y/n both say so, see `tests/test_preflight_disk.py`). `parted` was tried instead and rejected: script mode neither fixes a stale GPT
+  nor confirms "partition is in use". `--no-reread` is required: without it sfdisk refuses a disk with a mounted partition. It prints "re-reading the partition
   table failed" even on success, so successful steps are quiet. Verified on a real mounted loop disk in a privileged container (2 GiB -> 8 GiB, no
   restart); if a kernel ever keeps the old size, `grow` exits 10, leaves the filesystem alone and the next run finishes it (the filesystem-slack check).
   The consent is always explicit: the panel dialog on the Hardware page, or a Y/n in the preflight terminal (the panel is not installed yet when preflight
