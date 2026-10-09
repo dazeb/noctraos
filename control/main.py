@@ -25,6 +25,10 @@ import pages  # noqa: E402
 from pages import label  # noqa: E402
 
 APP_ID = 'local.noctraos.Control'
+# GNOME ties a running window to its launcher (and so to the pinned dock icon) by the window's app id, and GTK takes that from the
+# program name, which for `python3 main.py` is "main.py". Without this the panel gets a second, generic icon beside the pinned one.
+# The name must equal the launcher's file name without ".desktop" (configs/applications/noctraos-control.desktop; a test pins it).
+GLib.set_prgname('noctraos-control')
 
 # Same palette as the Welcome and Appearance windows (configs/theme/palette.json), 2 px corners.
 CSS = b"""

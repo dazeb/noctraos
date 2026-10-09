@@ -882,8 +882,18 @@ class UpdateLayerTests(unittest.TestCase):
         failed = panel.layer_summary({**self.STATUS, "failed_migrations": ["0002_x.sh"]})["problem"]
         self.assertIn("0002_x.sh", failed)
         self.assertIn("tried again", failed)
-        self.assertIn("Update 5", panel.layer_summary({**self.STATUS, "held": 5})["problem"])
+        self.assertIn("Update 5 was put back", panel.layer_summary({**self.STATUS, "held": 5})["problem"])
         self.assertIn("signing key", panel.layer_summary({**self.STATUS, "signing_key": False})["problem"])
+
+    def test_a_held_or_expired_update_is_not_called_unverifiable(self):
+        def row(status):
+            updates = {"apt": {"count": 0}, "flatpak": 0, "noctraos": {"status": status}}
+            return next(r for r in panel.update_rows(updates) if r["id"] == "noctraos")
+        self.assertIn("put back", row("held")["detail"])
+        self.assertIn("out of date", row("expired")["detail"])
+        for status in ("held", "expired", "current", "staged", "unreachable", "unverified"):
+            self.assertFalse(row(status)["available"], status)           # nothing to tick, and no wrong "could not verify"
+        self.assertIn("Could not verify", row("unverified")["detail"])
 
     def test_no_updater_is_not_an_error(self):
         s = panel.layer_summary(None)

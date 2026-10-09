@@ -298,7 +298,9 @@ class OverviewPage(Page):
         row.pack_start(text, True, True, 0)
         if step.state != 'waiting' or step.page:
             classes = ['suggested'] if step.state == 'todo' and not step.optional else []
-            row.pack_end(button(step.button, *classes, on_click=lambda *_: self._do(step)), False, False, 0)
+            action = button(step.button, *classes, on_click=lambda *_: self._do(step))
+            action.set_valign(Gtk.Align.CENTER)       # a tall row must not stretch its button
+            row.pack_end(action, False, False, 0)
         return row
 
     def _do(self, step):
@@ -487,7 +489,8 @@ class UpdatesPage(Page):
     def _rollback(self):
         argv = panel.rollback_command(self.layer_state)
         if argv and self._confirm('Go back to the previous update?', 'The previous version of the NoctraOS features is put back. '
-                                  'Your files and settings are not touched. Newer steps that already ran are not undone.',
+                                  'Your files and settings are not touched, and steps that already ran are not undone. '
+                                  'That update is not offered again; the next one is.',
                                   'Go back'):
             self._run_layer(argv, 'Going back…', 'Done. The previous update is back.')
 
