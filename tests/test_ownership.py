@@ -94,6 +94,15 @@ class MigrationTests(unittest.TestCase):
         recorder.write_text(f'#!/bin/sh\nfor a in "$@"; do echo "$a"; done >> "{self.log}"\n')
         recorder.chmod(0o755)
         self.recorder = recorder
+        failing = Path(self.tmp.name) / "chown-failing"
+        failing.write_text('#!/bin/sh\necho "chown: Operation not permitted" >&2\nexit 1\n')
+        failing.chmod(0o755)
+        self.failing = failing
+        # by default this is a NoctraOS system built from a flattened image: the release file, and a canary still flattened
+        self.release = self.tree / "etc/noctraos-release"
+        self.release.parent.mkdir(parents=True, exist_ok=True)
+        self.release.write_text("NoctraOS 0.4.0\n")
+        self.make("/usr/bin/crontab", 0o2755)
 
     def manifest(self, text):
         (self.snap / "configs/ownership/zorin-18.1-core.tsv").write_text(text)
@@ -124,11 +133,17 @@ class MigrationTests(unittest.TestCase):
         self.assertIn("restored the owner of 1 ", out.stdout)
 
     def test_a_file_with_an_owner_someone_chose_is_left_alone(self):
-        self.make("/var/log/btmp", 0o660)
-        self.manifest("/var/log/btmp\troot\tutmp\t\n")
-        out = self.run_migration(NOC_OWNERSHIP_FLATTENED="nobody:nogroup")      # the file is not (that) flattened owner
-        self.assertEqual(self.chowned(), [])
-        self.assertIn("restored the owner of 0 ", out.stdout)
+        """On an otherwise flattened system, a file whose group was changed on purpose is not touched."""
+        others = [g for g in os.getgroups() if g != os.getgid()]
+        if not others:
+            self.skipTest("this account is in no second group to give the file")
+        chosen = self.make("/var/log/btmp", 0o660)
+        os.chown(chosen, -1, others[0])
+        self.manifest("/var/log/btmp\troot\tutmp\t\n/usr/bin/crontab\troot\tcrontab\t\n")
+        out = self.run_migration()
+        self.assertNotIn(str(chosen), self.chowned())
+        self.assertIn(str(self.tree / "usr/bin/crontab"), self.chowned())      # the flattened one was repaired
+        self.assertIn("restored the owner of 1 ", out.stdout)
 
     def test_missing_paths_and_comments_are_skipped(self):
         self.manifest("# a comment\n\n/not/there\troot\tshadow\t\n")
@@ -149,6 +164,50 @@ class MigrationTests(unittest.TestCase):
         self.manifest("/etc/shadow\tno-such-user-xyz\tno-such-group-xyz\t\n")
         out = self.run_migration(NOC_OWNERSHIP_NO_LOOKUP="")      # real lookup: neither exists
         self.assertEqual(self.chowned(), [])
+
+    def test_a_system_that_never_was_flattened_is_left_alone(self):
+        """Stock Ubuntu with the one-line installer, or an image built after the fix: no canary is root:root there."""
+        self.make("/etc/ssl/private", 0o710, "d")
+        self.manifest("/etc/ssl/private\troot\tssl-cert\t\n/usr/bin/crontab\troot\tcrontab\t\n")
+        out = self.run_migration(NOC_OWNERSHIP_FLATTENED="nobody:nogroup")      # no canary has the flattened owner
+        self.assertEqual((out.returncode, self.chowned()), (0, []))
+        self.assertIn("already have their owners", out.stdout)
+
+    def test_a_system_that_is_not_noctraos_is_left_alone_even_if_a_canary_is_root_owned(self):
+        self.release.unlink()
+        self.manifest("/usr/bin/crontab\troot\tcrontab\t\n")
+        out = self.run_migration()
+        self.assertEqual((out.returncode, self.chowned()), (0, []))
+        self.assertIn("already have their owners", out.stdout)
+
+    def test_any_one_flattened_canary_is_enough(self):
+        (self.tree / "usr/bin/crontab").unlink()
+        self.make("/usr/sbin/unix_chkpwd", 0o2755)
+        self.manifest("/usr/sbin/unix_chkpwd\troot\tshadow\t\n")
+        out = self.run_migration()
+        self.assertIn("root:shadow", self.chowned())
+        self.assertIn("restored the owner of 1 ", out.stdout)
+
+    def test_a_failed_change_makes_the_migration_fail_so_the_updater_retries_it(self):
+        self.make("/usr/lib/dbus-1.0/dbus-daemon-launch-helper", 0o4754)
+        self.make("/etc/shadow", 0o640)
+        self.manifest("/usr/lib/dbus-1.0/dbus-daemon-launch-helper\troot\tmessagebus\t\n/etc/shadow\troot\tshadow\t\n")
+        out = self.run_migration(NOC_OWNERSHIP_CHOWN=str(self.failing))
+        self.assertEqual(out.returncode, 1)
+        self.assertIn("could not change the owner of /usr/lib/dbus-1.0/dbus-daemon-launch-helper", out.stdout)
+        self.assertIn("could not change the owner of /etc/shadow", out.stdout)       # it kept going after the first failure
+        self.assertIn("tried again at the next update", out.stdout)
+
+    def test_a_failed_recursive_change_fails_too(self):
+        self.make("/var/cache/man/fr/index.db", 0o644)
+        self.manifest("/var/cache/man\tman\tman\tR\n")
+        out = self.run_migration(NOC_OWNERSHIP_CHOWN=str(self.failing))
+        self.assertEqual(out.returncode, 1)
+        self.assertIn("could not change every owner below /var/cache/man", out.stdout)
+
+    def test_success_still_exits_zero(self):
+        self.manifest("/usr/bin/crontab\troot\tcrontab\t\n")
+        self.assertEqual(self.run_migration().returncode, 0)
 
     def test_no_manifest_is_not_an_error(self):
         out = self.run_migration()
