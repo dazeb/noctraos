@@ -213,6 +213,7 @@ TERMINAL = {
     'git': ['git config --global user.name "Your Name"', 'git config --global user.email you@example.com'],
     'github': ['gh auth login --web', 'gh auth setup-git'],
     'gpu': ['noc gpu status', 'noc gpu install'],
+    'disk': ['noc disk status', 'sudo noc disk grow'],
     'updates': ['noc update', 'noc update --only mise,models', 'noc channel', 'noc channel nightly'],
     'apps': ['noc apps', 'noc-upstream update --only <app>'],
     'models': ['noc models list', 'noc models pull <model>', 'noc models default <model>', 'noc models rm <model>'],
