@@ -64,6 +64,9 @@ button { background-image: none; background: #1e1e1e; color: #bebebe; border: 1p
 button:hover { background: #2a2a2a; }
 button:disabled { color: #555555; }
 button.link { background: none; border: none; color: #e68e0d; padding: 4px 8px; }
+button.terminal { background: none; border: none; color: #8a8a8d; padding: 4px 8px; font-size: 12px;
+                  font-family: 'JetBrainsMono Nerd Font', monospace; }
+button.terminal:hover { background: none; color: #e68e0d; }
 button.suggested { background: #e68e0d; color: #121212; border-color: #e68e0d; font-weight: bold; }
 button.suggested:disabled { background: #3a2a10; color: #7a6a50; border-color: #3a2a10; }
 check { background: #0d0d0d; border: 1px solid #333333; border-radius: 2px; box-shadow: none; }

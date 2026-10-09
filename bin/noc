@@ -2,6 +2,7 @@
 # noc — noctraos workstation management CLI.
 #   noc update        apt + Flatpak + NoctraOS features + mise runtimes + Hermes/agents + AI models  [--json] [--only apt,flatpak,noctraos,mise,apps,models]
 #   noc accounts      Git name/e-mail and GitHub sign-in: status [--json] | git set --name N --email E | github login|logout|suggest
+#   noc skip          setup chores you chose to do yourself: list [--json] | add <git|github|gpu> | rm <id>
 #   noc apps          tracked upstream apps (Hermes, Ollama, AppManager, coding agents): installed vs latest release  [--json] [--refresh]
 #   noc doctor        health check of the whole stack  [--json]
 #   noc status        Overview data as JSON (versions, updates, Ollama, GPU, disk, Hermes)
@@ -14,6 +15,7 @@ VERSION="0.4.0"
 OLLAMA_URL="${NOC_OLLAMA_URL:-http://127.0.0.1:11434}"
 DEFAULT_MODEL="qwen2.5-coder:7b"
 MODEL_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/noctraos/model"
+SKIP_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/noctraos/skipped"
 
 ok()   { printf '  \033[32mOK\033[0m  %s\n' "$*"; }
 bad()  { printf '  \033[31m!!\033[0m  %s\n' "$*"; }
@@ -647,6 +649,44 @@ cmd_accounts() {
   "$ACCOUNTS" "$@"
 }
 
+# noc skip [list [--json] | add <id> | rm <id>]: the setup chores the person chose to do themselves ("No, I'll set it up
+# myself"). One id per line in ~/.config/noctraos/skipped. The Control Panel, the Welcome app and `noc status` read it so
+# a skipped chore stops asking; skipping never changes the system, and `rm` brings the offer back.
+SKIPPABLE=(git github gpu)
+skip_title() {
+  case "$1" in
+    git)    echo "Git name and e-mail" ;;
+    github) echo "GitHub sign-in" ;;
+    gpu)    echo "GPU setup for local AI" ;;
+  esac
+}
+skip_valid() { local id; for id in "${SKIPPABLE[@]}"; do [ "$id" = "$1" ] && return 0; done; return 1; }
+# The skipped ids that still exist, in the order SKIPPABLE lists them (a stale or hand-edited line is ignored).
+skipped_ids() {
+  local id
+  for id in "${SKIPPABLE[@]}"; do
+    grep -qxF "$id" "$SKIP_FILE" 2>/dev/null && echo "$id"
+  done
+  return 0
+}
+skipped_json() { skipped_ids | jq -R . | jq -sc .; }
+cmd_skip() {
+  local action="${1:-list}" id="${2:-}" tmp ids="${SKIPPABLE[*]}"
+  case "$action" in
+    list)
+      if [ "$id" = "--json" ]; then skipped_json; return; fi
+      if [ -z "$(skipped_ids)" ]; then info "nothing skipped"; return; fi
+      for id in $(skipped_ids); do printf '  %-7s %s\n' "$id" "$(skip_title "$id")"; done ;;
+    add|rm)
+      if ! skip_valid "$id"; then bad "unknown setup chore '$id' (one of: $ids)"; return 1; fi
+      mkdir -p "$(dirname "$SKIP_FILE")" || return 1
+      tmp="$SKIP_FILE.$$"
+      { skipped_ids | grep -vxF "$id"; [ "$action" = add ] && echo "$id"; true; } > "$tmp" && mv "$tmp" "$SKIP_FILE" || { rm -f "$tmp"; return 1; }
+      ok "$([ "$action" = add ] && echo "skipped" || echo "no longer skipped"): $(skip_title "$id")" ;;
+    *) bad "usage: noc skip [list [--json] | add <${ids// /|}> | rm <id>]"; return 1 ;;
+  esac
+}
+
 # noc apps [--json] [--refresh]: the tracked upstream apps. The panel reads the same JSON.
 cmd_apps() {
   if [ ! -x "$UPSTREAM" ]; then bad "the upstream tracker is not installed on this system yet"; return 1; fi
@@ -681,6 +721,8 @@ cmd_status() {
   if [ -x "$ACCOUNTS" ]; then accounts="$(timeout 15 "$ACCOUNTS" status --json 2>/dev/null)" || accounts=null; fi
   printf '%s' "$accounts" | jq -e . >/dev/null 2>&1 || accounts=null
 
+  local skipped
+  skipped="$(skipped_json)" || skipped='[]'
   local apps=null
   if [ -x "$UPSTREAM" ]; then apps="$(timeout 20 "$UPSTREAM" list --json --offline 2>/dev/null)" || apps=null; fi
   printf '%s' "$apps" | jq -e . >/dev/null 2>&1 || apps=null
@@ -693,7 +735,7 @@ cmd_status() {
     --arg model "$(effective_model)" --argjson gpu "$gpu" \
     --argjson free "$(df -B1 --output=avail / | awk 'NR==2 {print $1}')" \
     --argjson total "$(df -B1 --output=size / | awk 'NR==2 {print $1}')" \
-    --argjson ram "$(ram_gb)" --arg hmode "$hmode" --argjson hready "$hready" --argjson idx "$idx_age" --argjson apps "$apps" --argjson accounts "$accounts" \
+    --argjson ram "$(ram_gb)" --arg hmode "$hmode" --argjson hready "$hready" --argjson idx "$idx_age" --argjson apps "$apps" --argjson accounts "$accounts" --argjson skipped "$skipped" \
     '{version:$version, os:$os,
       updates:{apt:$apt, flatpak:$flatpak, reboot_required:$reboot},
       ollama:{running:$ollama, version:(if $oversion=="" then null else $oversion end), models:$nmodels, default_model:$model},
@@ -701,7 +743,7 @@ cmd_status() {
       disk:{root_free_bytes:$free, root_total_bytes:$total},
       ram_gb:$ram,
       hermes:{installed:$hready, mode:(if $hmode=="" then null else $hmode end)},
-      apps:$apps, accounts:$accounts,
+      apps:$apps, accounts:$accounts, skipped:$skipped,
       search_index_age_seconds:$idx}'
 }
 
@@ -713,6 +755,7 @@ main() {
     updates) shift; cmd_updates "$@" ;;
     apps) shift; cmd_apps "$@" ;;
     accounts) shift; cmd_accounts "$@" ;;
+    skip)   shift; cmd_skip "$@" ;;
     models) shift; cmd_models "$@" ;;
     bg)     shift; cmd_bg "$@" ;;
     gpu)    shift; have noc-gpu && exec noc-gpu "$@" \
@@ -725,6 +768,8 @@ main() {
       echo "  noc doctor      health check of the whole stack (--json)"
       echo "  noc status      versions, pending updates, Ollama, GPU, disk as JSON"
       echo "  noc updates     what an update would do: counts, download size, online (JSON)"
+      echo "  noc accounts    Git name/e-mail and GitHub sign-in (status | git set | github login|logout)"
+      echo "  noc skip        setup chores you do yourself (list | add <id> | rm <id>)"
       echo "  noc models      manage local AI models (list | default | presets | pull | rm)"
       echo "  noc bg          cycle or set the wallpaper (list | next | set)"
       echo "  noc gpu         GPU setup for local LLMs (detect | install | status)"

@@ -62,7 +62,7 @@ install/
                             (module order in install.sh: 00 01 02 02b 03 04 04_workstation 04c 04d 05 06 08 09 10 07 11)
 bin/
   noc                       CLI: update [--json] [--only ..] | updates | doctor [--json] | status | models [list [--json]|default|presets|pull|rm]
-                            | bg [list|next|set] | gpu. Sourceable (tests call its functions); NOC_OLLAMA_URL overrides the Ollama URL
+                            | skip [list [--json]|add|rm] | bg [list|next|set] | gpu. Sourceable (tests call its functions); NOC_OLLAMA_URL overrides the Ollama URL
   noc-gpu                   GPU detect [--json] | install | status [--json] (NVIDIA driver+CUDA, AMD ROCm); VERSION must match noc
   noctraos-control          wrapper that execs the system-Python Control Panel (control/)
   noc-accounts              first-time setup without a terminal: Git name/e-mail (`git config --global`) and the GitHub sign-in (`gh auth login --web`
@@ -256,6 +256,14 @@ iso/vm-sysprep.sh           run inside a fully provisioned VM before exporting i
   and reads 2.8 GB/s; the Samsung 960 PRO (`/mnt/nvme1`) 0.6 to 1.1 GB/s and 2.3 GB/s, so the 2 TB drive is first. Re-measure after
   hardware changes (when no build runs). `build-release.sh` fails in seconds if the VM disk drive has under 100 GB free.
   Keep cold data off `/mnt/nvme1` with `~/workspace/shared/scripts/offload-dir.sh <dir>` (copy, checksum-verify, symlink).
+- **Every setup chore is skippable and every action has a terminal tip** (user's rule, 2026-10-09: "mouse first, terminal a close second"). A
+  chore the panel offers (Git identity, GitHub sign-in, GPU setup) has a "No, I'll set it up myself" button that runs `noc skip add <id>`
+  (the one store, `~/.config/noctraos/skipped`; `noc status --json` carries it as `skipped`), after which nothing nags (Overview card, page
+  headline, Welcome app) and the page shows the commands instead. Every action page has a quiet *Terminal* button whose tooltip lists the
+  commands (`TERMINAL` in `control/panel.py`; a test checks each command exists). Never show a command to someone who did not ask for it:
+  commands live behind hover/click, or in the place of a chore the person declined. A new chore needs: an id in `SKIPPABLE` (`control/panel.py`
+  and `bin/noc`), the skip button and a skipped state on its page, a `TERMINAL` entry; the Welcome app repeats the Git/GitHub commands as text
+  (a test pins them to `TERMINAL`).
 - **Accounts setup is for people who are not developers** (user's rule, 2026-10-08: "they just want AI and they want it to work"). Never
   make Git or GitHub setup need a terminal, a token or a command to copy. `noc-accounts` runs `gh auth login --web` with prompts off
   (stdin closed, `GH_PROMPT_DISABLED=1`; it prints a one-time code and a URL and then waits, no Enter needed), strips `GH_TOKEN` and
@@ -301,7 +309,7 @@ bash -n boot.sh install.sh install/*.sh bin/noc bin/noc-gpu bin/noc-privileged b
 docker run --rm -v "$PWD:/mnt" koalaman/shellcheck:stable --severity=warning \
   boot.sh install.sh install/*.sh bin/noc bin/noc-gpu bin/noc-privileged bin/noctraos-control bin/noctraos-agent \
   bin/noctraos-copyq bin/noctraos-hermes configs/nautilus-scripts/*     # same list as CI
-python3 -m unittest discover -s tests                # 151 tests: theme, GPU detection, noc JSON modes, root helper, Control Panel
+python3 -m unittest discover -s tests                # 344 tests: theme, GPU detection, noc JSON modes, root helper, Control Panel
 python3 scripts/render-theme.py --check              # committed theme outputs match palette.json
 
 # wallpaper iteration (venv at ~/workspace/scratch/zorin-img-venv: pillow+numpy)

@@ -315,6 +315,50 @@ class DoctorStatusTests(unittest.TestCase):
         self.assertEqual(data["ollama"]["models"], 0)
 
 
+class SkipCommandTests(unittest.TestCase):
+    """`noc skip`: the setup chores a person chose to do themselves, kept in one file the panel and Welcome app read."""
+
+    def skipped(self, e):
+        return json.loads(e.noc("skip", "list", "--json").stdout)
+
+    def test_empty_by_default_and_a_json_list(self):
+        e = Env(self, ollama=False)
+        self.assertEqual(self.skipped(e), [])
+        self.assertEqual(e.noc("skip").returncode, 0)
+
+    def test_add_is_remembered_once_and_rm_takes_it_back(self):
+        e = Env(self, ollama=False)
+        for chore in ("github", "gpu", "github"):
+            self.assertEqual(e.noc("skip", "add", chore).returncode, 0)
+        self.assertEqual(self.skipped(e), ["github", "gpu"])        # no duplicates, a fixed order
+        self.assertEqual(sorted((e.home / ".config/noctraos/skipped").read_text().split()), ["github", "gpu"])
+        self.assertEqual(e.noc("skip", "rm", "github").returncode, 0)
+        self.assertEqual(self.skipped(e), ["gpu"])
+        self.assertEqual(e.noc("skip", "rm", "github").returncode, 0)  # taking back what is not skipped is fine
+        self.assertEqual(e.noc("skip", "rm", "gpu").returncode, 0)
+        self.assertEqual(self.skipped(e), [])
+
+    def test_unknown_chores_and_commands_are_refused(self):
+        e = Env(self, ollama=False)
+        for args in (("add", "everything"), ("add",), ("rm", "../x"), ("frobnicate",)):
+            result = e.noc("skip", *args)
+            self.assertEqual(result.returncode, 1, args)
+        self.assertEqual(self.skipped(e), [])
+
+    def test_a_hand_edited_file_cannot_inject_anything(self):
+        e = Env(self, ollama=False)
+        path = e.home / ".config/noctraos"
+        path.mkdir(parents=True)
+        (path / "skipped").write_text("gpu\nrm -rf /\n\"; evil\ngit extra\n")
+        self.assertEqual(self.skipped(e), ["gpu"])
+
+    def test_status_carries_the_list(self):
+        e = Env(self, ollama=False)
+        self.assertEqual(json.loads(e.noc("status", "--json").stdout)["skipped"], [])
+        e.noc("skip", "add", "git")
+        self.assertEqual(json.loads(e.noc("status", "--json").stdout)["skipped"], ["git"])
+
+
 class UpdatesCommandTests(unittest.TestCase):
     def run_updates(self, e):
         return json.loads(e.noc("updates", NOC_ONLINE_URLS=e.url + "/api/version").stdout)

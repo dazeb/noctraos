@@ -81,16 +81,21 @@ def _apps_card(apps):
     return Card('apps', 'Apps', 'Up to date', f'Hermes {hermes["installed"]}' if hermes else '', 'ok', 'apps')
 
 
-def _accounts_card(accounts):
+def _accounts_card(accounts, skipped=None):
     """Git needs a name and e-mail before the first commit, and GitHub a sign-in before the first push: both stop a
-    newcomer cold with a cryptic message, so the Overview says plainly when they are not done yet."""
-    state = accounts_state(accounts)
+    newcomer cold with a cryptic message, so the Overview says plainly when they are not done yet. A chore the person
+    chose to do themselves is not nagged about."""
+    state = accounts_state(accounts, skipped)
     if state is None:
         return Card('accounts', 'Accounts', 'Not checked yet', 'Git name and e-mail, GitHub sign-in.', 'info', 'accounts')
     if state['done']:
         return Card('accounts', 'Accounts', 'Ready', f'{state["git_text"]}. {state["github_text"]}.', 'ok', 'accounts')
-    todo = [t for t, ok in (('Git name and e-mail', state['git_ready']), ('GitHub sign-in', state['signed_in'])) if not ok]
-    return Card('accounts', 'Accounts', 'Needs setting up', ' and '.join(todo) + ' (one minute, no terminal).', 'warn', 'accounts')
+    if state['todo']:
+        return Card('accounts', 'Accounts', 'Needs setting up',
+                    ' and '.join(SKIPPABLE[t] for t in state['todo']) + ' (one minute, no terminal).', 'warn', 'accounts')
+    return Card('accounts', 'Accounts', 'You are doing this yourself',
+                'Skipped: ' + ' and '.join(SKIPPABLE[t] for t in state['skipped']) + '. Open Accounts to change that.',
+                'info', 'accounts')
 
 
 def _ollama_card(ollama):
@@ -137,7 +142,7 @@ def cards(status):
     return [
         Card('version', 'NoctraOS', f'Version {status.get("version", "?")}', status.get('os') or '', 'ok', 'about'),
         _updates_card(status.get('updates') or {}),
-        _accounts_card(status.get('accounts')),
+        _accounts_card(status.get('accounts'), status.get('skipped')),
         _apps_card(status.get('apps')),
         _ollama_card(status.get('ollama') or {}),
         _gpu_card(status.get('gpu')),
@@ -183,6 +188,58 @@ def noc_json(*args, timeout=90):
         return json.loads(out.stdout)
     except (OSError, subprocess.SubprocessError, ValueError):
         return None
+
+
+# ---- Doing it yourself: skipped chores and terminal tips ---------------------------------------
+#
+# The panel is mouse first and the terminal a close second (docs/objectives.md). Two things follow: every setup chore
+# can be declined ("No, I'll set it up myself", remembered by `noc skip`), and every action has a small "Terminal" tip
+# that names the commands for it. The commands stay out of sight until the person hovers or clicks.
+
+SKIPPABLE = {'git': 'Git name and e-mail', 'github': 'GitHub sign-in', 'gpu': 'GPU setup for local AI'}
+
+# What each action is in a terminal, by the id the page uses. Plain tools (git, gh) come first where a person who knows a
+# terminal would reach for them; the `noc` form is the one the panel itself runs. tests/test_control_core.py checks that
+# every command here exists, so a renamed verb cannot leave a stale tip behind.
+TERMINAL = {
+    'git': ['git config --global user.name "Your Name"', 'git config --global user.email you@example.com'],
+    'github': ['gh auth login --web', 'gh auth setup-git'],
+    'gpu': ['noc gpu status', 'noc gpu install'],
+    'updates': ['noc update', 'noc update --only mise,models'],
+    'apps': ['noc apps', 'noc-upstream update --only <app>'],
+    'models': ['noc models list', 'noc models pull <model>', 'noc models default <model>', 'noc models rm <model>'],
+    'privacy': ['noctraos-hermes local', 'noctraos-hermes cloud', 'noctraos-search --settings', 'noctraos-weather --setup'],
+    'health': ['noc doctor'],
+}
+
+
+def terminal_commands(key):
+    """The terminal commands for an action, one per line, as text to copy; '' for an unknown key."""
+    return '\n'.join(TERMINAL.get(key, []))
+
+
+def terminal_tip(key):
+    """The tooltip of a page's Terminal button."""
+    commands = TERMINAL.get(key)
+    if not commands:
+        return ''
+    return 'In a terminal:\n' + '\n'.join(f'  {c}' for c in commands) + '\n\nClick to copy.'
+
+
+def skipped_set(skipped):
+    """The chores in a `noc skip list --json` answer (or a `noc status` document's `skipped`), unknown ids dropped."""
+    return {s for s in skipped if s in SKIPPABLE} if isinstance(skipped, list) else set()
+
+
+def skip_command(chore, skip=True):
+    """argv that records (or, with skip=False, takes back) the choice to do a chore yourself; None for an unknown chore."""
+    return [NOC, 'skip', 'add' if skip else 'rm', chore] if chore in SKIPPABLE else None
+
+
+def skipped_text(chore):
+    """Shown in place of a chore the person skipped: what they chose, and the terminal route they now own."""
+    return ('You chose to set this up yourself. In a terminal:\n' +
+            '\n'.join(f'  {c}' for c in TERMINAL.get(chore, [])) + '\n\nChange your mind any time with the button below.')
 
 
 # ---- Health ----------------------------------------------------------------------------------
@@ -534,14 +591,20 @@ ACCOUNTS_LOGIN = [ACCOUNTS, 'github', 'login', '--json']
 _EMAIL = re.compile(r'^[^@\s<>]+@[^@\s<>]+\.[^@\s<>]+$')
 
 
-def accounts_state(accounts):
-    """What the Accounts page and card say, from `noc accounts status --json`; None when it did not answer."""
+def accounts_state(accounts, skipped=None):
+    """What the Accounts page and card say, from `noc accounts status --json` (and the `noc skip` list); None when it did
+    not answer. `done` means both chores are really done; `todo` are the ones still asking, `skipped` the ones the person
+    chose to do themselves (a chore that is already done is never "skipped")."""
     if not isinstance(accounts, dict) or 'git' not in accounts:
         return None
     git, hub = accounts.get('git') or {}, accounts.get('github') or {}
     git_ready = bool(git.get('name') and git.get('email'))
     signed = bool(hub.get('signed_in'))
-    return {'git_ready': git_ready, 'signed_in': signed, 'done': git_ready and signed,
+    chosen = skipped_set(skipped)
+    todo = [t for t, ok in (('git', git_ready), ('github', signed)) if not ok and t not in chosen]
+    passed = [t for t, ok in (('git', git_ready), ('github', signed)) if not ok and t in chosen]
+    return {'git_ready': git_ready, 'signed_in': signed, 'done': git_ready and signed, 'todo': todo, 'skipped': passed,
+            'git_skipped': 'git' in passed, 'github_skipped': 'github' in passed,
             'name': git.get('name') or '', 'email': git.get('email') or '', 'login': hub.get('login') or '',
             'gh_installed': bool(hub.get('installed')),
             'git_text': f'Git signs your work as {git["name"]}' if git_ready else 'Git does not know your name yet',
@@ -740,11 +803,12 @@ def install_blocker(detect, free_bytes):
     return ''
 
 
-def hardware_state(detect, gstatus):
+def hardware_state(detect, gstatus, skipped=None):
     """Headline and rows for the Hardware page.
 
-    Returns {headline, level, gpus: [{name, verdict}], rows: [{status, text}], can_install, reboot}.
-    `can_install` is true only when there is something to install and the stack is not ready."""
+    Returns {headline, level, gpus: [{name, verdict}], rows: [{status, text}], can_install, skipped, reboot}.
+    `can_install` is true only when there is something to install, the stack is not ready and the person has not chosen
+    to set the GPU up themselves (`skipped`; then the page offers to take that back instead)."""
     gpus = [{'name': g.get('name', 'GPU'), 'verdict': gpu_verdict(g)} for g in (detect or {}).get('gpus', [])]
     # noc-gpu's rows end with a "run: noc gpu install" hint for people at a terminal; the page has a button.
     rows = [{**r, 'text': _GPU_HINT.sub('', r.get('text', ''))} for r in (gstatus or {}).get('rows', [])]
@@ -759,12 +823,16 @@ def hardware_state(detect, gstatus):
         headline, level = 'Restart to finish the GPU setup', 'warn'
     elif ready:
         headline, level = 'Your GPU is set up for local AI', 'ok'
+    elif vendors and 'gpu' in skipped_set(skipped):
+        headline, level = 'A GPU was found. You chose to set it up yourself.', 'info'
     elif vendors:
         headline, level = 'A GPU was found but is not set up for local AI yet', 'warn'
     else:
         headline, level = 'This GPU is not usable for local AI. Models run on the CPU.', 'info'
+    offer = bool(vendors) and not ready and not reboot
+    chosen = offer and 'gpu' in skipped_set(skipped)
     return {'headline': headline, 'level': level, 'gpus': gpus, 'rows': rows, 'reboot': reboot,
-            'can_install': bool(vendors) and not ready and not reboot}
+            'can_install': offer and not chosen, 'skipped': chosen}
 
 
 def gpu_install_argv(detect):
