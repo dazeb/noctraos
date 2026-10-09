@@ -160,10 +160,13 @@ def update(root, version, release, date):
                             lambda m: f"{m[1]}{date}{m[2]}", text, f"sitemap entry /{path}")
         sitemap.write_text(text)
 
-    for stale in root.glob("noctraos-*-amd64.iso.torrent"):
-        if stale.name != torrent_name:
-            stale.unlink()
-    shutil.copyfile(torrent, root / torrent_name)
+    # one copy in the repo root (the GitHub release notes link it) and one in site/, served from the site's own
+    # origin so the download button works with the `download` attribute
+    for folder in (root, root / "site"):
+        for stale in folder.glob("noctraos-*-amd64.iso.torrent"):
+            if stale.name != torrent_name:
+                stale.unlink()
+        shutil.copyfile(torrent, folder / torrent_name)
     return old
 
 
