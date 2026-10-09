@@ -61,7 +61,34 @@ if [ -f "$TARGET_HOME/.local/share/noctraos/.provisioned" ]; then
   min_gb=8
 fi
 if [ "$avail_gb" -lt "$min_gb" ]; then
-  die "Only ${avail_gb}GiB free on / — ${min_gb}GiB minimum (AI models + language runtimes)."
+  # A virtual disk enlarged after install leaves the new space outside the system partition, so "18GiB free" on a
+  # 64 GB disk is baffling. This runs before the Control Panel exists, in the terminal first boot opened (sudo is
+  # already unlocked), so offer the fix right here. Nothing changes without a yes.
+  unused_gb=0
+  if [ -f "$REPO_ROOT/bin/noc-disk" ] && disk_json="$(python3 "$REPO_ROOT/bin/noc-disk" status --json 2>/dev/null)"; then
+    unused_gb="$(printf '%s' "$disk_json" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(int(d["expandable_bytes"]/2**30) if d.get("can_grow") else 0)' 2>/dev/null || echo 0)"
+  fi
+  if [ "${unused_gb:-0}" -gt 0 ]; then
+    warn "The disk has ${unused_gb}GiB that the system is not using yet (the disk was made bigger after install)."
+    if [ -t 0 ]; then
+      printf '  Use all of it now? Your files are not touched and nothing is erased. [Y/n] '
+      read -r reply || reply=n
+      case "${reply:-Y}" in
+        [Yy]*|"")
+          if sudo python3 "$REPO_ROOT/bin/noc-disk" grow; then
+            avail_gb="$(df -BG --output=avail / | tail -n 1 | tr -dc '0-9')"
+          else
+            rc=$?
+            [ "$rc" -eq 10 ] && die "Restart the computer so the system sees the bigger disk, then run this setup again."
+          fi ;;
+      esac
+    else
+      warn "Open the NoctraOS Control Panel, choose Hardware, then Use all the disk space. After that, run this setup again."
+    fi
+  fi
+  if [ "$avail_gb" -lt "$min_gb" ]; then
+    die "Only ${avail_gb}GiB free on / — ${min_gb}GiB minimum (AI models + language runtimes)."
+  fi
 fi
 log "OK: ${avail_gb}GiB free on /"
 

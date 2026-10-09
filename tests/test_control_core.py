@@ -24,6 +24,51 @@ def by_id(status):
     return {c.id: c for c in panel.cards(status)}
 
 
+GROWN = {"root_free_bytes": 18 * 2**30, "root_total_bytes": 31 * 2**30, "can_grow": True,
+         "expandable_bytes": 33 * 2**30, "disk_bytes": 64 * 2**30, "partition_bytes": 31 * 2**30}
+
+
+class DiskGrowTests(unittest.TestCase):
+    def test_only_a_flagged_disk_can_grow(self):
+        self.assertTrue(panel.disk_can_grow(GROWN))
+        for disk in ({}, None, {"can_grow": False, "expandable_bytes": 5 * 2**30}, {"can_grow": True, "expandable_bytes": 0},
+                     {"root_free_bytes": 1, "root_total_bytes": 2}):
+            with self.subTest(disk=disk):
+                self.assertFalse(panel.disk_can_grow(disk))
+
+    def test_headline(self):
+        text, level = panel.disk_headline(GROWN)
+        self.assertEqual(level, "warn")
+        self.assertIn("33.0 GB", text)
+        self.assertEqual(panel.disk_headline({})[1], "ok")
+
+    def test_consent_text_says_what_happens_and_that_files_are_safe(self):
+        text = " ".join(panel.disk_grow_summary(GROWN))
+        self.assertIn("64.0 GB", text)            # the disk
+        self.assertIn("31.0 GB", text)            # what the system uses today
+        self.assertIn("33.0 GB", text)            # what it gains
+        self.assertIn("not touched", text)
+        self.assertIn("restart", text)
+
+    def test_the_command_is_the_fixed_privileged_verb_with_no_arguments(self):
+        self.assertEqual(panel.DISK_GROW, [panel.PKEXEC, panel.HELPER, "disk-grow"])
+        self.assertNotIn("sudo", panel.DISK_GROW)
+
+    def test_results(self):
+        self.assertEqual(panel.disk_grow_result(0)[1], False)
+        message, restart = panel.disk_grow_result(10)
+        self.assertTrue(restart)
+        self.assertIn("Restart", message)
+        self.assertFalse(panel.disk_grow_result(2)[1])
+        self.assertIn("cancelled", panel.disk_grow_result(126)[0])      # the password prompt was dismissed
+        self.assertIn("nothing was erased", panel.disk_grow_result(1)[0])
+
+    def test_no_one_click_fix_for_it_in_the_health_page(self):
+        """Growing a disk always goes through the consent dialog on the Hardware page, never a bare Fix button."""
+        self.assertNotIn("disk-grow", panel.FIXES)
+        self.assertNotIn(panel.DISK_GROW, panel.FIXES.values())
+
+
 class FormatTests(unittest.TestCase):
     def test_bytes(self):
         self.assertEqual(panel.fmt_bytes(0), "0 B")
@@ -95,6 +140,15 @@ class CardTests(unittest.TestCase):
         low = {**STATUS, "disk": {"root_free_bytes": 5 * 2**30, "root_total_bytes": 200 * 2**30}}
         self.assertEqual(by_id(low)["disk"].level, "warn")
         self.assertEqual(by_id(STATUS)["disk"].level, "ok")
+
+    def test_disk_card_says_so_when_the_disk_is_bigger_than_the_system_uses(self):
+        grown = {**STATUS, "disk": {**STATUS["disk"], "can_grow": True, "expandable_bytes": 32 * 2**30,
+                                     "disk_bytes": 64 * 2**30, "partition_bytes": 31 * 2**30}}
+        card = by_id(grown)["disk"]
+        self.assertEqual((card.level, card.page), ("warn", "hardware"))
+        self.assertIn("32.0 GB", card.detail)
+        self.assertIn("Hardware", card.detail)
+        self.assertEqual(by_id({**STATUS, "disk": {**STATUS["disk"], "can_grow": False, "expandable_bytes": 0}})["disk"].level, "ok")
 
     def test_search_index(self):
         self.assertEqual(by_id(STATUS)["search"].value, "Updated 10 minutes ago")

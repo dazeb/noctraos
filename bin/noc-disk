@@ -1,0 +1,306 @@
+#!/usr/bin/python3
+"""noc-disk — notice when the system disk is bigger than the system partition, and use the extra space.
+
+  noc-disk status [--json]   read-only, no root: how much of the disk the system actually uses
+  noc-disk grow [--dry-run]  root: extend the system partition to the end of the disk, then its filesystem
+  noc-disk notify            once per new amount of unused space, tell the person (desktop notification)
+
+Why: a virtual disk that was enlarged after install (Proxmox, VirtualBox, a cloned SSD) leaves the new space
+outside every partition, so the system keeps running on the old size. The first-boot setup needs room for the
+models and runtimes, and "Only 18GiB free" with a 64 GB disk is a confusing place to be stuck.
+
+Scope, on purpose: the plain layout the installer makes (the system filesystem on a partition, nothing after it
+on the disk, ext4/xfs/btrfs). Anything else (LVM, encryption, another partition behind it) is reported and left
+alone: we never move or rewrite partitions. Nothing is ever changed without the person's say-so; `grow` is only
+reached from a button or a command typed on purpose.
+
+Only tools every install already has are used: sfdisk and partx (util-linux), resize2fs / xfs_growfs / btrfs.
+The partition grows while it is mounted; the filesystem grows online. A restart is asked for only if the kernel
+refuses to pick the new partition size up (then the table is already saved, and the next `grow` finishes the job).
+
+Exit codes of `grow`: 0 done, 1 failed, 2 nothing to do or not supported here, 10 saved, restart to finish.
+
+Environment (tests): NOC_DISK_SYSFS, NOC_DISK_ROOT, NOC_DISK_FSTYPE, NOC_DISK_FS_BYTES, NOC_DISK_STATE.
+"""
+import json
+import os
+import re
+import subprocess
+import sys
+
+VERSION = "0.4.0"
+SECTOR = 512
+GIB = 1024 ** 3
+# Below this the gap is partition-alignment slack, not an enlarged disk: do not bother the person.
+MIN_GROW = GIB
+# statvfs counts the filesystem without its own bookkeeping, so a healthy ext4 reads ~96-98% of its partition.
+FS_FILLS_PARTITION = 0.90
+EXIT_OK, EXIT_FAILED, EXIT_NOTHING, EXIT_RESTART = 0, 1, 2, 10
+
+GROWERS = {
+    "ext2": lambda dev: ["resize2fs", dev],
+    "ext3": lambda dev: ["resize2fs", dev],
+    "ext4": lambda dev: ["resize2fs", dev],
+    "xfs": lambda dev: ["xfs_growfs", "/"],
+    "btrfs": lambda dev: ["btrfs", "filesystem", "resize", "max", "/"],
+}
+
+
+def sysfs_dir():
+    return os.environ.get("NOC_DISK_SYSFS", "/sys/class/block")
+
+
+def read_int(path):
+    try:
+        with open(path) as handle:
+            return int(handle.read().strip())
+    except (OSError, ValueError):
+        return None
+
+
+def capture(argv):
+    try:
+        return subprocess.run(argv, capture_output=True, text=True, timeout=20).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        return ""
+
+
+def root_device():
+    forced = os.environ.get("NOC_DISK_ROOT")
+    source = forced if forced is not None else capture(["findmnt", "-no", "SOURCE", "/"])
+    # A btrfs root mounted from a subvolume is reported as "/dev/sda2[/@]": drop the "[/subvolume]" suffix.
+    source = re.sub(r"\[[^\]]*\]$", "", source)
+    return os.path.realpath(source) if source.startswith("/") else ""
+
+
+def root_fstype():
+    forced = os.environ.get("NOC_DISK_FSTYPE")
+    return forced if forced is not None else capture(["findmnt", "-no", "FSTYPE", "/"])
+
+
+def root_fs_bytes():
+    forced = os.environ.get("NOC_DISK_FS_BYTES")
+    if forced is not None:
+        return int(forced)
+    stat = os.statvfs("/")
+    return stat.f_blocks * stat.f_frsize
+
+
+def fmt(nbytes):
+    return f"{nbytes / GIB:.1f} GiB"
+
+
+def analyse(device, fstype, fs_bytes, sysfs=None):
+    """Everything status reports, from the kernel's view of the disk (sysfs, sectors of 512 bytes)."""
+    sysfs = sysfs or sysfs_dir()
+    out = {"supported": False, "reason": "", "device": device, "disk": "", "partition_number": None,
+           "fstype": fstype, "disk_bytes": None, "partition_bytes": None, "fs_bytes": fs_bytes,
+           "unallocated_bytes": 0, "fs_slack_bytes": 0, "expandable_bytes": 0, "can_grow": False}
+
+    def unsupported(reason):
+        out["reason"] = reason
+        return out
+
+    name = os.path.basename(device) if device else ""
+    node = os.path.join(sysfs, name) if name else ""
+    if not name or not os.path.isdir(node):
+        return unsupported("Could not tell which disk the system is on.")
+    number = read_int(os.path.join(node, "partition"))
+    if number is None:
+        return unsupported("The system is not on a plain partition (LVM, encryption or RAID), "
+                           "so it is not resized automatically.")
+    disk_name = os.path.basename(os.path.dirname(os.path.realpath(node)))
+    disk_node = os.path.join(sysfs, disk_name)
+    start, size = read_int(os.path.join(node, "start")), read_int(os.path.join(node, "size"))
+    disk_sectors = read_int(os.path.join(disk_node, "size"))
+    if None in (start, size, disk_sectors):
+        return unsupported("Could not read the disk layout.")
+    out.update(disk="/dev/" + disk_name, partition_number=number, disk_bytes=disk_sectors * SECTOR,
+               partition_bytes=size * SECTOR)
+
+    for entry in os.listdir(os.path.realpath(disk_node)):
+        other = read_int(os.path.join(os.path.realpath(disk_node), entry, "partition"))
+        other_start = read_int(os.path.join(os.path.realpath(disk_node), entry, "start"))
+        if other is not None and other_start is not None and other_start > start:
+            return unsupported(f"Another partition comes after the system partition, so it cannot be "
+                               f"grown without moving that one ({entry}).")
+    if fstype not in GROWERS:
+        return unsupported(f"The system filesystem ({fstype or 'unknown'}) is not resized automatically.")
+
+    out["supported"] = True
+    out["unallocated_bytes"] = max(0, (disk_sectors - (start + size)) * SECTOR)
+    # A partition that was already grown (by hand, or a half-finished earlier run) but whose filesystem was not.
+    if fs_bytes and fs_bytes < out["partition_bytes"] * FS_FILLS_PARTITION:
+        out["fs_slack_bytes"] = out["partition_bytes"] - fs_bytes
+    out["expandable_bytes"] = out["unallocated_bytes"] + out["fs_slack_bytes"]
+    out["can_grow"] = out["expandable_bytes"] >= MIN_GROW
+    return out
+
+
+def status():
+    return analyse(root_device(), root_fstype(), root_fs_bytes())
+
+
+def describe(st):
+    """Plain-language lines for the terminal."""
+    if st["disk_bytes"] is None:
+        return [st["reason"]]
+    lines = [f"Disk {st['disk']}: {fmt(st['disk_bytes'])}",
+             f"System partition {st['device']} ({st['fstype'] or '?'}): {fmt(st['partition_bytes'])}"]
+    if st["can_grow"]:
+        lines.append(f"{fmt(st['expandable_bytes'])} of the disk is not in use yet.")
+        lines.append("Use it with the Control Panel (Hardware), or: pkexec /usr/local/libexec/noctraos/noc-privileged disk-grow")
+    elif st["reason"]:
+        lines.append(st["reason"])
+    else:
+        lines.append("The system uses all of the disk.")
+    return lines
+
+
+# ----------------------------------------------------------------------------------------------- grow ----
+
+def run_step(text, argv, stdin=None, dry_run=False, quiet=False):
+    """Run one step. `quiet` hides the tool's output when it succeeds: sfdisk prints "re-reading the partition table
+    failed" even when that is exactly what --no-reread asked for, which reads like an error to a non-developer. A
+    failing step always shows everything."""
+    print(text, flush=True)
+    if dry_run:
+        print("  would run: " + " ".join(argv), flush=True)
+        return True
+    result = subprocess.run(argv, input=stdin, capture_output=True, text=True)
+    if result.returncode != 0 or not quiet:
+        for line in (result.stdout + result.stderr).strip().splitlines():
+            print("  " + line, flush=True)
+    return result.returncode == 0
+
+
+def partition_table_label(disk):
+    try:
+        out = subprocess.run(["sfdisk", "-J", disk], capture_output=True, text=True, timeout=20)
+        return json.loads(out.stdout)["partitiontable"]["label"]
+    except (OSError, subprocess.SubprocessError, ValueError, KeyError):
+        return ""
+
+
+def grow(dry_run=False):
+    st = status()
+    if not st["supported"]:
+        print(st["reason"], flush=True)
+        return EXIT_NOTHING
+    if not st["can_grow"]:
+        print("The system already uses all of the disk. Nothing to do.", flush=True)
+        return EXIT_NOTHING
+    if os.geteuid() != 0 and not dry_run:
+        print("noc-disk grow needs administrator rights (the Control Panel asks for your password).", file=sys.stderr)
+        return EXIT_FAILED
+
+    disk, number, dev = st["disk"], st["partition_number"], st["device"]
+    print(f"Using the unused {fmt(st['expandable_bytes'])} of {disk}. Your files are not touched.", flush=True)
+
+    if st["unallocated_bytes"] >= MIN_GROW:
+        label = "gpt" if dry_run else partition_table_label(disk)
+        if label not in ("gpt", "dos"):
+            print("Could not read the partition table, so nothing was changed.", flush=True)
+            return EXIT_FAILED
+        if label == "dos" and number > 4:
+            print("The system sits in a logical (extended) partition, which is not resized automatically.", flush=True)
+            return EXIT_NOTHING
+        # A bigger virtual disk may not be visible to the kernel until it is asked to look again.
+        rescan = os.path.join("/sys/class/block", os.path.basename(disk), "device", "rescan")
+        if not dry_run and os.path.exists(rescan):
+            try:
+                with open(rescan, "w") as handle:
+                    handle.write("1")
+            except OSError:
+                pass
+        # --no-reread: the system partition is mounted, which sfdisk would otherwise refuse to touch; the kernel is
+        # told about the new size per partition (partx) right after.
+        if label == "gpt" and not run_step("Moving the partition table's backup copy to the end of the disk…",
+                                           ["sfdisk", "--no-reread", "--relocate", "gpt-bak-std", disk],
+                                           dry_run=dry_run, quiet=True):
+            return EXIT_FAILED
+        if not run_step(f"Growing partition {number} to the end of the disk…",
+                        ["sfdisk", "--no-reread", "-N", str(number), disk], stdin=", +\n", dry_run=dry_run, quiet=True):
+            return EXIT_FAILED
+        run_step("Telling the system about the new size…", ["partx", "-u", disk], dry_run=dry_run, quiet=True)
+        if not dry_run:
+            size = read_int(os.path.join(sysfs_dir(), os.path.basename(dev), "size"))
+            if size is None or size * SECTOR <= st["partition_bytes"]:
+                print("The partition table is saved, but this system has not picked up the new size yet. "
+                      "Restart, then use the space again to finish.", flush=True)
+                return EXIT_RESTART
+
+    if not run_step("Growing the filesystem to fill the partition…", GROWERS[st["fstype"]](dev), dry_run=dry_run):
+        return EXIT_FAILED
+    if not dry_run:
+        after = status()
+        print(f"Done. {fmt(after['disk_bytes'])} disk, system partition now {fmt(after['partition_bytes'])}.", flush=True)
+    return EXIT_OK
+
+
+# --------------------------------------------------------------------------------------------- notify ----
+
+def state_file():
+    forced = os.environ.get("NOC_DISK_STATE")
+    if forced:
+        return forced
+    base = os.environ.get("XDG_STATE_HOME") or os.path.expanduser("~/.local/state")
+    return os.path.join(base, "noctraos", "disk-notified")
+
+
+def notify():
+    """Tell the person once for each new amount of unused space (so a dismissed notice stays dismissed, and a
+    bigger disk later is news again). The Control Panel's Disk card is the permanent signal."""
+    st = status()
+    if not st["can_grow"]:
+        return EXIT_OK
+    gib = int(st["expandable_bytes"] // GIB)
+    try:
+        with open(state_file()) as handle:
+            if handle.read().strip() == str(gib):
+                return EXIT_OK
+    except OSError:
+        pass
+    try:
+        os.makedirs(os.path.dirname(state_file()), exist_ok=True)
+        with open(state_file(), "w") as handle:
+            handle.write(str(gib))
+    except OSError:
+        pass
+    try:
+        out = subprocess.run(
+            ["notify-send", "--app-name=NoctraOS", "--icon=drive-harddisk", "--wait", "--action=open=Use all the space",
+             "Your disk is bigger than the system",
+             f"{fmt(st['expandable_bytes'])} of the disk is not being used yet. Use all of it? "
+             "Your files are not touched."],
+            capture_output=True, text=True, timeout=600)
+    except (OSError, subprocess.SubprocessError):
+        return EXIT_OK
+    if out.stdout.strip() == "open":
+        subprocess.Popen(["/usr/local/bin/noctraos-control", "--page", "hardware"], start_new_session=True)
+    return EXIT_OK
+
+
+def main(argv):
+    command = argv[1] if len(argv) > 1 else "status"
+    rest = argv[2:]
+    if command == "status":
+        st = status()
+        if "--json" in rest:
+            print(json.dumps(st))
+        else:
+            print("\n".join(describe(st)))
+        return EXIT_OK
+    if command == "grow":
+        return grow(dry_run="--dry-run" in rest)
+    if command == "notify":
+        return notify()
+    if command in ("--version", "-v"):
+        print(f"noc-disk {VERSION}")
+        return EXIT_OK
+    print(__doc__.strip().split("\n\n")[0] + "\n\nusage: noc-disk status [--json] | grow [--dry-run] | notify", file=sys.stderr)
+    return EXIT_FAILED
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))
