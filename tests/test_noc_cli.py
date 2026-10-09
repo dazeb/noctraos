@@ -384,7 +384,8 @@ class LocalLlmTests(unittest.TestCase):
 
     def test_fit_says_how_to_get_llmfit_when_it_is_missing(self):
         e = Env(self)
-        result = e.noc("llm", "fit", HOME=str(e.home))
+        # A real LLMFIT in /usr/local/bin (or anywhere on the caller's PATH) would be found, so use a bare PATH.
+        result = e.noc("llm", "fit", HOME=str(e.home), PATH=f"{e.bin}:/usr/bin:/bin")
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("noc llm setup", result.stdout)
 
