@@ -4,10 +4,14 @@
 <style>
   .nx { position:absolute; left:0; right:0; top:0; bottom:0; padding:12px 48px; box-sizing:border-box;
         font-family:'JetBrains Mono', 'DejaVu Sans Mono', monospace; color:#bebebe; background:#121212; overflow:hidden; }
+  .nx .pg { position:absolute; left:48px; right:48px; top:12px; opacity:0; pointer-events:none; transition:opacity .4s ease; }
+  .nx .pg.on { opacity:1; transition:opacity .5s ease .35s; }
   .nx .keys { text-align:center; margin:0 0 14px; }
   .nx .key { display:inline-block; min-width:92px; padding:9px 16px; margin:0 6px; background:#1e1e1e;
              border:1px solid #333; border-bottom:3px solid #e68e0d; color:#eaeaea; font-size:18px; text-align:center; }
   .nx .key.icon { min-width:0; padding:12px 14px 9px; }
+  .nx .keys.sm { margin-bottom:12px; padding-top:6px; }
+  .nx .keys.sm .key { min-width:0; padding:6px 12px; margin:4px 4px; font-size:14px; }
   .nx .key svg { vertical-align:middle; }
   .nx .or { color:#8a8a8d; font-size:13px; margin:0 2px; }
   .nx .plus { color:#8a8a8d; font-size:20px; }
@@ -16,20 +20,128 @@
   .nx li { padding:7px 0 7px 22px; border-bottom:1px solid #333; font-size:12px; line-height:17px; position:relative; }
   .nx li:before { content:''; position:absolute; left:0; top:12px; width:8px; height:8px; background:#e68e0d; }
   .nx li b { color:#eaeaea; font-weight:normal; }
+  .nx .pager { position:absolute; left:48px; right:48px; bottom:12px; height:26px; text-align:center; }
+  .nx .pager button { font:inherit; cursor:pointer; outline:0; }
+  .nx .dot { width:8px; height:8px; margin:9px 5px; padding:0; border:0; background:#333; vertical-align:top; }
+  .nx .dot:hover { background:#8a8a8d; }
+  .nx .dot.on { background:#e68e0d; }
+  .nx .next { position:absolute; right:0; top:0; height:26px; padding:0 12px; font-size:12px; color:#bebebe;
+              background:#1e1e1e; border:1px solid #333; }
+  .nx .next:hover { color:#eaeaea; border-color:#e68e0d; }
+  @media (prefers-reduced-motion: reduce) { .nx .pg, .nx .pg.on { transition:none; } }
 </style>
 <div class="nx">
-  <div class="keys">
-    <span class="key icon" title="Windows key"><svg viewBox="0 0 24 24" width="22" height="22" aria-label="Windows key"><path fill="#eaeaea" d="M3 4.6 10.2 3.6v7.2H3zM11.2 3.5 21 2v8.8h-9.8zM3 12.2h7.2v7.2L3 18.4zM11.2 12.2H21V22l-9.8-1.4z"/></svg></span>
-    <span class="or">or</span>
-    <span class="key icon" title="Command key (Mac)"><svg viewBox="0 0 24 24" width="22" height="22" aria-label="Command key"><path fill="none" stroke="#eaeaea" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M15 6v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3"/></svg></span>
-    <span class="plus">+</span>
-    <span class="key">Space</span>
+  <div class="pg on" data-title="Welcome to NoctraOS">
+    <div class="keys">
+      <span class="key icon" title="Windows key"><svg viewBox="0 0 24 24" width="22" height="22" aria-label="Windows key"><path fill="#eaeaea" d="M3 4.6 10.2 3.6v7.2H3zM11.2 3.5 21 2v8.8h-9.8zM3 12.2h7.2v7.2L3 18.4zM11.2 12.2H21V22l-9.8-1.4z"/></svg></span>
+      <span class="or">or</span>
+      <span class="key icon" title="Command key (Mac)"><svg viewBox="0 0 24 24" width="22" height="22" aria-label="Command key"><path fill="none" stroke="#eaeaea" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M15 6v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3"/></svg></span>
+      <span class="plus">+</span>
+      <span class="key">Space</span>
+    </div>
+    <div class="lead">Search everything from one place:<br />apps, files, clipboard, the web and your browser history.</div>
+    <ul>
+      <li><b>AI first.</b> That one shortcut is the only one to learn.</li>
+      <li><b>Your AI lives here.</b> Local models run on this computer, so your files can stay here.</li>
+      <li><b>Lost?</b> Open the Start menu and pick &ldquo;New users start here&rdquo;.</li>
+    </ul>
   </div>
-  <div class="lead">Search everything from one place:<br />apps, files, clipboard, the web and your browser history.</div>
-  <ul>
-    <li><b>AI first.</b> That one shortcut is the only one to learn.</li>
-    <li><b>Your AI lives here.</b> Models run on this computer; nothing leaves it unless you say so.</li>
-    <li><b>Lost?</b> Open the Start menu and pick &ldquo;New users start here&rdquo;.</li>
-  </ul>
+
+  <div class="pg" data-title="Start where you expect it">
+    <div class="keys"><span class="key">AI agents</span><span class="key">Your apps</span><span class="key">Recent files</span></div>
+    <div class="lead">The Start button in the dock opens everything.<br />The desktop works the way you already know.</div>
+    <ul>
+      <li><b>Agents on top.</b> Pick one and start; the first time you open one it offers to install it.</li>
+      <li><b>Make it yours.</b> Press + Add to put any installed app in the panel, or Edit to take one off.</li>
+      <li><b>Familiar places.</b> Dock at the bottom, clock and network at the top, Files one click away.</li>
+    </ul>
+  </div>
+
+  <div class="pg" data-title="Coding assistants within reach">
+    <div class="keys sm"><span class="key">Hermes</span><span class="key">Claude Code</span><span class="key">Codex</span><span class="key">OpenCode</span><span class="key">Grok</span><span class="key">Gemini CLI</span><span class="key">Qwen Code</span></div>
+    <div class="lead">Hermes Desktop comes with NoctraOS.<br />The others install the first time you open them.</div>
+    <ul>
+      <li><b>Free to try.</b> Hermes&rsquo; free tier runs in the Nous cloud, so what you type to it leaves this computer. Local-only is one click away.</li>
+      <li><b>Bring your own account.</b> Claude Code, Codex and the rest use their own providers and may ask you to sign in.</li>
+      <li><b>Always current.</b> The Control Panel shows which version of each you have and updates it.</li>
+    </ul>
+  </div>
+
+  <div class="pg" data-title="Local AI, if you want it">
+    <div class="keys"><span class="key">Ollama</span><span class="key">VS Code</span><span class="key">Continue</span></div>
+    <div class="lead">Models can run on this computer through Ollama.<br />Your files and prompts stay here.</div>
+    <ul>
+      <li><b>You pick the model.</b> Nothing is downloaded for you; choose, download and remove models under AI models.</li>
+      <li><b>One that fits.</b> LLMFIT helps you find a model your memory and graphics card can run.</li>
+      <li><b>The editor is ready.</b> VS Code comes with Continue already pointed at your local model.</li>
+    </ul>
+  </div>
+
+  <div class="pg" data-title="A Control Panel for the chores">
+    <div class="keys sm"><span class="key">Accounts</span><span class="key">Updates</span><span class="key">Apps</span><span class="key">AI models</span><span class="key">Hardware</span><span class="key">Health</span><span class="key">Privacy</span></div>
+    <div class="lead">One window to look after this computer.<br />Everything in it works with the mouse.</div>
+    <ul>
+      <li><b>Sign in to GitHub with a short code.</b> Accounts sets up Git and GitHub, no terminal.</li>
+      <li><b>Health lists problems first.</b> Some have a Fix button.</li>
+      <li><b>You stay in charge.</b> Nothing updates until you press Update.</li>
+    </ul>
+  </div>
+
+  <div class="pg" data-title="Right-click and go">
+    <div class="keys sm"><span class="key">Ask AI to Explain</span><span class="key">Open in VS Code</span><span class="key">Open Terminal Here</span></div>
+    <div class="lead">Right-click a file in Files, then Scripts.</div>
+    <ul>
+      <li><b>Clipboard history is kept.</b> Find anything you copied from Super + Space.</li>
+      <li><b>Task Manager is Mission Center.</b> Search for it, or find it in the dock.</li>
+      <li><b>Flatpaks and AppImages just work.</b> AppManager installs and updates the AppImages.</li>
+    </ul>
+  </div>
 </div>
+<script>
+  /* The pages fade into one another on a timer; the dots and Next move by hand. Without script, page one stays. */
+  (function () {
+    function start() {
+      var root = document.querySelector('.nx');
+      if (!root || root.getAttribute('data-ready')) { return; }
+      root.setAttribute('data-ready', '1');
+      var pages = root.querySelectorAll('.pg');
+      var main = root.parentNode, title = main.previousElementSibling && main.previousElementSibling.querySelector('.slidetitle');
+      var pager = document.createElement('div'), dots = [], next = document.createElement('button');
+      var current = 0, advance = null, retitle = null;
+      pager.className = 'pager';
+      for (var i = 0; i < pages.length; i++) {
+        var dot = document.createElement('button');
+        dot.className = 'dot' + (i ? '' : ' on');
+        dot.setAttribute('aria-label', 'Page ' + (i + 1) + ' of ' + pages.length);
+        dot.onclick = (function (n) { return function () { show(n); }; })(i);
+        dots.push(dot);
+        pager.appendChild(dot);
+      }
+      next.className = 'next';
+      next.textContent = 'Next ›';
+      next.onclick = function () { show(current + 1); };
+      pager.appendChild(next);
+      root.appendChild(pager);
+
+      function show(n) {
+        n = (n + pages.length) % pages.length;
+        pages[current].className = 'pg';
+        dots[current].className = 'dot';
+        pages[n].className = 'pg on';
+        dots[n].className = 'dot on';
+        if (title && n !== current) {
+          clearTimeout(retitle);
+          title.style.transition = 'opacity .4s ease';
+          title.style.opacity = 0;
+          retitle = setTimeout(function () { title.textContent = pages[n].getAttribute('data-title'); title.style.opacity = 1; }, 400);
+        }
+        current = n;
+        clearTimeout(advance);
+        advance = setTimeout(function () { show(current + 1); }, 9000);
+      }
+      advance = setTimeout(function () { show(current + 1); }, 9000);
+    }
+    setTimeout(start, 0);
+  })();
+</script>
 </div>
