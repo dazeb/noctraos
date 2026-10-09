@@ -19,11 +19,11 @@ Keyboard: Ctrl+1 to Ctrl+7 switch pages, Ctrl+R or F5 check again, Ctrl+W or Ctr
 | Page | Shows | Actions |
 |---|---|---|
 | Overview | Version, updates, local AI, graphics, disk, Hermes mode, search index. Each card opens its page | Refresh, Run health check |
-| Accounts | The two first-time chores that stop a newcomer's first `git commit` and `git push`: the name and e-mail Git signs work with, and signing in to GitHub (a code to paste in the browser; no terminal, no password typed). Offers GitHub's private e-mail address | Save, Sign in, Use my GitHub details, Sign out |
+| Accounts | The two first-time chores that stop a newcomer's first `git commit` and `git push`: the name and e-mail Git signs work with, and signing in to GitHub (a code to paste in the browser; no terminal, no password typed). Offers GitHub's private e-mail address | Save, Sign in, Use my GitHub details, Sign out, No I'll set it up myself (each chore) |
 | Apps | Hermes, Ollama, AppManager and the coding agents: installed version, newest upstream release, when it last changed, an Update button ([updates.md](updates.md#apps-that-come-straight-from-their-publishers-hermes-ollama-coding-agents)) | Check now, Update |
 | Updates | System packages (count and download size), Flatpak, NoctraOS features (signed rolling updates, [updates.md](updates.md)), programming languages (mise), AI models | Tick what to update, then Update. Needs no terminal; one password prompt for the system steps |
 | AI models | Installed models with size and the default; suggestions chosen from this machine's RAM and video memory | Download with a progress bar and Cancel, Remove (confirms), Make default, a custom name |
-| Hardware | The GPU found, whether the stack is ready, RAM and disk | Set up the GPU, only after a summary of what will be installed and a yes |
+| Hardware | The GPU found, whether the stack is ready, RAM and disk | Set up the GPU, only after a summary of what will be installed and a yes; or "No, I'll set up the GPU myself" |
 | Health | `noc doctor` as rows, problems first | Re-check, Copy report, Fix where one exists |
 | Privacy | Whether Hermes uses the Nous free tier (a cloud service) or stays local | Switch (cloud needs a confirmation), open the Search and Weather settings |
 | About | Version, base system, links | Copy diagnostics |
@@ -31,6 +31,29 @@ Keyboard: Ctrl+1 to Ctrl+7 switch pages, Ctrl+R or F5 check again, Ctrl+W or Ctr
 Every page has a "not ready yet" state (no network, Ollama still starting, no GPU, Hermes not
 installed). The only things the panel never does on its own: install drivers, switch Hermes to the
 cloud, or cancel a half-finished system upgrade.
+
+## Doing it yourself
+
+The panel is mouse first and the terminal a close second. Nothing here is mandatory, and nothing needs the panel:
+
+- **"No, I'll set it up myself".** Every setup chore the panel offers (the Git name and e-mail, the GitHub sign-in, the GPU
+  setup; the Welcome app's "Set up Git and GitHub" too) has this button. It changes nothing on the system. It is remembered
+  by `noc skip` (`~/.config/noctraos/skipped`, one id per line), so the Overview card, the page headline and the Welcome app
+  stop asking, and the page shows the terminal commands in place of the form. "Set it up here after all" takes it back.
+  Nothing is hidden for good: a chore that is already done is never shown as skipped.
+- **The Terminal button.** Every page with an action has a small, quiet *Terminal* button. Hovering it lists the commands for
+  that page's actions; clicking it copies them. People who never look never see a command. The table is `TERMINAL` in
+  `control/panel.py`; `tests/test_control_core.py` fails if a tip names a command or sub-command that does not exist.
+
+```sh
+noc skip                      # what you skipped
+noc skip add github           # git | github | gpu
+noc skip rm github            # ask again
+```
+
+Adding a setup chore to the panel means: an id in `SKIPPABLE` (panel.py) and `SKIPPABLE` (`bin/noc`), a skip button and a
+skipped state on its page, a `TERMINAL` entry. Actions that are already opt-in (updates, apps, models, privacy) need only the
+Terminal button.
 
 ## How it works
 
@@ -40,7 +63,7 @@ noctraos-control (wrapper, pins /usr/bin/python3)
     ├ control/pages.py GTK pages; slow calls run on a thread and show a spinner
     └ control/panel.py everything testable without GTK: cards, rows, plans, progress
           │
-          ├ noc status | updates | doctor --json | models list|presets --json | update --json
+          ├ noc status | updates | doctor --json | models list|presets --json | update --json | skip list --json
           ├ noc-gpu detect|status --json
           ├ noctraos-hermes mode | local --no-launch | cloud
           └ pkexec noc-privileged  update <apt,flatpak> | module <name> | gpu-install <vendor>

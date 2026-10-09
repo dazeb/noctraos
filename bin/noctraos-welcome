@@ -273,13 +273,38 @@ class Welcome(Gtk.ApplicationWindow):
                              'the Control Panel, under Privacy.', 'muted'), False, False, 0)
         # The two one-time chores that stop a first git commit and push. Done in the Control Panel, no terminal.
         box.pack_start(label('Save and share your work', 'section'), False, False, 6)
-        box.pack_start(label('Your AI tools can keep your projects safe on GitHub. That needs your name for Git and a '
-                             'GitHub sign-in: one minute, done once, no terminal.', 'lede'), False, False, 0)
-        accounts = Gtk.Button(label='Set up Git and GitHub', halign=Gtk.Align.CENTER)
+        lede = label('Your AI tools can keep your projects safe on GitHub. That needs your name for Git and a '
+                     'GitHub sign-in: one minute, done once, no terminal.', 'lede')
+        box.pack_start(lede, False, False, 0)
+        accounts = Gtk.Button(label='Set up Git and GitHub')
         accounts.connect('clicked', lambda *_: subprocess.Popen(
             ['/usr/local/bin/noctraos-control', '--page', 'accounts'], stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True))
-        box.pack_start(accounts, False, False, 4)
+        # "No, I'll do it myself": remembered by `noc skip`, so the Control Panel does not ask either. The commands below are the
+        # same as the Terminal tips on the panel's Accounts page (control/panel.py TERMINAL; tests/test_control_core.py pins both).
+        later = Gtk.Button(label="No, I'll set up Git and GitHub myself")
+        later.get_style_context().add_class('link')
+        later.set_tooltip_text('Nothing is changed. You can still do it later in the Control Panel, under Accounts.')
+        row = Gtk.Box(spacing=12, halign=Gtk.Align.CENTER)
+        row.pack_start(accounts, False, False, 0)
+        row.pack_start(later, False, False, 0)
+        box.pack_start(row, False, False, 4)
+
+        def do_it_myself(*_):
+            for chore in ('git', 'github'):
+                try:
+                    subprocess.run(['/usr/local/bin/noc', 'skip', 'add', chore], capture_output=True, timeout=10)
+                except (OSError, subprocess.SubprocessError):
+                    pass
+            row.hide()
+            lede.set_text('Okay, this one is yours. In a terminal:\n'
+                          '  git config --global user.name "Your Name"\n'
+                          '  git config --global user.email you@example.com\n'
+                          '  gh auth login --web\n'
+                          '  gh auth setup-git\n'
+                          'Changed your mind? The Control Panel, under Accounts, does it with the mouse.')
+            lede.set_selectable(True)
+        later.connect('clicked', do_it_myself)
         return box
 
     # -- navigation --------------------------------------------------------------------

@@ -28,6 +28,17 @@ HOME_DIR="$(getent passwd "$USER_NAME" | cut -d: -f6)"
 [ -n "$HOME_DIR" ] && [ -d "$HOME_DIR" ] || { echo "no such user/home: $USER_NAME" >&2; exit 1; }
 log() { printf '[sysprep] %s\n' "$*"; }
 
+# The image was provisioned under KVM, but it will also be opened in VMware, VirtualBox and Hyper-V: carry every guest agent
+# (each stays inert on a host it does not belong to). Not fatal: the image still boots without them.
+log "VM guest tools for every hypervisor this image may boot on"
+if [ -f "$HOME_DIR/.local/share/noctraos/install.sh" ]; then
+  sudo -u "$USER_NAME" env NOCTRAOS_VM_GUEST=all NOCTRAOS_LOG=/tmp/noctraos-install-vm-guest.log \
+    bash "$HOME_DIR/.local/share/noctraos/install.sh" --only 01b_vm_guest.sh \
+    || log "WARNING: the VM guest tools did not all install; the image will lack some of them"
+else
+  log "WARNING: no provisioner at $HOME_DIR/.local/share/noctraos; the image will carry only the KVM guest tools"
+fi
+
 # The desktop session and Hermes must not be running while we delete their state.
 pkill -u "$USER_NAME" -x Hermes 2>/dev/null || true
 pkill -u "$USER_NAME" -x hermes 2>/dev/null || true

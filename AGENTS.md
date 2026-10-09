@@ -27,12 +27,14 @@ proxmox-install.sh          one-command Proxmox VE installer: downloads the rele
 boot.sh                     remote fetcher: clones repo to ~/.local/share/noctraos,
                             runs install.sh; env: NOCTRAOS_REPO_URL, NOCTRAOS_BRANCH, NOCTRAOS_HOME
 install.sh                  orchestrator: logging, TARGET_USER resolution, flags
-                            (--skip-ai, --skip-gui, --skip-gpu, --only <module>), runs modules 00-11
+                            (--skip-ai, --skip-gui, --skip-gpu, --only <module>), runs modules 00-11 (plus 01b)
 install/
   lib.sh                    shared helpers: log/warn/die, as_user(), apt_install(),
                             desktop_file_exists(). Modules MUST source it.
   00_preflight.sh           user/sudo/OS/network/25GB-disk/RAM checks
   01_system.sh              apt core + python build deps, Flathub, Nerd Font
+  01b_vm_guest.sh           VM guest tools: qemu-guest-agent + spice-vdagent (KVM/Proxmox), open-vm-tools (VMware), VirtualBox
+                            guest utils, Hyper-V daemons; a no-op on bare metal; NOCTRAOS_VM_GUEST=all installs every set (images)
   02_mise.sh                mise binary, profile.d + bash.bashrc hooks, runtimes,
                             Herdr, Starship, lazygit, lazydocker
   02b_gpu_drivers.sh        GPU detect + NVIDIA driver/CUDA or AMD ROCm (thin wrapper
@@ -59,10 +61,10 @@ install/
                             (update-alternatives, update-initramfs, update-grub)
   11_hermes.sh              Hermes Desktop preinstalled (runtime + Electron app build),
                             free Nous tier primary, local Ollama fallback; runs LAST (25+ min, no sudo)
-                            (module order in install.sh: 00 01 02 02b 03 04 04_workstation 04c 04d 05 06 08 09 10 07 11)
+                            (module order in install.sh: 00 01 01b 02 02b 03 04 04_workstation 04c 04d 05 06 08 09 10 07 11)
 bin/
   noc                       CLI: update [--json] [--only ..] | updates | doctor [--json] | status | models [list [--json]|default|presets|pull|rm]
-                            | bg [list|next|set] | gpu. Sourceable (tests call its functions); NOC_OLLAMA_URL overrides the Ollama URL
+                            | skip [list [--json]|add|rm] | bg [list|next|set] | gpu. Sourceable (tests call its functions); NOC_OLLAMA_URL overrides the Ollama URL
   noc-gpu                   GPU detect [--json] | install | status [--json] (NVIDIA driver+CUDA, AMD ROCm); VERSION must match noc
   noctraos-control          wrapper that execs the system-Python Control Panel (control/)
   noc-accounts              first-time setup without a terminal: Git name/e-mail (`git config --global`) and the GitHub sign-in (`gh auth login --web`
@@ -256,6 +258,22 @@ iso/vm-sysprep.sh           run inside a fully provisioned VM before exporting i
   and reads 2.8 GB/s; the Samsung 960 PRO (`/mnt/nvme1`) 0.6 to 1.1 GB/s and 2.3 GB/s, so the 2 TB drive is first. Re-measure after
   hardware changes (when no build runs). `build-release.sh` fails in seconds if the VM disk drive has under 100 GB free.
   Keep cold data off `/mnt/nvme1` with `~/workspace/shared/scripts/offload-dir.sh <dir>` (copy, checksum-verify, symlink).
+- **A VM install needs its hypervisor's guest tools** (user's note, 2026-10-09: "vm installs need qemu-guest-tools or the equivalent"). Module
+  `install/01b_vm_guest.sh` picks them from `systemd-detect-virt --vm` (qemu-guest-agent + spice-vdagent on KVM/Proxmox, open-vm-tools on VMware,
+  VirtualBox guest utils, the Hyper-V daemons; Parallels has no package, it only warns). It runs on every install, also with `--skip-gui`, and is
+  never fatal. Rules that follow: (1) Proxmox VMs must have the agent option on (`--agent enabled=1` in `proxmox-install.sh`, or the host
+  sees nothing); (2) exported disks (`iso/vm-sysprep.sh`) get `NOCTRAOS_VM_GUEST=all` because they boot on hosts other than the build VM;
+  (3) `noc doctor` has a `vm-guest` row inside a VM, fixable from the panel through `noc-privileged module 01b_vm_guest.sh`; the package map
+  lives twice (module and `vm_guest_primary` in `bin/noc`), `tests/test_vm_guest.py` keeps them in step. Untested on real VMware, VirtualBox and
+  Hyper-V hosts (only the KVM path can be tried here): check `noc doctor` after the next image boot on each.
+- **Every setup chore is skippable and every action has a terminal tip** (user's rule, 2026-10-09: "mouse first, terminal a close second"). A
+  chore the panel offers (Git identity, GitHub sign-in, GPU setup) has a "No, I'll set it up myself" button that runs `noc skip add <id>`
+  (the one store, `~/.config/noctraos/skipped`; `noc status --json` carries it as `skipped`), after which nothing nags (Overview card, page
+  headline, Welcome app) and the page shows the commands instead. Every action page has a quiet *Terminal* button whose tooltip lists the
+  commands (`TERMINAL` in `control/panel.py`; a test checks each command exists). Never show a command to someone who did not ask for it:
+  commands live behind hover/click, or in the place of a chore the person declined. A new chore needs: an id in `SKIPPABLE` (`control/panel.py`
+  and `bin/noc`), the skip button and a skipped state on its page, a `TERMINAL` entry; the Welcome app repeats the Git/GitHub commands as text
+  (a test pins them to `TERMINAL`).
 - **Accounts setup is for people who are not developers** (user's rule, 2026-10-08: "they just want AI and they want it to work"). Never
   make Git or GitHub setup need a terminal, a token or a command to copy. `noc-accounts` runs `gh auth login --web` with prompts off
   (stdin closed, `GH_PROMPT_DISABLED=1`; it prints a one-time code and a URL and then waits, no Enter needed), strips `GH_TOKEN` and
@@ -301,7 +319,7 @@ bash -n boot.sh install.sh install/*.sh bin/noc bin/noc-gpu bin/noc-privileged b
 docker run --rm -v "$PWD:/mnt" koalaman/shellcheck:stable --severity=warning \
   boot.sh install.sh install/*.sh bin/noc bin/noc-gpu bin/noc-privileged bin/noctraos-control bin/noctraos-agent \
   bin/noctraos-copyq bin/noctraos-hermes configs/nautilus-scripts/*     # same list as CI
-python3 -m unittest discover -s tests                # 151 tests: theme, GPU detection, noc JSON modes, root helper, Control Panel
+python3 -m unittest discover -s tests                # 365 tests: theme, GPU detection, noc JSON modes, root helper, Control Panel
 python3 scripts/render-theme.py --check              # committed theme outputs match palette.json
 
 # wallpaper iteration (venv at ~/workspace/scratch/zorin-img-venv: pillow+numpy)

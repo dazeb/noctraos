@@ -664,6 +664,119 @@ class HardwareTests(unittest.TestCase):
         self.assertEqual(panel.hardware_state(None, None)["level"], "info")
 
 
+ROOT = Path(__file__).resolve().parents[1]
+
+
+class SkipTests(unittest.TestCase):
+    """"No, I'll set it up myself": a skipped chore stops asking, and the page offers the way back."""
+
+    def test_set_ignores_junk(self):
+        self.assertEqual(panel.skipped_set(["github", "gpu", "nonsense", 3]), {"github", "gpu"})
+        for bad in (None, "github", {"github": True}, 7):
+            self.assertEqual(panel.skipped_set(bad), set())
+
+    def test_commands(self):
+        self.assertEqual(panel.skip_command("github"), [panel.NOC, "skip", "add", "github"])
+        self.assertEqual(panel.skip_command("gpu", skip=False), [panel.NOC, "skip", "rm", "gpu"])
+        self.assertIsNone(panel.skip_command("everything"))                    # only chores the panel knows
+        self.assertNotIn("sudo", panel.skip_command("git"))
+
+    def test_a_skip_never_covers_a_chore_that_is_done(self):
+        s = panel.accounts_state(ACCOUNTS_DONE, ["git", "github"])
+        self.assertTrue(s["done"])
+        self.assertEqual((s["todo"], s["skipped"]), ([], []))
+
+    def test_accounts_state_sorts_chores_into_todo_and_skipped(self):
+        s = panel.accounts_state(ACCOUNTS_NONE, ["github"])
+        self.assertEqual((s["todo"], s["skipped"]), (["git"], ["github"]))
+        self.assertTrue(s["github_skipped"] and not s["git_skipped"] and not s["done"])
+        self.assertEqual(panel.accounts_state(ACCOUNTS_NONE)["todo"], ["git", "github"])
+
+    def test_card_stops_asking_once_everything_left_is_skipped(self):
+        status = {**STATUS, "accounts": ACCOUNTS_NONE}
+        both = by_id({**status, "skipped": ["git", "github"]})["accounts"]
+        self.assertEqual((both.value, both.level, both.page), ("You are doing this yourself", "info", "accounts"))
+        self.assertIn("Git name and e-mail and GitHub sign-in", both.detail)
+        half = by_id({**status, "skipped": ["github"]})["accounts"]
+        self.assertEqual((half.value, half.level), ("Needs setting up", "warn"))     # Git is still undone and not skipped
+        self.assertNotIn("GitHub", half.detail)
+        self.assertEqual(by_id(status)["accounts"].level, "warn")                    # no skip list: nothing changes
+
+    def test_gpu_skip_hides_the_install_but_keeps_the_way_back(self):
+        d = det("modern", gpus=[NV])
+        s = panel.hardware_state(d, NOT_READY, ["gpu"])
+        self.assertEqual((s["can_install"], s["skipped"], s["level"]), (False, True, "info"))
+        self.assertIn("yourself", s["headline"])
+        asking = panel.hardware_state(d, NOT_READY, [])
+        self.assertEqual((asking["can_install"], asking["skipped"]), (True, False))
+        done = panel.hardware_state(d, READY, ["gpu"])                                 # set up after all: skipping is moot
+        self.assertEqual((done["skipped"], done["level"]), (False, "ok"))
+        reboot = panel.hardware_state(d, {**NOT_READY, "reboot_pending": True}, ["gpu"])
+        self.assertIn("Restart", reboot["headline"])
+        self.assertFalse(panel.hardware_state(det(), {"gpus": [], "ready": False, "rows": []}, ["gpu"])["skipped"])
+
+    def test_skipped_text_names_the_commands(self):
+        text = panel.skipped_text("github")
+        self.assertIn("yourself", text)
+        self.assertIn("gh auth login --web", text)
+
+
+class TerminalTipTests(unittest.TestCase):
+    """Every action has a small Terminal tip. A tip that names a command that does not exist is worse than none."""
+
+    NOC_SRC = (ROOT / "bin/noc").read_text()
+
+    def commands(self):
+        return [(key, command) for key, lines in panel.TERMINAL.items() for command in lines]
+
+    def test_tip_and_copy_text(self):
+        tip = panel.terminal_tip("github")
+        self.assertTrue(tip.startswith("In a terminal:"))
+        self.assertIn("  gh auth login --web", tip)
+        self.assertEqual(panel.terminal_commands("github"), "gh auth login --web\ngh auth setup-git")
+        self.assertEqual((panel.terminal_tip("nope"), panel.terminal_commands("nope")), ("", ""))
+
+    def test_every_chore_you_can_skip_has_a_tip(self):
+        for chore in panel.SKIPPABLE:
+            self.assertIn(chore, panel.TERMINAL, chore)
+
+    def test_every_tip_is_used_by_a_page_and_every_page_tip_exists(self):
+        import re
+        used = set(re.findall(r"terminal_button\('(\w+)'\)", (ROOT / "control/pages.py").read_text()))
+        self.assertEqual(used, set(panel.TERMINAL))
+
+    def test_commands_exist(self):
+        import re
+        for key, command in self.commands():
+            words = command.split()
+            program = words[0]
+            if program in ("git", "gh"):
+                continue
+            self.assertTrue((ROOT / "bin" / program).is_file(), f"{key}: {program} is not a program of this system")
+            if program == "noc":
+                verb = words[1]
+                self.assertRegex(self.NOC_SRC, rf"(?m)^\s+{verb}\)", f"{key}: noc has no '{verb}'")
+                script, rest = {"gpu": "bin/noc-gpu"}.get(verb, "bin/noc"), words[2:]
+            else:
+                script, rest = f"bin/{program}", words[1:]
+            text = (ROOT / script).read_text()
+            for word in rest:
+                if re.fullmatch(r"[a-z]+", word):                 # a sub-command, not a flag, a placeholder or an example
+                    self.assertIn(word, text, f"{key}: {script} has no '{word}'")
+
+    def test_placeholders_are_obvious(self):
+        for key, command in self.commands():
+            for token in command.split():
+                if token.startswith("<"):
+                    self.assertTrue(token.endswith(">"), f"{key}: {command}")
+
+    def test_the_welcome_app_gives_the_same_commands(self):
+        welcome = (ROOT / "bin/noctraos-welcome").read_text()
+        for key in ("git", "github"):
+            for command in panel.TERMINAL[key]:
+                self.assertIn(command, welcome, f"{key}: {command}")
+
+
 class PrivacyTests(unittest.TestCase):
     def test_hermes_text_never_calls_the_cloud_local(self):
         cloud = panel.hermes_privacy("cloud")

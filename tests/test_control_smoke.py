@@ -61,6 +61,41 @@ assert not press("x", ctrl=True), "an unrelated key must pass through"
 assert not press("0", ctrl=True), "Ctrl+0 is never a page"
 assert len(seen) <= 9, "Ctrl+1..9 is all the digit shortcuts there are: add a different way to reach page 10"
 window.open_page("no-such-page")
+
+# The skip choice reaches the widgets: feed the Accounts and Hardware pages by hand (the helpers above are all missing).
+pump(1.0)
+accounts = window.pages["accounts"]
+undone = {"git": {"installed": True, "name": "", "email": ""}, "github": {"installed": True, "signed_in": False, "login": ""}}
+accounts._loaded((undone, []))
+assert accounts.skip_git.get_visible() and accounts.skip_github.get_visible() and accounts.terminal_github.get_visible()
+assert accounts.git_form.get_visible() and not accounts.git_skipped.get_visible() and not accounts.github_skipped.get_visible()
+accounts._loaded((undone, ["github"]))
+assert accounts.github_skipped.get_visible() and not accounts.skip_github.get_visible() and not accounts.signin.get_visible()
+assert accounts.git_form.get_visible() and accounts.skip_git.get_visible()
+accounts._loaded((undone, ["git", "github"]))
+assert accounts.git_skipped.get_visible() and not accounts.git_form.get_visible()
+assert "Nothing left" in accounts.headline.get_text(), accounts.headline.get_text()
+done = {"git": {"installed": True, "name": "Ada", "email": "ada@example.com"}, "github": {"installed": True, "signed_in": True, "login": "ada"}}
+accounts._loaded((done, ["git", "github"]))
+assert not accounts.git_skipped.get_visible() and not accounts.github_skipped.get_visible() and not accounts.skip_git.get_visible()
+assert accounts.signout.get_visible() and not accounts.skip_github.get_visible()
+hardware = window.pages["hardware"]
+gpu = {"gpus": [{"name": "X", "vendor": "nvidia", "tier": "modern"}], "plan": {"nvidia": "modern"}}
+hardware._loaded((gpu, {"ready": False, "rows": []}, None, []))
+assert hardware.setup.get_visible() and hardware.skip.get_visible() and hardware.unskip is None
+hardware._loaded((gpu, {"ready": False, "rows": []}, None, ["gpu"]))
+assert not hardware.setup.get_visible() and not hardware.skip.get_visible() and hardware.unskip is not None
+for page_id in ("updates", "apps", "models", "hardware", "health", "privacy", "accounts"):
+    page = window.pages[page_id]
+    tips = []
+    def walk(widget):
+        if isinstance(widget, Gtk.Button) and widget.get_style_context().has_class("terminal"):
+            tips.append(widget.get_tooltip_text())
+        if isinstance(widget, Gtk.Container):
+            for child in widget.get_children():
+                walk(child)
+    walk(page)
+    assert tips and all(t.startswith("In a terminal:") for t in tips), (page_id, tips)
 print("PAGES", ",".join(seen))
 '''
 
