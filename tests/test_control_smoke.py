@@ -85,6 +85,22 @@ hardware._loaded((gpu, {"ready": False, "rows": []}, None, []))
 assert hardware.setup.get_visible() and hardware.skip.get_visible() and hardware.unskip is None
 hardware._loaded((gpu, {"ready": False, "rows": []}, None, ["gpu"]))
 assert not hardware.setup.get_visible() and not hardware.skip.get_visible() and hardware.unskip is not None
+# The setup checklist on the Overview: what is left gets a row and a button, finished steps are only counted.
+overview = window.pages["overview"]
+status = {"version": "1", "ollama": {"running": True, "models": 1, "default_model": "m"}, "hermes": {"installed": True, "mode": "cloud"},
+          "accounts": undone, "skipped": ["github"], "gpu": gpu}
+overview._loaded((status, {"gpu_status": {"ready": False, "rows": []}, "onboarded": False, "weather_city": ""}))
+def texts(widget, found):
+    if isinstance(widget, (Gtk.Label, Gtk.Button)):
+        found.append(widget.get_text() if isinstance(widget, Gtk.Label) else widget.get_label())
+    if isinstance(widget, Gtk.Container):
+        for child in widget.get_children():
+            texts(child, found)
+    return found
+shown = texts(overview, [])
+for want in ("3 things left to set up", "Git name and e-mail", "GitHub sign-in", "GPU for local AI", "Meet Hermes", "Open Hermes", "Pick a city"):
+    assert want in shown, (want, shown)
+overview._loaded((None, {}))
 for page_id in ("updates", "apps", "models", "hardware", "health", "privacy", "accounts"):
     page = window.pages[page_id]
     tips = []

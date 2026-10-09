@@ -25,10 +25,12 @@ CANDIDATES=(
   "$VSCODE_DESKTOP"
   io.missioncenter.MissionCenter.desktop
   org.gnome.Terminal.desktop
+  noctraos-control.desktop
 )
 favorites=()
 for c in "${CANDIDATES[@]}"; do
-  if desktop_file_exists "$c"; then
+  # The Control Panel launcher is installed further down in this module, so on a first run only the repo has it yet.
+  if desktop_file_exists "$c" || [ "$c" = noctraos-control.desktop ]; then
     favorites+=("$c")
   else
     warn "Skipping missing desktop entry: $c"

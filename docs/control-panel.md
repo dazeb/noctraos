@@ -7,18 +7,21 @@ The design record and the phase-by-phase history are in [control-panel-plan.md](
 
 ## Open it
 
+- **The dock.** The NoctraOS Control Panel icon is pinned to the taskbar (last, after the Terminal). A fresh install pins it in
+  module 06; accounts made earlier get it once from `migrations/user/0001_pin_control_panel.sh`, and unpinning it sticks.
+  It opens on the Overview, whose first card is the setup checklist.
 - Start panel: the sliders icon in the header, next to the settings gear.
 - Super+Space, then type "control".
 - The "AI Health Check" and "AI Models" menu entries open it on those pages (`noctraos-control --page <name>`).
 
-Pages: `overview`, `updates`, `models`, `hardware`, `health`, `privacy`, `about`.
-Keyboard: Ctrl+1 to Ctrl+7 switch pages, Ctrl+R or F5 check again, Ctrl+W or Ctrl+Q close.
+Pages: `overview`, `accounts`, `updates`, `apps`, `models`, `hardware`, `health`, `privacy`, `about`.
+Keyboard: Ctrl+1 to Ctrl+9 switch pages, Ctrl+R or F5 check again, Ctrl+W or Ctrl+Q close.
 
 ## What each page does
 
 | Page | Shows | Actions |
 |---|---|---|
-| Overview | Version, updates, local AI, graphics, disk, Hermes mode, search index. Each card opens its page | Refresh, Run health check |
+| Overview | **Setup checklist** first: Git name and e-mail, GitHub sign-in, GPU for local AI, a local model, meeting Hermes, the Start panel weather. Finished steps are only counted; what is left (and what you skipped, so the way back stays in sight) has a row and a button. Then the cards: version, updates, local AI, graphics, disk, Hermes mode, search index; each opens its page | Refresh, Run health check, a button per step |
 | Accounts | The two first-time chores that stop a newcomer's first `git commit` and `git push`: the name and e-mail Git signs work with, and signing in to GitHub (a code to paste in the browser; no terminal, no password typed). Offers GitHub's private e-mail address | Save, Sign in, Use my GitHub details, Sign out, No I'll set it up myself (each chore) |
 | Apps | Hermes, Ollama, AppManager and the coding agents: installed version, newest upstream release, when it last changed, an Update button ([updates.md](updates.md#apps-that-come-straight-from-their-publishers-hermes-ollama-coding-agents)) | Check now, Update |
 | Updates | System packages (count and download size), Flatpak, NoctraOS features (signed rolling updates, [updates.md](updates.md)), programming languages (mise), AI models | Tick what to update, then Update. Needs no terminal; one password prompt for the system steps |
@@ -31,6 +34,15 @@ Keyboard: Ctrl+1 to Ctrl+7 switch pages, Ctrl+R or F5 check again, Ctrl+W or Ctr
 Every page has a "not ready yet" state (no network, Ollama still starting, no GPU, Hermes not
 installed). The only things the panel never does on its own: install drivers, switch Hermes to the
 cloud, or cancel a half-finished system upgrade.
+
+## The setup checklist
+
+Everything the Welcome app and the first boot ask for lives in one list at the top of the Overview, so nobody has to remember
+where a skipped step was. `panel.setup_steps()` builds it from `noc status --json` plus `panel.setup_extras()` (GPU stack state,
+whether Hermes' first-run chat happened, the weather city). A step is `done`, `todo`, `skipped` (a `noc skip` chore) or
+`waiting` (cannot be done yet, for example Hermes while the first boot still builds it, so nothing nags). Steps that do not
+apply, like the GPU step on a machine with no usable GPU, are left out. The weather step is optional and never counts as "left".
+A new chore needs a step in `setup_steps()` and a test in `SetupChecklistTests`.
 
 ## Doing it yourself
 

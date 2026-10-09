@@ -231,33 +231,84 @@ class CardWidget(Gtk.EventBox):
 
 
 class OverviewPage(Page):
+    MARKS = {'done': ('✓', 'status-ok'), 'todo': ('●', 'status-warn'), 'skipped': ('–', 'status-info'), 'waiting': ('…', 'status-info')}
+
     def __init__(self, window):
         super().__init__(window)
         self.spinner = Gtk.Spinner()
         self.pack_start(header('Overview', self.spinner, button('Refresh', on_click=lambda *_: self.refresh(), tooltip='Check again (Ctrl+R)'),
                                button('Run health check', on_click=lambda *_: window.open_page('health', True), tooltip='Open Health and check everything now')),
                         False, False, 0)
-        self.pack_start(label('The state of this workstation.', 'lede'), False, False, 0)
+        self.pack_start(label('The state of this workstation, and what is left to set up.', 'lede'), False, False, 0)
         self.holder = self.scroller()
         self.refresh()
+
+    def on_show(self):
+        # Coming back from Accounts or Hardware: the checklist should already show what was just done.
+        if getattr(self, 'loaded', False):
+            self.refresh()
 
     def refresh(self):
         self.spinner.start()
         self.swap(self.holder, Gtk.Label(label='Checking…', xalign=0, margin_top=8))
-        background(lambda: panel.noc_json('status'), self._loaded)
+        background(lambda: (panel.noc_json('status'), panel.setup_extras()), self._loaded)
 
-    def _loaded(self, status):
+    def _loaded(self, result):
+        status, extras = result
         self.spinner.stop()
+        self.loaded = True
         if status is None:
             self.swap(self.holder, label('Could not read the system state. Is `noc` installed? '
                                          'Run the installer again, then press Refresh.', 'muted'))
             return
+        body = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12, margin_end=8)
+        body.add(self._setup_section(panel.setup_steps(status, extras)))
         flow = Gtk.FlowBox(selection_mode=Gtk.SelectionMode.NONE, homogeneous=True, row_spacing=12,
                            column_spacing=12, min_children_per_line=2, max_children_per_line=3,
                            valign=Gtk.Align.START)
         for card in panel.cards(status):
             flow.add(CardWidget(card, self.window.open_page))
-        self.swap(self.holder, flow)
+        body.add(flow)
+        self.swap(self.holder, body)
+
+    def _setup_section(self, steps):
+        """Every first-run step with its state. Finished steps are only counted; what is left (and what was skipped, so the
+        way back stays in sight) gets a row with a button that does it."""
+        headline, level = panel.setup_summary(steps)
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        box.get_style_context().add_class('card')
+        box.get_style_context().add_class(level)
+        box.add(label('SETUP', 'card-title'))
+        box.add(label(headline, 'card-value'))
+        shown = [s for s in steps if s.state != 'done']
+        done = len(steps) - len(shown)
+        if done and shown:
+            box.add(label(f'{done} of {len(steps)} steps done.', 'card-detail'))
+        for step in shown:
+            box.add(self._step_row(step))
+        return box
+
+    def _step_row(self, step):
+        row = Gtk.Box(spacing=12, margin_top=6)
+        mark, css = self.MARKS[step.state]
+        row.pack_start(label(mark, 'mark', css, xalign=0.5, wrap=False), False, False, 0)
+        text = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        text.add(label(step.title + ('  (optional)' if step.optional else ''), 'row-title', xalign=0, wrap=False))
+        text.add(label(step.text, 'card-detail', chars=70))
+        row.pack_start(text, True, True, 0)
+        if step.state != 'waiting' or step.page:
+            classes = ['suggested'] if step.state == 'todo' and not step.optional else []
+            row.pack_end(button(step.button, *classes, on_click=lambda *_: self._do(step)), False, False, 0)
+        return row
+
+    def _do(self, step):
+        if step.launch:
+            try:
+                subprocess.Popen(list(step.launch), start_new_session=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            except OSError:
+                pass
+        elif step.page:
+            self.window.open_page(step.page)
 
 
 # ---- Health ----------------------------------------------------------------------------------

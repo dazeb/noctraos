@@ -87,12 +87,12 @@ bin/
 branding/setup-branding.py  once-per-account dock + top-bar layout (marker desktop-layout-v1)
 extensions/                 GNOME Shell extensions: noctraos-search (Super+Space overlay),
                             noctraos-start (Start panel), noctraos-branding (flat top bar, Show Desktop)
-control/                    Control Panel (docs/control-panel-plan.md): panel.py = pure formatting of `noc ... --json`
+control/                    Control Panel (docs/control-panel-plan.md): panel.py = pure formatting of `noc ... --json` and the Overview's setup checklist (`setup_steps`)
                             (unit-tested, no GTK), main.py = GTK3 window; installed to /usr/local/share/noctraos-control
 search/                     search app: file index (SQLite), CopyQ bridge, browser history, settings window
 help/index.html             "New users start here" page the Start panel opens
 scripts/                    render-theme.py, build-desktop-theme.py, seed-password-store.py, make-update.py (update bundles + signed manifests)
-migrations/                 system/ and user/ scripts a machine runs once when it updates (README has the rules); in the update bundle
+migrations/                 system/ and user/ scripts (user/0001 pins the Control Panel icon to the dock) a machine runs once when it updates (README has the rules); in the update bundle
 configs/update/             update-signers: the PUBLIC update key every machine trusts (the private key never enters the repo)
 tests/                      unittest: theme composition (test_desktop_theme), GPU detection (test_gpu_detect),
                             noc/noctraos-hermes JSON modes (test_noc_cli), Control Panel cards (test_control_core)
@@ -319,7 +319,7 @@ bash -n boot.sh install.sh install/*.sh bin/noc bin/noc-gpu bin/noc-privileged b
 docker run --rm -v "$PWD:/mnt" koalaman/shellcheck:stable --severity=warning \
   boot.sh install.sh install/*.sh bin/noc bin/noc-gpu bin/noc-privileged bin/noctraos-control bin/noctraos-agent \
   bin/noctraos-copyq bin/noctraos-hermes configs/nautilus-scripts/*     # same list as CI
-python3 -m unittest discover -s tests                # 365 tests: theme, GPU detection, noc JSON modes, root helper, Control Panel
+python3 -m unittest discover -s tests                # 383 tests: theme, GPU detection, noc JSON modes, root helper, Control Panel
 python3 scripts/render-theme.py --check              # committed theme outputs match palette.json
 
 # wallpaper iteration (venv at ~/workspace/scratch/zorin-img-venv: pillow+numpy)

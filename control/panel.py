@@ -885,6 +885,113 @@ def switch_command(target, current):
     return {'local': HERMES_LOCAL, 'cloud': HERMES_CLOUD}.get(target)
 
 
+# ---- Setup checklist -------------------------------------------------------------------------
+#
+# The first-run chores in one list, so a person who skipped the Welcome app (or clicked "No, I'll do it myself") has one
+# place to come back to: the top of the Overview page, reached from the Control Panel icon in the dock.
+
+HERMES_ONBOARDED = os.path.join(os.environ.get('HERMES_HOME', os.path.expanduser('~/.hermes')), '.noctraos-onboarded')
+
+
+@dataclass
+class Step:
+    id: str
+    title: str
+    text: str
+    state: str                  # done | todo | skipped | waiting (waiting: cannot be done yet, nothing to nag about)
+    page: str = ''              # sidebar page that does it, '' when `launch` does
+    launch: tuple = ()          # program to start instead (argv)
+    button: str = 'Set up'
+    optional: bool = False      # never counts as "left to do"
+
+
+def weather_city():
+    """The city picked for the Start panel's weather, '' when none (or the setting cannot be read)."""
+    try:
+        out = subprocess.run(['gsettings', 'get', 'org.gnome.shell.extensions.noctraos-start', 'weather-city'],
+                             capture_output=True, text=True, timeout=5).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        return ''
+    return out.strip("'")
+
+
+def setup_extras():
+    """What the checklist needs beyond `noc status`; slow-ish, so call it on a thread."""
+    return {'gpu_status': gpu_json('status', '--json'), 'onboarded': os.path.exists(HERMES_ONBOARDED),
+            'weather_city': weather_city()}
+
+
+def setup_steps(status, extras=None):
+    """The setup checklist from a `noc status` document and setup_extras(). A step that does not apply to this machine
+    (no usable GPU) is left out; a skipped chore keeps its row, so the way back stays in sight."""
+    status, extras = status or {}, extras or {}
+    skipped = status.get('skipped')
+    steps = []
+
+    acc = accounts_state(status.get('accounts'), skipped)
+    if acc is not None:
+        for chore, ready, title, done_text, todo_text in (
+                ('git', acc['git_ready'], 'Git name and e-mail', acc['git_text'],
+                 'Git refuses to save your work until it knows your name. One minute, no terminal.'),
+                ('github', acc['signed_in'], 'GitHub sign-in', acc['github_text'],
+                 'Lets your AI tools save and share projects on GitHub. You approve it in your browser.')):
+            if ready:
+                steps.append(Step(chore, title, done_text, 'done', 'accounts'))
+            elif chore in acc['skipped']:
+                steps.append(Step(chore, title, 'You chose to do this yourself.', 'skipped', 'accounts', button='Open'))
+            else:
+                steps.append(Step(chore, title, todo_text, 'todo', 'accounts'))
+
+    detect = status.get('gpu')
+    gpu = hardware_state(detect, extras.get('gpu_status'), skipped)
+    if install_vendors(detect) or gpu['reboot']:
+        if gpu['reboot']:
+            steps.append(Step('gpu', 'GPU for local AI', 'Restart the computer to finish the GPU setup.', 'todo', 'hardware', button='Open'))
+        elif gpu['skipped']:
+            steps.append(Step('gpu', 'GPU for local AI', 'You chose to do this yourself.', 'skipped', 'hardware', button='Open'))
+        elif gpu['can_install']:
+            steps.append(Step('gpu', 'GPU for local AI', 'Your GPU makes local models much faster. Needs a download and a restart.',
+                              'todo', 'hardware'))
+        else:
+            steps.append(Step('gpu', 'GPU for local AI', gpu['headline'], 'done', 'hardware'))
+
+    ollama = status.get('ollama') or {}
+    if ollama.get('running') and ollama.get('models'):
+        steps.append(Step('models', 'Local AI model', f'{ollama["default_model"]} is ready.', 'done', 'models'))
+    elif ollama.get('running'):
+        steps.append(Step('models', 'Local AI model', 'Ollama runs but has no model yet. Pick one to download.', 'todo', 'models', button='Choose'))
+    else:
+        steps.append(Step('models', 'Local AI model', 'Ollama is starting, or is not installed yet.', 'waiting', 'models', button='Open'))
+
+    hermes = status.get('hermes') or {}
+    if not hermes.get('installed'):
+        steps.append(Step('hermes', 'Meet Hermes', 'Hermes Desktop is still being set up on first boot.', 'waiting', 'privacy', button='Open'))
+    elif extras.get('onboarded'):
+        steps.append(Step('hermes', 'Meet Hermes', 'You have met Hermes.', 'done', 'privacy'))
+    else:
+        steps.append(Step('hermes', 'Meet Hermes', 'Your AI agent asks who you are and how it should behave. Its free tier is a cloud '
+                          'service; Privacy keeps it local.', 'todo', launch=(HERMES,), button='Open Hermes'))
+
+    if extras.get('weather_city'):
+        steps.append(Step('weather', 'Weather', f'Showing {extras["weather_city"]} in the Start panel.', 'done', launch=tuple(WEATHER_SETUP),
+                          button='Change', optional=True))
+    elif 'weather_city' in extras:
+        steps.append(Step('weather', 'Weather', 'Optional. Pick a city for the Start panel. Only the city name is sent, to Open-Meteo.',
+                          'todo', launch=tuple(WEATHER_SETUP), button='Pick a city', optional=True))
+    return steps
+
+
+def setup_summary(steps):
+    """(headline, level) for the checklist: what is left, not counting optional steps or ones that cannot be done yet."""
+    left = [s for s in steps if s.state == 'todo' and not s.optional]
+    chose = [s for s in steps if s.state == 'skipped']
+    if left:
+        return f'{len(left)} thing{"" if len(left) == 1 else "s"} left to set up', 'warn'
+    if chose:
+        return 'Everything else is set up. You are doing the rest yourself.', 'info'
+    return 'Setup is complete.', 'ok'
+
+
 def run_ok(argv, timeout=120):
     """Run argv; returns (ok, last line of its output) so a page can say what went wrong."""
     try:
