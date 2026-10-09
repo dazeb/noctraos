@@ -56,12 +56,15 @@
     </nav>
   </div>
 </header>
+<aside class="alpha-bar" aria-label="Project status">
+  <div class="wrap"><span class="badge">Alpha</span><span>Bleeding-edge and changing daily, so expect things to break. Try it in a virtual machine.</span><a href="download.html#files">Get a VM disk</a><a href="community.html">Help build it</a></div>
+</aside>
 
 <main>
 <div class="hero">
   <img src="img/neon-rift.webp" alt="" width="1920" height="1080" fetchpriority="high">
   <div class="wrap">
-    <p class="eyebrow"><span class="dot"></span>Noctra OS 0.3 · based on Ubuntu</p>
+    <p class="eyebrow"><span class="dot"></span>Alpha release 0.4.0 · based on Ubuntu</p>
     <h1>Install. Detect. <em>Run AI.</em></h1>
     <p class="lede">Noctra OS is an AI development workstation OS. It detects your graphics card, sets up local AI, and puts the AI coding assistants one click from the Start button.</p>
     <div class="cta">
@@ -104,7 +107,23 @@
         <p>Noctra detects NVIDIA and AMD graphics cards and installs the driver, plus CUDA or ROCm, so local AI models use the card.</p>
       </div>
     </div>
+  </div>
+</section>
+
+<section id="alpha">
+  <div class="wrap">
+    <div class="head">
+      <p class="eyebrow"><span class="dot"></span>Please read this first</p>
+      <h2>Bleeding edge, and in alpha.</h2>
+      <p class="lede">Noctra OS is an early, fast-moving project. We ship updates constantly, and some of them will break things. That is the price of building in the open.</p>
     </div>
+    <ul class="points">
+      <li><h3>Updates are constant</h3><p>New features and fixes arrive all the time, on installed systems through the built-in updater as well as in new downloads. What you try today may look different next week.</p></li>
+      <li><h3>Expect things to break</h3><p>This is alpha software with little testing on real hardware. Do not rely on it for work you cannot lose, and back up before you install it on a disk.</p></li>
+      <li><h3>That is why there are VMs</h3><p>Start with a ready-made virtual machine disk, or run one command on Proxmox. If it breaks, you throw it away and lose nothing.</p></li>
+    </ul>
+    <div class="cta gap-top"><a class="btn primary" href="download.html#files">Get a VM disk</a><a class="btn ghost" href="community.html">We need contributors</a></div>
+    <p class="alt gap-top-sm">Found something broken? That is the most useful thing you can tell us. <a href="https://github.com/dazeb/noctraos/issues">Open an issue</a> and include the output of <code>noc doctor</code>.</p>
   </div>
 </section>
 
@@ -122,7 +141,7 @@
         <figure class="shot"><a href="img/shots/full/control-overview.webp" target="_blank" rel="noopener" aria-label="Open the full-size screenshot: The Noctra Control Panel overview: version, updates, local AI, graphics, disk and Hermes"><img src="img/shots/control-overview.webp" alt="The Noctra Control Panel overview: version, updates, local AI, graphics, disk and Hermes" width="760" height="552" loading="lazy" decoding="async"></a><figcaption><b>Control Panel.</b> Updates, AI models, hardware and health in one window.</figcaption></figure>
         <figure class="shot"><a href="img/shots/full/control-privacy.webp" target="_blank" rel="noopener" aria-label="Open the full-size screenshot: The Noctra Control Panel privacy page: Hermes local only, or the Nous cloud free tier"><img src="img/shots/control-privacy.webp" alt="The Noctra Control Panel privacy page: Hermes local only, or the Nous cloud free tier" width="760" height="552" loading="lazy" decoding="async"></a><figcaption><b>Privacy.</b> Keep Hermes on this computer, or use the free cloud tier.</figcaption></figure>
       </div>
-    <p class="alt" style="margin-top:22px"><a href="features.html">See more of what is in the box</a></p>
+    <p class="alt gap-top"><a href="features.html">See more of what is in the box</a></p>
   </div>
 </section>
 
@@ -133,8 +152,8 @@
       <h2>Ready to try it?</h2>
     </div>
     <div class="stack">
-      <p class="alt">Download the installer, write it to a USB stick and boot. Noctra sets itself up on first login, which takes 25 to 40 minutes.</p>
-      <div class="cta"><a class="btn primary" href="download.html">Download</a><a class="btn ghost" href="features.html">See features</a></div>
+      <p class="alt">Safest first step: boot the ready-made virtual machine disk and look around. Or write the installer to a USB stick; Noctra then sets itself up on first login, which takes 25 to 40 minutes. It is alpha, so back up first.</p>
+      <div class="cta"><a class="btn primary" href="download.html">Download</a><a class="btn ghost" href="community.html">Help build it</a></div>
     </div>
   </div>
 </section>
