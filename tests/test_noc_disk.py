@@ -138,6 +138,26 @@ class AnalyseTests(unittest.TestCase):
         self.assertTrue(st["reason"])
 
 
+class RootDeviceTests(unittest.TestCase):
+    def device(self, source):
+        with mock.patch.dict(os.environ, {k: v for k, v in os.environ.items() if k != "NOC_DISK_ROOT"}, clear=True), \
+                mock.patch.object(noc_disk, "capture", return_value=source):
+            return noc_disk.root_device()
+
+    def test_plain_device(self):
+        self.assertEqual(self.device("/dev/nonexistent-sda2"), "/dev/nonexistent-sda2")
+
+    def test_btrfs_subvolume_suffix_is_dropped(self):
+        for source in ("/dev/nonexistent-sda2[/@]", "/dev/nonexistent-sda2[/@/.snapshots/1/snapshot]"):
+            with self.subTest(source=source):
+                self.assertEqual(self.device(source), "/dev/nonexistent-sda2")
+
+    def test_no_device_gives_nothing(self):
+        for source in ("", "overlay", "tmpfs"):
+            with self.subTest(source=source):
+                self.assertEqual(self.device(source), "")
+
+
 class StatusCliTests(unittest.TestCase):
     def run_tool(self, d, *args, **extra):
         block = d.link()

@@ -24,6 +24,7 @@ Environment (tests): NOC_DISK_SYSFS, NOC_DISK_ROOT, NOC_DISK_FSTYPE, NOC_DISK_FS
 """
 import json
 import os
+import re
 import subprocess
 import sys
 
@@ -67,6 +68,8 @@ def capture(argv):
 def root_device():
     forced = os.environ.get("NOC_DISK_ROOT")
     source = forced if forced is not None else capture(["findmnt", "-no", "SOURCE", "/"])
+    # A btrfs root mounted from a subvolume is reported as "/dev/sda2[/@]": drop the "[/subvolume]" suffix.
+    source = re.sub(r"\[[^\]]*\]$", "", source)
     return os.path.realpath(source) if source.startswith("/") else ""
 
 
