@@ -132,6 +132,21 @@ class AnalyseTests(unittest.TestCase):
         st = d.analyse(root, fs_gib=ext4_fits(30))
         self.assertEqual((st["disk"], st["partition_number"], st["can_grow"]), ("/dev/nvme0n1", 3, True))
 
+    def test_status_says_when_growing_will_have_to_install_fdisk(self):
+        """A default install has no sfdisk, so the consent dialog can warn about the download and the library updates."""
+        root = self.d.part(2, 0.01, 31.5)
+        with mock.patch.object(noc_disk, "have", return_value=False):
+            self.assertTrue(self.d.analyse(root, fs_gib=ext4_fits(31.5))["needs_fdisk"])
+        with mock.patch.object(noc_disk, "have", return_value=True):
+            self.assertFalse(self.d.analyse(root, fs_gib=ext4_fits(31.5))["needs_fdisk"])
+
+    def test_no_fdisk_is_needed_when_only_the_filesystem_must_grow(self):
+        root = self.d.part(2, 0.01, 63.98)
+        with mock.patch.object(noc_disk, "have", return_value=False):
+            st = self.d.analyse(root, fs_gib=31)
+        self.assertTrue(st["can_grow"])
+        self.assertFalse(st["needs_fdisk"])
+
     def test_unknown_device(self):
         st = noc_disk.analyse("", "ext4", None, sysfs=str(self.d.link()))
         self.assertFalse(st["supported"])
@@ -175,7 +190,8 @@ class StatusCliTests(unittest.TestCase):
         self.assertEqual(out.returncode, 0, out.stderr)
         st = json.loads(out.stdout)
         for key in ("supported", "reason", "device", "disk", "partition_number", "fstype", "disk_bytes",
-                    "partition_bytes", "fs_bytes", "unallocated_bytes", "fs_slack_bytes", "expandable_bytes", "can_grow"):
+                    "partition_bytes", "fs_bytes", "unallocated_bytes", "fs_slack_bytes", "expandable_bytes", "can_grow",
+                    "needs_fdisk"):
             self.assertIn(key, st)
         self.assertTrue(st["can_grow"])
 
@@ -203,7 +219,7 @@ class GrowPlanTests(unittest.TestCase):
     def test_ext4_plan(self):
         out = self.plan(self.setup_disk())
         self.assertEqual(out.returncode, 0, out.stderr)
-        lines = [l.strip() for l in out.stdout.splitlines() if "would run" in l]
+        lines = [l.strip() for l in out.stdout.splitlines() if "would run" in l and "apt-get" not in l]   # fdisk install: only if missing
         self.assertEqual(lines, ["would run: sfdisk --no-reread --relocate gpt-bak-std /dev/sda",
                                  "would run: sfdisk --no-reread -N 2 /dev/sda",
                                  "would run: partx -u /dev/sda",
@@ -236,7 +252,7 @@ class GrowPlanTests(unittest.TestCase):
 class GrowRunTests(unittest.TestCase):
     """The real code path with every external command faked: order, privilege and exit codes."""
 
-    def run_grow(self, euid=0, partition_after=None, fail_on=None):
+    def run_grow(self, euid=0, partition_after=None, fail_on=None, sfdisk_installed=True):
         d = Disk(self)
         d.part(1, 0.001, 0.001)
         d.part(2, 0.01, 31.5)
@@ -257,6 +273,7 @@ class GrowRunTests(unittest.TestCase):
                "NOC_DISK_FS_BYTES": str(30 * GIB)}
         with mock.patch.dict(os.environ, env), mock.patch.object(noc_disk.os, "geteuid", return_value=euid), \
                 mock.patch.object(noc_disk.subprocess, "run", side_effect=fake_run), \
+                mock.patch.object(noc_disk, "have", return_value=sfdisk_installed), \
                 mock.patch.object(noc_disk, "status", wraps=noc_disk.status):
             code = noc_disk.grow()
         return code, calls
@@ -278,6 +295,25 @@ class GrowRunTests(unittest.TestCase):
         code, calls = self.run_grow(partition_after=31.5)
         self.assertEqual(code, noc_disk.EXIT_RESTART)
         self.assertNotIn("resize2fs", [c[0] for c in calls])
+
+    def test_a_system_without_sfdisk_gets_the_fdisk_package_first(self):
+        """A default install has no sfdisk (it is in the separate fdisk package): found on a real VM."""
+        code, calls = self.run_grow(partition_after=63.98, sfdisk_installed=False)
+        self.assertEqual(code, noc_disk.EXIT_OK)
+        self.assertEqual(calls[0][:2], ["env", "DEBIAN_FRONTEND=noninteractive"])
+        self.assertIn("apt-get", calls[0])
+        self.assertEqual(calls[0][-1], "fdisk")
+        first_sfdisk = next(i for i, c in enumerate(calls) if c[0] == "sfdisk")
+        self.assertLess(0, first_sfdisk)
+
+    def test_sfdisk_present_means_nothing_is_installed(self):
+        _, calls = self.run_grow(partition_after=63.98)
+        self.assertFalse(any("apt-get" in c for c in calls))
+
+    def test_if_fdisk_cannot_be_installed_nothing_is_changed(self):
+        code, calls = self.run_grow(sfdisk_installed=False, fail_on=("env", "fdisk"))
+        self.assertEqual(code, noc_disk.EXIT_FAILED)
+        self.assertEqual([c[0] for c in calls], ["env"])           # no partition command was run
 
     def test_a_failing_step_stops_the_run(self):
         code, calls = self.run_grow(fail_on=("sfdisk", "-N"))

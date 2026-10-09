@@ -14,7 +14,9 @@ on the disk, ext4/xfs/btrfs). Anything else (LVM, encryption, another partition 
 alone: we never move or rewrite partitions. Nothing is ever changed without the person's say-so; `grow` is only
 reached from a button or a command typed on purpose.
 
-Only tools every install already has are used: sfdisk and partx (util-linux), resize2fs / xfs_growfs / btrfs.
+Tools: sfdisk (package fdisk) and partx (util-linux), then resize2fs / xfs_growfs / btrfs. A default install does NOT have
+sfdisk (Ubuntu 24.04 keeps it in the separate `fdisk` package; found on a real VM), so `grow` installs that one small package
+first. parted was tried instead and rejected: in script mode it neither fixes a stale GPT nor confirms "partition is in use".
 The partition grows while it is mounted; the filesystem grows online. A restart is asked for only if the kernel
 refuses to pick the new partition size up (then the table is already saved, and the next `grow` finishes the job).
 
@@ -25,6 +27,7 @@ Environment (tests): NOC_DISK_SYSFS, NOC_DISK_ROOT, NOC_DISK_FSTYPE, NOC_DISK_FS
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 
@@ -44,6 +47,14 @@ GROWERS = {
     "xfs": lambda dev: ["xfs_growfs", "/"],
     "btrfs": lambda dev: ["btrfs", "filesystem", "resize", "max", "/"],
 }
+
+
+SEARCH_PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+
+def have(tool):
+    """Is `tool` installed? Looked up on the system path too, since a graphical session's PATH may lack /usr/sbin."""
+    return shutil.which(tool, path=SEARCH_PATH) is not None
 
 
 def sysfs_dir():
@@ -95,7 +106,8 @@ def analyse(device, fstype, fs_bytes, sysfs=None):
     sysfs = sysfs or sysfs_dir()
     out = {"supported": False, "reason": "", "device": device, "disk": "", "partition_number": None,
            "fstype": fstype, "disk_bytes": None, "partition_bytes": None, "fs_bytes": fs_bytes,
-           "unallocated_bytes": 0, "fs_slack_bytes": 0, "expandable_bytes": 0, "can_grow": False}
+           "unallocated_bytes": 0, "fs_slack_bytes": 0, "expandable_bytes": 0, "can_grow": False,
+           "needs_fdisk": False}
 
     def unsupported(reason):
         out["reason"] = reason
@@ -134,6 +146,7 @@ def analyse(device, fstype, fs_bytes, sysfs=None):
         out["fs_slack_bytes"] = out["partition_bytes"] - fs_bytes
     out["expandable_bytes"] = out["unallocated_bytes"] + out["fs_slack_bytes"]
     out["can_grow"] = out["expandable_bytes"] >= MIN_GROW
+    out["needs_fdisk"] = out["unallocated_bytes"] >= MIN_GROW and not have("sfdisk")
     return out
 
 
@@ -198,6 +211,13 @@ def grow(dry_run=False):
     print(f"Using the unused {fmt(st['expandable_bytes'])} of {disk}. Your files are not touched.", flush=True)
 
     if st["unallocated_bytes"] >= MIN_GROW:
+        if not have("sfdisk"):
+            apt = ["env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "-o", "DPkg::Lock::Timeout=120", "install", "-y",
+                   "--no-install-recommends", "fdisk"]
+            if not run_step("Installing the small tool that resizes partitions (fdisk)…", apt, dry_run=dry_run, quiet=True):
+                print("Could not install it (is the computer online, and is another update running?). Nothing was changed.",
+                      flush=True)
+                return EXIT_FAILED
         label = "gpt" if dry_run else partition_table_label(disk)
         if label not in ("gpt", "dos"):
             print("Could not read the partition table, so nothing was changed.", flush=True)

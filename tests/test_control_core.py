@@ -50,6 +50,14 @@ class DiskGrowTests(unittest.TestCase):
         self.assertIn("not touched", text)
         self.assertIn("restart", text)
 
+    def test_the_consent_text_discloses_the_fdisk_install_only_when_it_will_happen(self):
+        plain = " ".join(panel.disk_grow_summary(GROWN))
+        self.assertNotIn("fdisk", plain)
+        needs = " ".join(panel.disk_grow_summary({**GROWN, "needs_fdisk": True}))
+        self.assertIn("fdisk", needs)
+        self.assertIn("internet", needs)
+        self.assertIn("libraries", needs)
+
     def test_the_command_is_the_fixed_privileged_verb_with_no_arguments(self):
         self.assertEqual(panel.DISK_GROW, [panel.PKEXEC, panel.HELPER, "disk-grow"])
         self.assertNotIn("sudo", panel.DISK_GROW)

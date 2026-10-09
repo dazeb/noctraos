@@ -793,7 +793,8 @@ cmd_status() {
       gpu:$gpu,
       disk:({root_free_bytes:$free, root_total_bytes:$total}
             + (if $dsk == null then {} else {expandable_bytes:($dsk.expandable_bytes // 0), can_grow:($dsk.can_grow // false),
-                                              disk_bytes:$dsk.disk_bytes, partition_bytes:$dsk.partition_bytes} end)),
+                                              disk_bytes:$dsk.disk_bytes, partition_bytes:$dsk.partition_bytes,
+                                              needs_fdisk:($dsk.needs_fdisk // false)} end)),
       ram_gb:$ram,
       hermes:{installed:$hready, mode:(if $hmode=="" then null else $hmode end)},
       apps:$apps, accounts:$accounts, skipped:$skipped,
