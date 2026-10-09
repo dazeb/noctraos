@@ -8,6 +8,7 @@
 Output (committed, so the site and the posts need no build step):
   site/img/social/og-*.png     1200x630 Open Graph / X link-preview images, one per page
   assets/promo/x/x-*.png       1600x900 images for posts on X
+  assets/promo/patreon/patreon-banner.png   1600x400 Patreon banner (keep the words in the middle 1000px: phones crop the sides)
 
 Cards are plain HTML written to a temp folder, using the real screenshots in site/img/shots/full.
 Fonts (Hanken Grotesk, JetBrains Mono, the same as the site) are the local files in
@@ -200,6 +201,24 @@ def x_ai():
 for name, fn, folder in (("x-launch", x_launch, "assets/promo/x"), ("x-search", x_search, "assets/promo/x"),
                          ("x-proxmox", x_proxmox, "assets/promo/x"), ("x-ai", x_ai, "assets/promo/x")):
     CARDS[name] = (1600, 900, folder, fn)
+
+
+# ---- Patreon banner (1600x400) ----------------------------------------------------------------
+def patreon_banner():
+    """Phones crop the sides of a Patreon banner, so everything that must be read sits in the middle 1000px."""
+    side = lambda pos, flip: (f'<div style="position:absolute;{pos};top:50px;width:420px;opacity:.16;'
+                              f'transform:scaleX({flip})">{LOGO_MARK}</div>')
+    return page(1600, 400, 16, f"""
+{side("left:-120px", 1)}{side("right:-120px", -1)}
+<div style="position:absolute;left:300px;width:1000px;top:0;height:400px;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;text-align:center">
+  <div class="brand" style="font-size:30px">{LOGO_MARK}<span>Noctra <small>OS</small></span></div>
+  <h1 style="margin-top:24px;font-size:64px">Help build an <em>AI</em> workstation OS<br>that just works.</h1>
+  <p class="sub" style="margin-top:20px;font-size:25px">Free and open source. Your support keeps it moving.</p>
+</div>""")
+
+
+CARDS["patreon-banner"] = (1600, 400, "assets/promo/patreon", patreon_banner)
 
 
 # ---- favicons and app icons -------------------------------------------------------------------
