@@ -266,7 +266,7 @@ cmd_models() {
 # What the Control Panel runs through noc-privileged (pkexec), a person at a terminal runs here: one module of the installer,
 # from the root-owned snapshot that module 07 keeps (never from the person's clone), as the person; the module asks for sudo
 # itself. `noc llm setup`, `noc repair <name>` and `noc apps update <ollama|appmanager>` all end up here. The modules allowed
-# are noc-privileged's MODULES; tests/test_noc_parity.py keeps the two in step.
+# are noc-privileged's MODULES; PanelParityTests (tests/test_noc_cli.py) keeps the two in step.
 run_module() {
   local module="$1" installer=/usr/local/share/noctraos/repo/install.sh
   test_hooks && installer="${NOC_INSTALLER:-$installer}"

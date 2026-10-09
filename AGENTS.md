@@ -48,7 +48,7 @@ install/
   lib.sh                    shared helpers: log/warn/die, as_user(), apt_install(),
                             desktop_file_exists(). Modules MUST source it.
   00_preflight.sh           user/sudo/OS/network/25GB-disk/RAM checks
-  01_system.sh              apt core + python build deps, Flathub, Nerd Font
+  01_system.sh              apt core, Flathub, Nerd Font
   01b_vm_guest.sh           VM guest tools, FIRST in install.sh (before the preflight): qemu-guest-agent + spice-vdagent (KVM/Proxmox), open-vm-tools (VMware), VirtualBox
                             guest utils, Hyper-V daemons; a no-op on bare metal; NOCTRAOS_VM_GUEST=all installs every set (images)
   02_mise.sh                mise binary, profile.d + bash.bashrc hooks, Node LTS (the only language: agents + Hermes build need it),
