@@ -22,6 +22,7 @@ def fixture(directory):
     old = re.search(r'"softwareVersion":"([0-9.]+)"', (root / "site/download.html").read_text())[1]
     torrent = next(ROOT.glob("noctraos-*-amd64.iso.torrent"))
     shutil.copy(torrent, root / torrent.name)
+    shutil.copy(torrent, root / "site" / torrent.name)
     release = Path(directory) / "release"
     release.mkdir()
     contents = {"noctraos-9.8.7-amd64.iso": b"i" * 2_500_000, "noctraos-9.8.7.qcow2": b"q" * 5000,
@@ -48,6 +49,8 @@ class UpdateSiteTests(unittest.TestCase):
             self.assertIn("urn:btih:" + MODULE.infohash(root / "noctraos-9.8.7-amd64.iso.torrent"), page)
             self.assertIn("VERSION='9.8.7'", (root / "proxmox-install.sh").read_text())
             self.assertEqual(sorted(p.name for p in root.glob("*.torrent")), ["noctraos-9.8.7-amd64.iso.torrent"])
+            self.assertEqual(sorted(p.name for p in (root / "site").glob("*.torrent")), ["noctraos-9.8.7-amd64.iso.torrent"])
+            self.assertIn('href="noctraos-9.8.7-amd64.iso.torrent" download', page)
             sitemap = (root / "site/sitemap.xml").read_text()
             self.assertIn("/download</loc><lastmod>2030-01-02<", sitemap)
 
@@ -78,6 +81,13 @@ class UpdateSiteTests(unittest.TestCase):
         torrent = next(ROOT.glob("noctraos-*-amd64.iso.torrent"))
         page = (ROOT / "site/download.html").read_text()
         self.assertIn(MODULE.infohash(torrent), page)
+
+    def test_the_site_serves_its_own_copy_of_the_torrent(self):
+        torrent = next(ROOT.glob("noctraos-*-amd64.iso.torrent"))
+        copy = ROOT / "site" / torrent.name
+        self.assertTrue(copy.is_file(), "site/ has no copy of the torrent")
+        self.assertEqual(copy.read_bytes(), torrent.read_bytes())
+        self.assertIn(f'href="{torrent.name}" download', (ROOT / "site/download.html").read_text())
 
 
 if __name__ == "__main__":
