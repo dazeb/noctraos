@@ -803,6 +803,8 @@ class TerminalTipTests(unittest.TestCase):
         import re
         for key, command in self.commands():
             words = command.split()
+            if words[0] == "sudo":                 # a command that needs root: the program is the next word
+                words = words[1:]
             program = words[0]
             if program in ("git", "gh"):
                 continue
@@ -810,13 +812,23 @@ class TerminalTipTests(unittest.TestCase):
             if program == "noc":
                 verb = words[1]
                 self.assertRegex(self.NOC_SRC, rf"(?m)^\s+{verb}\)", f"{key}: noc has no '{verb}'")
-                script, rest = {"gpu": "bin/noc-gpu"}.get(verb, "bin/noc"), words[2:]
+                script, rest = {"gpu": "bin/noc-gpu", "disk": "bin/noc-disk"}.get(verb, "bin/noc"), words[2:]
             else:
                 script, rest = f"bin/{program}", words[1:]
             text = (ROOT / script).read_text()
             for word in rest:
                 if re.fullmatch(r"[a-z]+", word):                 # a sub-command, not a flag, a placeholder or an example
                     self.assertIn(word, text, f"{key}: {script} has no '{word}'")
+
+    def test_the_disk_tip_names_the_command_that_works(self):
+        """`grow` needs root, so the plain form would only print "needs administrator rights"."""
+        self.assertEqual(panel.TERMINAL["disk"], ["noc disk status", "sudo noc disk grow"])
+
+    def test_the_progress_line_never_says_gpu_for_the_disk(self):
+        """Both long actions on the Hardware page share one progress callback: its text comes from the action."""
+        src = (ROOT / "control/pages.py").read_text()
+        self.assertIn("self.run.set_status(self.busy_text, None)", src)
+        self.assertEqual(src.count("self.run.set_status('Setting up the GPU"), 0)
 
     def test_placeholders_are_obvious(self):
         for key, command in self.commands():

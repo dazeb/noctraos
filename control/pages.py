@@ -1172,10 +1172,15 @@ class HardwarePage(Page):
         self.pack_start(self.headline, False, False, 0)
         self.holder = self.scroller()
         self.disk = {}
+        self.busy_text = ''                 # what the progress line says while the GPU setup or the disk grow runs
         self.grow = button('Use all the disk space…', 'suggested', on_click=lambda *_: self._confirm_grow())
-        self.grow.set_halign(Gtk.Align.START)
-        self.grow.set_no_show_all(True)
-        self.pack_start(self.grow, False, False, 0)
+        self.terminal_disk = self.terminal_button('disk')
+        grow_row = Gtk.Box(spacing=10)
+        for item in (self.grow, self.terminal_disk):
+            item.set_no_show_all(True)
+            grow_row.pack_start(item, False, False, 0)
+        grow_row.set_halign(Gtk.Align.START)
+        self.pack_start(grow_row, False, False, 0)
         self.setup = button('Set up GPU for local AI…', 'suggested', on_click=lambda *_: self._confirm())
         self.skip = button("No, I'll set up the GPU myself", 'link', on_click=lambda *_: self.skip_chore('gpu'),
                            tooltip='Nothing is installed. The terminal commands are shown here instead.')
@@ -1248,6 +1253,7 @@ class HardwarePage(Page):
         self.swap(self.holder, body)
         self.setup.set_visible(state['can_install'])
         self.grow.set_visible(can_grow)
+        self.terminal_disk.set_visible(can_grow)
         self.skip.set_visible(state['can_install'])
 
     # -- use the unused disk space: an explicit summary and a yes, never on its own ---------
@@ -1268,7 +1274,8 @@ class HardwarePage(Page):
         self.running = True
         self.grow.set_sensitive(False)
         self.say(self.note, '')
-        self.run.begin('Using the rest of the disk…')
+        self.busy_text = 'Using the rest of the disk…'
+        self.run.begin(self.busy_text)
 
         def work():
             for event in panel.run_events(panel.DISK_GROW):
@@ -1325,7 +1332,8 @@ class HardwarePage(Page):
         self.setup.set_sensitive(False)
         self.skip.set_sensitive(False)
         self.say(self.note, '')
-        self.run.begin('Setting up the GPU…')
+        self.busy_text = 'Setting up the GPU…'
+        self.run.begin(self.busy_text)
 
         def work():
             problem = ''
@@ -1340,7 +1348,7 @@ class HardwarePage(Page):
     def _tick(self, line):
         if line:
             self.run.append(line)
-        self.run.set_status('Setting up the GPU…', None)
+        self.run.set_status(self.busy_text, None)
         return False
 
     def _finished(self, result):
