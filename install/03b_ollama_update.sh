@@ -24,10 +24,12 @@ case "$status" in
 esac
 
 log "Updating Ollama $installed -> $latest (official installer, pinned to that release; the service restarts)"
+boot_choice="$(ollama_boot_choice)"   # the vendor installer turns the service on at boot; whether it starts with the computer is the person's choice
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 curl -fsSL --retry 3 --max-time 60 https://ollama.com/install.sh -o "$tmp/install.sh"
 sudo env OLLAMA_VERSION="$latest" sh "$tmp/install.sh"
+ollama_boot_restore "$boot_choice"
 
 now="$(python3 "$REPO_ROOT/bin/noc-upstream" list --json | jq -r '.apps[] | select(.id == "ollama") | .installed')"
 [ "$now" = "$latest" ] || die "Ollama reports $now after the update, expected $latest"

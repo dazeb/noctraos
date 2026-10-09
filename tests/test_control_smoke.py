@@ -133,8 +133,40 @@ never = {"ollama": {"installed": False, "running": False}, "gpu": gpu, "ram_gb":
 models._loaded((None, None, never))
 assert models.setup_button is not None and models.setup_button.get_label() == "Set up local AI…"
 assert "Local AI is not set up" in texts(models.holder, [])
-models._loaded((None, None, {**never, "ollama": {"installed": True, "running": False}}))
-assert models.setup_button is None and any("installed but not answering" in t for t in texts(models.holder, []))
+# The engine row. Stopped and not meant to start with the computer is the normal state after the setup: a plain Start, no alarm.
+models._loaded((None, None, {**never, "ollama": {"installed": True, "running": False, "autostart": False}}))
+shown = texts(models.holder, [])
+assert models.setup_button is None and "Ollama is off" in shown and "Start Ollama" in shown and "Start with this computer" in shown, shown
+models._loaded((None, None, {**never, "ollama": {"installed": True, "running": False, "autostart": True}}))
+shown = texts(models.holder, [])
+assert "Ollama is not running" in shown and "Do not start with this computer" in shown and "Start Ollama" in shown, shown
+models._loaded(({"ollama": True, "autostart": False, "default": "m", "models": []}, None, None))
+shown = texts(models.holder, [])
+assert "Ollama is running" in shown and "Stop Ollama" in shown and "Start with this computer" in shown, shown
+models._loaded(({"ollama": True, "autostart": None, "default": "m", "models": []}, None, None))
+shown = texts(models.holder, [])
+assert "Stop Ollama" in shown and "Start with this computer" not in shown and "Do not start with this computer" not in shown, shown
+# Pressing the buttons runs the fixed helper verbs and refreshes. A helper that is missing says so instead of raising.
+ran_engine = []
+panel.run_ok = lambda argv, timeout=120: (ran_engine.append(argv), (True, ""))[1]
+panel.wait_for_ollama = lambda *a, **k: True
+models._loaded((None, None, {**never, "ollama": {"installed": True, "running": False, "autostart": False}}))
+models._engine_service("start", False)
+pump(1.0)
+assert ran_engine == [[panel.PKEXEC, panel.HELPER, "ollama-service", "start"]], ran_engine
+assert "Ollama is running" in models.note.get_text(), models.note.get_text()
+models._engine_boot("on", False)
+pump(1.0)
+assert ran_engine[-1] == [panel.PKEXEC, panel.HELPER, "ollama-autostart", "on"], ran_engine
+assert "starts with this computer" in models.note.get_text(), models.note.get_text()
+models._engine_service("start", True)    # it is running already: nothing to do
+models._engine_boot("on", True)          # it starts with the computer already: nothing to do
+pump(0.5)
+assert len(ran_engine) == 2, ran_engine
+panel.run_ok = lambda argv, timeout=120: (False, "polkit said no")
+models._engine_service("stop", True)
+pump(1.0)
+assert "Could not stop Ollama: polkit said no" in models.note.get_text(), models.note.get_text()
 models._loaded((None, None, None))
 assert models.setup_button is None and any("Could not check" in t for t in texts(models.holder, []))
 # Pressing Set up: the summary dialog (answered yes here), then the helper's module through the allowlisted verb, then the result.

@@ -13,6 +13,7 @@
 #   noc updates       what an update would do, as JSON (counts, apt download size, online)
 #   noc models        list [--json] | default [name] | presets [--json] | pull <model> | rm <model>
 #   noc llm           optional local AI: setup (GPU stack, Ollama, LLMFIT; no model) | fit (LLMFIT: find a model that fits)
+#                     | start | stop (the Ollama service now) | autostart [on|off] (start it with the computer; off unless you turn it on)
 #   noc gpu           detect | install | status  (NVIDIA CUDA / AMD ROCm for local LLMs)
 #   noc disk          status | grow  (use the space when the system disk was made bigger)
 set -uo pipefail
@@ -216,11 +217,11 @@ cmd_models() {
           while IFS= read -r name; do
             caps="$(model_capabilities "$name" | jq -c --arg n "$name" --argjson c "$caps" '$c + {($n): .}')"
           done < <(printf '%s' "$tags" | jq -r '.models[]?.name')
-          printf '%s' "$tags" | jq --arg d "$def" --argjson caps "$caps" \
-            '{ollama:true, default:$d, models:[.models[]? | {name, size, modified:.modified_at,
+          printf '%s' "$tags" | jq --arg d "$def" --argjson caps "$caps" --argjson boot "$(ollama_boot_json)" \
+            '{ollama:true, autostart:$boot, default:$d, models:[.models[]? | {name, size, modified:.modified_at,
               is_default:(.name == $d or .name == ($d + ":latest")), capabilities:($caps[.name] // [])}]}'
         else
-          jq -n --arg d "$def" '{ollama:false, default:$d, models:[]}'
+          jq -n --arg d "$def" --argjson boot "$(ollama_boot_json)" '{ollama:false, autostart:$boot, default:$d, models:[]}'
         fi
       else
         ollama list
@@ -292,10 +293,69 @@ cmd_llm() {
       if [ ! -x "$bin" ]; then bad "LLMFIT is not installed yet — run: noc llm setup"; return 1; fi
       exec "$bin" "$@"
       ;;
+    start|stop) llm_service "$action" ;;
+    autostart) llm_autostart "$@" ;;
     *)
-      echo "usage: noc llm [setup | fit [llmfit arguments]]"
+      echo "usage: noc llm [setup | fit [llmfit arguments] | start | stop | autostart [on|off]]"
       return 1
       ;;
+  esac
+}
+
+# ---- the Ollama service: it runs when you ask, and starts with the computer only if you say so ------------------------
+# Ollama's own installer turns the service on at boot; the NoctraOS setup turns that off again (install/lib.sh) and a later
+# update keeps whatever you chose. Root work is noc-privileged's `ollama-service` and `ollama-autostart`, the same code the
+# Control Panel reaches through pkexec.
+
+ollama_up() { curl -fsS --max-time 3 "$OLLAMA_URL/api/version" >/dev/null 2>&1; }
+
+# on | off | absent: whether the service starts with the computer; no real answer from systemctl ("not-found" from newer
+# systemd, nothing from older) means no Ollama service.
+ollama_boot_state() {
+  local word
+  word="$(systemctl is-enabled ollama.service 2>/dev/null)" || true
+  case "$word" in
+    enabled*|alias) echo on ;;
+    ""|not-found) echo absent ;;
+    *) echo off ;;
+  esac
+}
+
+# true | false | null, for the JSON the panel reads.
+ollama_boot_json() {
+  case "$(ollama_boot_state)" in on) echo true ;; off) echo false ;; *) echo null ;; esac
+}
+
+# noc llm start|stop: run or stop the Ollama service now. A stopped Ollama is not broken; it frees the memory a loaded model uses.
+llm_service() {
+  local action="$1" sudo=sudo
+  [ "$(id -u)" -eq 0 ] && sudo=""
+  have ollama || { bad "local AI is not set up yet — run: noc llm setup"; return 1; }
+  if [ "$action" = start ] && ollama_up; then info "Ollama is already running"; return 0; fi
+  if [ "$action" = stop ] && ! ollama_up && ! systemctl is-active --quiet ollama.service 2>/dev/null; then
+    info "Ollama is already stopped"; return 0
+  fi
+  $sudo "$PRIVILEGED" ollama-service "$action" || return 1
+  if [ "$action" = stop ]; then info "Ollama is stopped"; return 0; fi
+  for _ in $(seq 1 "${NOC_OLLAMA_WAIT:-15}"); do
+    ollama_up && { info "Ollama is running"; return 0; }
+    sleep 1
+  done
+  bad "Ollama was started but does not answer yet (look: journalctl -u ollama -n 50)"; return 1
+}
+
+# noc llm autostart [on|off]: show, or change, whether Ollama starts with this computer. It never starts or stops it now.
+llm_autostart() {
+  local target="${1:-}" now sudo=sudo
+  now="$(ollama_boot_state)"
+  [ "$now" = absent ] && { bad "there is no Ollama service on this computer (noc llm setup installs it)"; return 1; }
+  case "$target" in
+    "") echo "Ollama starts with this computer: $now" ;;
+    on|off)
+      if [ "$now" = "$target" ]; then info "Ollama already starts with this computer: $now"; return 0; fi
+      [ "$(id -u)" -eq 0 ] && sudo=""
+      $sudo "$PRIVILEGED" ollama-autostart "$target" && info "Ollama starts with this computer: $target" ;;
+    *) echo "usage: noc llm autostart [on|off]"; return 1 ;;
   esac
 }
 
@@ -560,6 +620,9 @@ cmd_doctor() {
     local model_count
     model_count="$(curl -fsS "$OLLAMA_URL/api/tags" | jq '.models | length' 2>/dev/null || echo 0)"
     chk ok ollama-models "Ollama models" "$model_count local model(s)"
+  elif have ollama && [ "$(ollama_boot_state)" = off ]; then
+    # It does not start with the computer unless you ask for that, so being off is how a quiet machine looks.
+    chk info ollama "Ollama" "stopped (start it when you need it: noc llm start)"
   elif have ollama; then
     chk fail ollama "Ollama" "not responding on $OLLAMA_URL (try: systemctl status ollama)"
   else
@@ -867,13 +930,15 @@ KEYRING_ENCRYPTED_HEX=476e6f6d654b657972696e670a0d000a00
 KEYRING_PLAIN_HEX=5b6b657972696e675d
 
 # on | off | absent: whether the SSH server runs or starts at boot. Ubuntu 24.04 starts sshd from ssh.socket, older releases
-# from ssh.service, so both are asked; a missing unit prints nothing to is-enabled, so no answer at all means no server.
+# from ssh.service, so both are asked; a missing unit prints nothing (older systemd) or "not-found" (newer) to is-enabled, so
+# no real answer at all means no server.
 remote_state() {
   local word seen=""
   for word in $(systemctl is-active ssh.socket ssh.service 2>/dev/null); do
     [ "$word" = active ] && { echo on; return; }
   done
   for word in $(systemctl is-enabled ssh.socket ssh.service 2>/dev/null); do
+    [ "$word" = not-found ] && continue   # newer systemd says so for a unit that does not exist; older prints nothing
     seen=1
     case "$word" in enabled*|alias) echo on; return ;; esac
   done
@@ -1046,14 +1111,14 @@ cmd_status() {
     --arg version "$VERSION" --arg os "$os" \
     --argjson apt "$(apt_pending)" --argjson flatpak "$(flatpak_pending)" \
     --argjson reboot "$([ -f /var/run/reboot-required ] && echo true || echo false)" \
-    --argjson ollama "$ollama" --argjson oinstalled "$oinstalled" --arg oversion "$oversion" --argjson nmodels "${nmodels:-0}" \
+    --argjson ollama "$ollama" --argjson oinstalled "$oinstalled" --argjson oboot "$(ollama_boot_json)" --arg oversion "$oversion" --argjson nmodels "${nmodels:-0}" \
     --arg model "$(effective_model)" --argjson gpu "$gpu" \
     --argjson free "$(df -B1 --output=avail / | awk 'NR==2 {print $1}')" \
     --argjson total "$(df -B1 --output=size / | awk 'NR==2 {print $1}')" \
     --argjson ram "$(ram_gb)" --arg hmode "$hmode" --argjson hready "$hready" --argjson idx "$idx_age" --argjson apps "$apps" --argjson accounts "$accounts" --argjson skipped "$skipped" --argjson dsk "$dsk" \
     '{version:$version, os:$os,
       updates:{apt:$apt, flatpak:$flatpak, reboot_required:$reboot},
-      ollama:{installed:$oinstalled, running:$ollama, version:(if $oversion=="" then null else $oversion end), models:$nmodels, default_model:$model},
+      ollama:{installed:$oinstalled, running:$ollama, autostart:$oboot, version:(if $oversion=="" then null else $oversion end), models:$nmodels, default_model:$model},
       gpu:$gpu,
       disk:({root_free_bytes:$free, root_total_bytes:$total}
             + (if $dsk == null then {} else {expandable_bytes:($dsk.expandable_bytes // 0), can_grow:($dsk.can_grow // false),
@@ -1095,7 +1160,7 @@ main() {
       echo "  noc channel     NoctraOS update channel: stable (default) or nightly (testers)"
       echo "  noc skip        setup chores you do yourself (list | add <id> | rm <id>)"
       echo "  noc models      manage local AI models (list | default | presets | pull | rm)"
-      echo "  noc llm         optional local AI: setup (engine, no model) | fit (find a model that fits)"
+      echo "  noc llm         optional local AI: setup (engine, no model) | fit (find a model that fits) | start | stop | autostart [on|off]"
       echo "  noc apps        Hermes, Ollama, AppManager and the coding agents: versions, update"
       echo "  noc repair      run again what noc doctor found missing (appmanager | vm-guest | hermes)"
       echo "  noc privacy     remote login, clipboard history, saved passwords, Hermes (status | remote | clipboard | hermes)"

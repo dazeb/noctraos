@@ -26,7 +26,7 @@ Some apps are not in apt or Flatpak: they are installed from the publisher's own
 | App | Newest release comes from | Installed version read from | Updated by |
 |---|---|---|---|
 | Hermes | GitHub Releases of `NousResearch/hermes-agent` | `hermes --version` | `noctraos-hermes update` (user) |
-| Ollama | GitHub Releases of `ollama/ollama` | `ollama --version` | `install/03b_ollama_update.sh` through the privileged helper (root; the Apps page asks first, it restarts the service) |
+| Ollama | GitHub Releases of `ollama/ollama` | `ollama --version` | `install/03b_ollama_update.sh` through the privileged helper (root; the Apps page asks first, it restarts the service and keeps whether it starts with the computer: the vendor installer turns that on, the module puts the person's choice back) |
 | AppManager | GitHub Releases of `kem-a/AppManager` | `/opt/appmanager/VERSION` | `install/04d_appmanager.sh` through the privileged helper (root) |
 | Codex, Claude Code, OpenCode, Grok, Gemini CLI, Qwen Code | npm registry `latest` | the global `node_modules` | `npm install -g <package>@<exact version>` (user); only when already installed |
 

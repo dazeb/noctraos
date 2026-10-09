@@ -178,9 +178,12 @@ class ModelTests(unittest.TestCase):
                          {"qwen2.5-coder:7b": ["completion", "tools", "insert"], "nomic-embed-text:latest": []})
 
     def test_list_json_ollama_down_is_a_state_not_an_error(self):
-        result = Env(self, ollama=False).noc("models", "list", "--json")
+        e = Env(self, ollama=False)
+        e.stub("systemctl", "echo not-found; exit 4")                 # no Ollama service on this machine
+        result = e.noc("models", "list", "--json")
         self.assertEqual(result.returncode, 0)
-        self.assertEqual(json.loads(result.stdout), {"ollama": False, "default": "qwen2.5-coder:7b", "models": []})
+        self.assertEqual(json.loads(result.stdout),
+                         {"ollama": False, "autostart": None, "default": "qwen2.5-coder:7b", "models": []})
 
     def test_default_round_trip(self):
         e = Env(self)
@@ -329,6 +332,7 @@ class DoctorStatusTests(unittest.TestCase):
     def test_doctor_json_ollama_down(self):
         e = Env(self, ollama=False)
         e.stub("ollama", "true")  # installed, but its API does not answer
+        e.stub("systemctl", "echo enabled")                           # and set to start with the computer: that is a failure
         rows = json.loads(e.noc("doctor", "--json").stdout)
         self.assertEqual({r["id"]: r["status"] for r in rows}["ollama"], "fail")
 
@@ -911,7 +915,8 @@ class PrivacyStatusTests(unittest.TestCase):
                  ("inactive", "enabled-runtime", "on"),
                  ("inactive inactive", "disabled disabled", "off"),
                  ("inactive", "indirect", "off"),
-                 ("inactive inactive", "", None)]                         # no unit file at all
+                 ("inactive inactive", "", None),                         # no unit file at all (older systemd prints nothing)
+                 ("inactive inactive", "not-found not-found", None)]      # (newer systemd says so)
         for active, enabled, want in cases:
             with self.subTest(active=active, enabled=enabled):
                 self.systemctl(active, enabled)
@@ -1055,6 +1060,117 @@ class PrivacyActionTests(unittest.TestCase):
         self.assertIn("usage: noc privacy", result.stdout)
 
 
+class OllamaServiceTests(unittest.TestCase):
+    """Ollama runs when asked and starts with the computer only if the person says so: `noc llm start|stop|autostart`."""
+
+    def setUp(self):
+        self.e = Env(self, ollama=False)
+        self.calls = self.e.home / "calls"
+        self.up = self.e.home / "up"                 # while this file exists, the stand-in API answers
+        self.e.stub("sudo", 'exec "$@"')
+        self.e.stub("ollama", "true")
+        self.e.stub("curl", f'[ -e "{self.up}" ] && echo \'{{"version":"0.9.0","models":[]}}\' || exit 7')
+        self.helper()
+
+    def helper(self, answers=True):
+        """A stand-in for noc-privileged: starting it makes the API answer (unless answers is False), stopping silences it."""
+        start = f'touch "{self.up}"' if answers else "true"
+        self.e.stub("privileged", f'echo "privileged $*" >> "{self.calls}"\ncase "$*" in "ollama-service start") {start} ;; '
+                                  f'"ollama-service stop") rm -f "{self.up}" ;; esac')
+
+    def systemctl(self, enabled, active="inactive"):
+        self.e.stub("systemctl", f'case "$1" in is-active) echo {active}; [ {active} = active ] ;; is-enabled) echo {enabled} ;; esac')
+
+    def llm(self, *args, **extra):
+        return self.e.noc("llm", *args, NOC_PRIVILEGED=str(self.e.bin / "privileged"), NOC_OLLAMA_WAIT="2", **extra)
+
+    def logged(self):
+        return self.calls.read_text().splitlines() if self.calls.exists() else []
+
+    def test_autostart_shows_its_state_and_changes_it_only_when_it_needs_to(self):
+        self.systemctl("disabled")
+        self.assertEqual(self.llm("autostart").stdout.strip(), "Ollama starts with this computer: off")
+        self.assertEqual(self.llm("autostart", "off").returncode, 0)
+        self.assertEqual(self.logged(), [])                                   # already so: nothing is called
+        self.assertEqual(self.llm("autostart", "on").returncode, 0)
+        self.assertEqual(self.logged(), ["privileged ollama-autostart on"])
+        self.systemctl("enabled")
+        self.assertEqual(self.llm("autostart").stdout.strip(), "Ollama starts with this computer: on")
+        self.assertEqual(self.llm("autostart", "off").returncode, 0)
+        self.assertEqual(self.logged(), ["privileged ollama-autostart on", "privileged ollama-autostart off"])
+
+    def test_autostart_never_starts_or_stops_it(self):
+        self.systemctl("disabled")
+        self.llm("autostart", "on")
+        self.assertFalse(self.up.exists())
+
+    def test_without_the_service_autostart_is_an_error_that_changes_nothing(self):
+        for printed in ("not-found", ""):                                     # newer and older systemd
+            with self.subTest(printed=printed):
+                self.systemctl(printed)
+                result = self.llm("autostart", "on")
+                self.assertEqual(result.returncode, 1)
+                self.assertIn("no Ollama service", result.stdout)
+                self.assertEqual(self.logged(), [])
+
+    def test_anything_but_on_or_off_is_refused_before_the_helper_is_called(self):
+        self.systemctl("disabled")
+        for word in ("maybe", "ON", "on; id", "--now", "start"):
+            self.assertEqual(self.llm("autostart", word).returncode, 1, word)
+        self.assertEqual(self.logged(), [])
+
+    def test_start_runs_the_helper_and_waits_until_the_api_answers(self):
+        self.systemctl("disabled")
+        result = self.llm("start")
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertEqual(self.logged(), ["privileged ollama-service start"])
+        self.assertIn("is running", result.stdout)
+        self.assertIn("already running", self.llm("start").stdout)             # the second call changes nothing
+        self.assertEqual(self.logged(), ["privileged ollama-service start"])
+
+    def test_start_that_never_answers_is_an_error(self):
+        self.systemctl("disabled")
+        self.helper(answers=False)
+        result = self.llm("start")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("does not answer yet", result.stdout)
+
+    def test_stop_runs_the_helper_once(self):
+        self.systemctl("disabled", active="active")
+        self.up.write_text("")
+        self.assertEqual(self.llm("stop").returncode, 0)
+        self.assertEqual(self.logged(), ["privileged ollama-service stop"])
+        self.systemctl("disabled", active="inactive")
+        self.assertIn("already stopped", self.llm("stop").stdout)
+        self.assertEqual(self.logged(), ["privileged ollama-service stop"])
+
+    @unittest.skipIf(shutil.which("ollama"), "the test needs a machine without Ollama")
+    def test_start_and_stop_without_local_ai_point_at_the_setup(self):
+        e = Env(self, ollama=False)
+        for action in ("start", "stop"):
+            result = e.noc("llm", action)
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("noc llm setup", result.stdout)
+
+    def test_status_and_models_list_say_whether_it_starts_with_the_computer(self):
+        for printed, want in (("enabled", True), ("disabled", False), ("not-found", None), ("", None)):
+            with self.subTest(printed=printed):
+                self.systemctl(printed)
+                status = json.loads(self.e.noc("status", "--json").stdout)
+                self.assertEqual(status["ollama"]["autostart"], want)
+                listing = json.loads(self.e.noc("models", "list", "--json").stdout)
+                self.assertEqual(listing["autostart"], want)
+
+    def test_doctor_does_not_call_a_stopped_ollama_a_failure_when_it_is_not_meant_to_start_with_the_computer(self):
+        self.systemctl("disabled")
+        row = {r["id"]: r for r in json.loads(self.e.noc("doctor", "--json").stdout)}["ollama"]
+        self.assertEqual(row["status"], "info")
+        self.assertIn("noc llm start", row["detail"])
+        self.systemctl("enabled")
+        row = {r["id"]: r for r in json.loads(self.e.noc("doctor", "--json").stdout)}["ollama"]
+        self.assertEqual(row["status"], "fail")                                # set to start, and not answering: a real problem
+
+
 class PanelParityTests(unittest.TestCase):
     """Whatever the Control Panel can do, `noc` can do, so a broken panel never leaves a machine without the option.
     Every root verb of noc-privileged, every module it may run and every Health fix needs a `noc` command; adding one to the
@@ -1065,7 +1181,8 @@ class PanelParityTests(unittest.TestCase):
 
     # noc-privileged verb -> the noc command (words after `noc`) that does the same; `module` is checked per module below
     VERBS = {"update": "update", "update-channel": "channel", "update-rollback": "channel rollback", "module": None,
-             "gpu-install": "gpu install", "disk-grow": "disk grow", "remote-access": "privacy remote"}
+             "gpu-install": "gpu install", "disk-grow": "disk grow", "remote-access": "privacy remote",
+             "ollama-service": "llm start", "ollama-autostart": "llm autostart"}
     # module the panel may run -> the noc command that runs the same module
     MODULES = {"04d_appmanager.sh": ["repair", "appmanager"], "01b_vm_guest.sh": ["repair", "vm-guest"],
                "03b_ollama_update.sh": ["apps", "update", "ollama"], "optional/local_llm.sh": ["llm", "setup"]}

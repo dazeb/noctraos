@@ -9,6 +9,7 @@ import json
 import os
 import re
 import subprocess
+import time
 import urllib.request
 from dataclasses import dataclass
 
@@ -103,6 +104,10 @@ def _ollama_card(ollama):
     if state == 'absent':
         return Card('ollama', 'Local AI', 'Not set up',
                     'Optional. Set it up from AI models to run models on this computer.', 'info', 'models')
+    if state == 'stopped' and ollama.get('autostart') is False:
+        return Card('ollama', 'Local AI', 'Off',
+                    'Ollama is not running, and does not start with this computer. Start it from AI models when you want it.',
+                    'info', 'models')
     if state != 'running':
         return Card('ollama', 'Local AI', 'Not running',
                     'Ollama is installed but not answering. It may still be starting; open Health if it stays like this.',
@@ -220,7 +225,7 @@ TERMINAL = {
     'disk': ['noc disk status', 'sudo noc disk grow'],
     'updates': ['noc update', 'noc update --only mise,models', 'noc channel', 'noc channel nightly', 'noc channel rollback'],
     'apps': ['noc apps', 'noc apps update', 'noc apps update <app>'],
-    'models': ['noc llm setup', 'noc llm fit', 'noc models list', 'noc models pull <model>', 'noc models default <model>', 'noc models rm <model>'],
+    'models': ['noc llm setup', 'noc llm fit', 'noc llm start', 'noc llm stop', 'noc llm autostart on', 'noc models list', 'noc models pull <model>', 'noc models default <model>', 'noc models rm <model>'],
     'privacy': ['noc privacy status', 'noc privacy remote off', 'noc privacy clipboard clear', 'noc privacy hermes local',
                 'noc privacy hermes cloud', 'noctraos-search --settings', 'noctraos-weather --setup'],
     'health': ['noc doctor', 'noc repair <name>'],
@@ -477,6 +482,64 @@ def local_ai_result(code, reboot=False):
                 + (' Restart the computer to finish the graphics driver; until then models run on the processor.'
                    if reboot else ''))
     return exit_message(code) or 'The setup did not finish. Show details has the reason; Health lists what is missing.'
+
+
+# Ollama is a service that runs when the person asks and starts with the computer only if they say so (the setup turns the
+# vendor's boot setting off). The AI models page shows one row for it; `noc llm start|stop|autostart` are the same actions.
+
+def ollama_service_text(ollama):
+    """The AI models page's engine row from the ollama block of `noc status` (or the same keys of `noc models list --json`):
+    {'headline', 'text', 'service': 'start'|'stop'|None, 'boot': 'on'|'off'|None}. None while it is not installed or unread.
+    'service' is the action its button does; 'boot' is the state the boot button would switch to (None when unknown)."""
+    state = local_ai_state(ollama)
+    if state not in ('running', 'stopped'):
+        return None
+    boot = ollama.get('autostart')
+    start_with = ('' if not isinstance(boot, bool) else
+                  'It starts with this computer.' if boot else 'It does not start with this computer unless you ask it to.')
+    if state == 'running':
+        return {'headline': 'Ollama is running', 'service': 'stop', 'boot': _boot_target(boot),
+                'text': ' '.join(t for t in ('Stop it to free the memory a model is using.', start_with) if t)}
+    if boot is True:
+        text = ('It is set to start with this computer but does not answer yet. It may still be starting: press Refresh in a '
+                'minute. If it stays like this, open Health.')
+    else:
+        text = ' '.join(t for t in ('Start it when you want to use local AI.', start_with) if t)
+    return {'headline': 'Ollama is off' if boot is False else 'Ollama is not running', 'service': 'start',
+            'boot': _boot_target(boot), 'text': text}
+
+
+def _boot_target(boot):
+    return None if not isinstance(boot, bool) else ('off' if boot else 'on')
+
+
+def ollama_service_command(action, running):
+    """argv through the root helper that starts or stops Ollama; None when it is already so or the action is unknown."""
+    if action not in ('start', 'stop') or (action == 'start') == bool(running):
+        return None
+    return [PKEXEC, HELPER, 'ollama-service', action]
+
+
+def ollama_autostart_command(target, current):
+    """argv through the root helper that makes Ollama start with the computer ('on') or not ('off'); None when it is
+    already so, is not known, or the target is not one of the two."""
+    if target not in ('on', 'off') or not isinstance(current, bool) or (target == 'on') == current:
+        return None
+    return [PKEXEC, HELPER, 'ollama-autostart', target]
+
+
+def wait_for_ollama(seconds=15, base_url=None):
+    """True once Ollama answers, polling for up to `seconds`: a service that was just started needs a moment."""
+    deadline = time.monotonic() + seconds
+    while True:
+        try:
+            with urllib.request.urlopen(f'{base_url or OLLAMA_URL}/api/version', timeout=3):
+                return True
+        except (OSError, ValueError):
+            pass
+        if time.monotonic() >= deadline:
+            return False
+        time.sleep(1)
 
 
 # ---- Updates ---------------------------------------------------------------------------------
@@ -1158,8 +1221,12 @@ def setup_steps(status, extras=None):
     elif ollama.get('running'):
         steps.append(Step('models', 'Local AI model', 'Ollama runs but has no model yet. Pick one to download.', 'todo', 'models', button='Choose'))
     else:
-        text = ('Optional. Set up local AI to run models on this computer.' if local_ai_state(ollama) == 'absent'
-                else 'Ollama is installed but not running.')
+        if local_ai_state(ollama) == 'absent':
+            text = 'Optional. Set up local AI to run models on this computer.'
+        elif ollama.get('autostart') is False:
+            text = 'Ollama is off. Start it when you want local AI.'
+        else:
+            text = 'Ollama is installed but not running.'
         steps.append(Step('models', 'Local AI model', text, 'waiting', 'models', button='Open'))
 
     hermes = status.get('hermes') or {}

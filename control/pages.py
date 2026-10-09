@@ -1029,6 +1029,8 @@ class ModelsPage(Page):
             self._not_running(body)
             self.swap(self.holder, body)
             return
+        body.add(label('Engine', 'section'))
+        body.add(self._engine_row({'installed': True, 'running': True, 'autostart': listing.get('autostart')}))
         installed = panel.installed_rows(listing)
         body.add(label('Installed', 'section'))
         if not installed:
@@ -1056,10 +1058,66 @@ class ModelsPage(Page):
             self.setup_button.set_halign(Gtk.Align.START)
             body.add(self.setup_button)
         elif state == 'stopped':
-            body.add(label('Ollama is installed but not answering. It may still be starting: press Refresh in a minute. '
-                           'If it stays like this, open Health.', 'muted', chars=80))
+            body.add(label('Engine', 'section'))
+            body.add(self._engine_row((self.status or {}).get('ollama')))
         else:
             body.add(label('Could not check local AI. Press Refresh to try again.', 'muted'))
+
+    # -- the engine: runs when asked, starts with the computer only if you say so ----------------
+    def _engine_row(self, ollama):
+        info = panel.ollama_service_text(ollama)
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        if not info:
+            return box
+        running = info['service'] == 'stop'
+        box.add(label(info['headline'], 'row-title'))
+        box.add(label(info['text'], 'card-detail', chars=80))
+        row = Gtk.Box(spacing=8)
+        row.add(button('Stop Ollama' if running else 'Start Ollama', *(() if running else ('suggested',)),
+                       on_click=lambda *_: self._engine_service(info['service'], running)))
+        if info['boot']:
+            row.add(button('Start with this computer' if info['boot'] == 'on' else 'Do not start with this computer',
+                           on_click=lambda *_: self._engine_boot(info['boot'], ollama.get('autostart'))))
+        box.add(row)
+        return box
+
+    def _engine_service(self, action, running):
+        argv = panel.ollama_service_command(action, running)
+        if not argv:
+            return
+        self.say(self.note, 'Starting Ollama… you may be asked for your password.' if action == 'start'
+                 else 'Stopping Ollama… you may be asked for your password.')
+
+        def work():
+            ok, message = panel.run_ok(argv)
+            if ok and action == 'start' and not panel.wait_for_ollama():
+                return False, 'it was started but does not answer yet (Health has the details)'
+            return ok, message
+
+        def done(result):
+            ok, message = result
+            if ok:
+                self.say(self.note, 'Ollama is running.' if action == 'start' else 'Ollama is stopped.')
+            else:
+                self.say(self.note, f'Could not {action} Ollama: {message}')
+            self.refresh()
+        background(work, done)
+
+    def _engine_boot(self, target, current):
+        argv = panel.ollama_autostart_command(target, current)
+        if not argv:
+            return
+        self.say(self.note, 'Switching… you may be asked for your password.')
+
+        def done(result):
+            ok, message = result
+            if ok:
+                self.say(self.note, 'Done. Ollama starts with this computer.' if target == 'on'
+                         else 'Done. Ollama no longer starts with this computer. It keeps running until you stop it or restart.')
+            else:
+                self.say(self.note, f'Could not switch: {message}')
+            self.refresh()
+        background(lambda: panel.run_ok(argv), done)
 
     # -- set up local AI: an explicit summary and a yes, never on its own -----------------------
     def _confirm_setup(self):

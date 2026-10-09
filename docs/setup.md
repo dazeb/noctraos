@@ -4,7 +4,8 @@
 
 For downloads and checksums, start at [noctraos.dev/download](https://noctraos.dev/download).
 This guide covers provisioning an existing machine, configuration, GPU setup,
-ISO builds, and day-to-day maintenance.
+ISO builds, and day-to-day maintenance. For what NoctraOS sets up and what it
+leaves to you, read [What we do](what-we-do.md).
 
 ## Install on Proxmox VE
 
@@ -70,6 +71,8 @@ noc update        # apt + Flatpak apps + mise runtimes + refresh the local model
 noc doctor        # health check: OS, Ollama + models, mise runtimes, VS Code, search, Hermes, AppManager, GPU, disk
 noc llm setup     # optional: local AI engine (Ollama), GPU stack and LLMFIT. Downloads no model
 noc llm fit       # LLMFIT: the models that fit this computer
+noc llm start     # start Ollama now (noc llm stop to stop it); it does not start with the computer by itself
+noc llm autostart on    # start Ollama with the computer (off to stop that; no argument shows the setting)
 noc models list   # local models
 noc models pull <model>   # e.g. noc models pull llama3.2:3b
 noc models rm <model>

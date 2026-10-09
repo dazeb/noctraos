@@ -179,6 +179,73 @@ exit 0
         self.assertIn("remote-access <on|off>", out.stderr)
 
 
+class OllamaVerbTests(unittest.TestCase):
+    """`ollama-service` and `ollama-autostart` take one of two words each and touch one fixed unit. Starting does not
+    enable it at boot and enabling does not start it: the person chooses each on its own."""
+
+    def run_as_root(self, args, units=("ollama.service",)):
+        with tempfile.TemporaryDirectory() as d:
+            log = Path(d) / "log"
+            stub = Path(d) / "systemctl"
+            stub.write_text(f'''#!/bin/sh
+echo "$*" >> "{log}"
+if [ "$1" = cat ]; then case " {' '.join(units)} " in *" $2 "*) exit 0 ;; esac; exit 1; fi
+exit 0
+''')
+            stub.chmod(0o755)
+            script = f'id() {{ echo 0; }}; source "{HELPER}"; SYSTEMCTL="{stub}"; main {args}'
+            out = subprocess.run(["bash", "-c", script], capture_output=True, text=True,
+                                 env={k: v for k, v in os.environ.items() if k != "PKEXEC_UID"})
+            return out, [c for c in (log.read_text().splitlines() if log.exists() else []) if not c.startswith("cat ")]
+
+    def test_the_validators(self):
+        for good in ("start", "stop"):
+            self.assertEqual(bash(f"validate_ollama_action {good}").returncode, 0, good)
+        for good in ("on", "off"):
+            self.assertEqual(bash(f"validate_ollama_autostart {good}").returncode, 0, good)
+        for bad in ("", "START", "restart", "enable", "start;id", "--now", "$(id)", "ollama"):
+            with self.subTest(word=bad):
+                self.assertNotEqual(bash(f"validate_ollama_action '{bad}'").returncode, 0)
+        for bad in ("", "ON", "enable", "start", "--now", "on off"):
+            with self.subTest(word=bad):
+                self.assertNotEqual(bash(f"validate_ollama_autostart '{bad}'").returncode, 0)
+
+    def test_start_and_stop_touch_only_the_fixed_unit_and_not_its_boot_setting(self):
+        for word in ("start", "stop"):
+            with self.subTest(word=word):
+                out, calls = self.run_as_root(f"ollama-service {word}")
+                self.assertEqual(out.returncode, 0, out.stderr)
+                self.assertEqual(calls, [f"{word} ollama.service"])
+
+    def test_autostart_enables_or_disables_without_starting_or_stopping(self):
+        out, calls = self.run_as_root("ollama-autostart on")
+        self.assertEqual((out.returncode, calls), (0, ["enable ollama.service"]))
+        out, calls = self.run_as_root("ollama-autostart off")
+        self.assertEqual((out.returncode, calls), (0, ["disable ollama.service"]))
+
+    def test_without_the_unit_it_is_an_error_that_changes_nothing(self):
+        for args in ("ollama-service start", "ollama-service stop", "ollama-autostart on", "ollama-autostart off"):
+            with self.subTest(args=args):
+                out, calls = self.run_as_root(args, units=())
+                self.assertEqual(out.returncode, 1)
+                self.assertIn("not installed", out.stderr)
+                self.assertEqual(calls, [])
+
+    def test_anything_else_is_refused_before_systemctl_is_touched(self):
+        for args in ("ollama-service", "ollama-service restart", "ollama-service start extra", "ollama-service ollama.service",
+                     "ollama-service 'start;id'", "ollama-autostart", "ollama-autostart maybe", "ollama-autostart on extra",
+                     "ollama-autostart start"):
+            with self.subTest(args=args):
+                out, calls = self.run_as_root(args)
+                self.assertEqual(out.returncode, 2)
+                self.assertEqual(calls, [])
+
+    def test_the_usage_line_lists_them(self):
+        out, _ = self.run_as_root("nonsense")
+        self.assertIn("ollama-service <start|stop>", out.stderr)
+        self.assertIn("ollama-autostart <on|off>", out.stderr)
+
+
 class PolicyTests(unittest.TestCase):
     def test_policy_pins_the_helper_and_asks_once(self):
         action = ET.parse(POLICY).getroot().find("action")

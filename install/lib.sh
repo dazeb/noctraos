@@ -11,6 +11,24 @@ die()  { printf '\033[1;31m[noctraos ERROR]\033[0m %s\n' "$*" >&2; exit 1; }
 
 have() { command -v "$1" >/dev/null 2>&1; }
 
+# Ollama's own installer turns the service on at boot, and NoctraOS leaves that choice to the person (docs/what-we-do.md): a
+# first install ends with it off, and a later run (an update of Ollama) puts back whatever the person had. Call
+# `ollama_boot_choice` BEFORE the vendor installer and `ollama_boot_restore "$choice"` after it. The service may run now;
+# the choice is only whether it starts with the computer. Turn it on with `noc llm autostart on` or the AI models page.
+ollama_boot_choice() {
+  if ! command -v ollama >/dev/null 2>&1 || ! systemctl cat ollama.service >/dev/null 2>&1; then echo off
+  elif systemctl is-enabled --quiet ollama.service 2>/dev/null; then echo on
+  else echo off
+  fi
+}
+
+ollama_boot_restore() {
+  local now=off
+  systemctl is-enabled --quiet ollama.service 2>/dev/null && now=on
+  [ "$now" = "$1" ] && return 0
+  if [ "$1" = on ]; then sudo systemctl enable ollama.service; else sudo systemctl disable ollama.service; fi
+}
+
 apt_install() {
   sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "$@"
 }

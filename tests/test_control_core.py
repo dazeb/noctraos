@@ -801,6 +801,79 @@ class LocalAiTests(unittest.TestCase):
 ROOT = Path(__file__).resolve().parents[1]
 
 
+class OllamaServiceTests(unittest.TestCase):
+    """Ollama runs when asked and starts with the computer only if the person says so: the AI models page's engine row."""
+
+    def test_running_and_stopped_each_offer_the_other_action(self):
+        run = panel.ollama_service_text({"installed": True, "running": True, "autostart": False})
+        self.assertEqual((run["headline"], run["service"], run["boot"]), ("Ollama is running", "stop", "on"))
+        off = panel.ollama_service_text({"installed": True, "running": False, "autostart": False})
+        self.assertEqual((off["headline"], off["service"], off["boot"]), ("Ollama is off", "start", "on"))
+        self.assertIn("does not start with this computer", off["text"])
+
+    def test_it_says_when_it_starts_with_the_computer_and_offers_to_stop_that(self):
+        run = panel.ollama_service_text({"installed": True, "running": True, "autostart": True})
+        self.assertEqual(run["boot"], "off")
+        self.assertIn("starts with this computer", run["text"])
+        down = panel.ollama_service_text({"installed": True, "running": False, "autostart": True})
+        self.assertEqual((down["headline"], down["service"], down["boot"]), ("Ollama is not running", "start", "off"))
+        self.assertIn("Health", down["text"])                     # set to start and silent: that one is worth a look
+
+    def test_an_unknown_boot_setting_hides_the_boot_button_and_claims_nothing(self):
+        for unknown in (None, "yes", 1):
+            info = panel.ollama_service_text({"installed": True, "running": True, "autostart": unknown})
+            self.assertIsNone(info["boot"], unknown)
+            self.assertNotIn("this computer", info["text"])
+
+    def test_nothing_to_show_until_it_is_installed_and_read(self):
+        for state in (None, {}, {"installed": False, "running": False}, "x"):
+            self.assertIsNone(panel.ollama_service_text(state), state)
+
+    def test_commands_go_through_the_fixed_helper_verbs_and_only_when_they_change_something(self):
+        self.assertEqual(panel.ollama_service_command("start", False), [panel.PKEXEC, panel.HELPER, "ollama-service", "start"])
+        self.assertEqual(panel.ollama_service_command("stop", True), [panel.PKEXEC, panel.HELPER, "ollama-service", "stop"])
+        self.assertIsNone(panel.ollama_service_command("start", True))
+        self.assertIsNone(panel.ollama_service_command("stop", False))
+        self.assertIsNone(panel.ollama_service_command("restart", False))
+        self.assertEqual(panel.ollama_autostart_command("on", False), [panel.PKEXEC, panel.HELPER, "ollama-autostart", "on"])
+        self.assertEqual(panel.ollama_autostart_command("off", True), [panel.PKEXEC, panel.HELPER, "ollama-autostart", "off"])
+        for target, current in (("on", True), ("off", False), ("on", None), ("maybe", False), ("", True)):
+            self.assertIsNone(panel.ollama_autostart_command(target, current), (target, current))
+        for argv in (panel.ollama_service_command("start", False), panel.ollama_autostart_command("on", False)):
+            self.assertNotIn("sudo", argv)
+
+    def test_the_card_calls_an_off_ollama_by_that_name_and_a_silent_one_that_should_run_a_warning(self):
+        off = panel._ollama_card({"installed": True, "running": False, "autostart": False})
+        self.assertEqual((off.value, off.level), ("Off", "info"))
+        silent = panel._ollama_card({"installed": True, "running": False, "autostart": True})
+        self.assertEqual((silent.value, silent.level), ("Not running", "warn"))
+        unknown = panel._ollama_card({"installed": True, "running": False})
+        self.assertEqual(unknown.level, "warn")                    # an older noc: say nothing new about it
+
+    def test_the_overview_step_is_not_a_chore_for_an_ollama_that_is_off(self):
+        steps = panel.setup_steps({**STATUS, "ollama": {"installed": True, "running": False, "autostart": False}}, {})
+        step = [s for s in steps if s.id == "models"][0]
+        self.assertEqual(step.state, "waiting")
+        self.assertIn("Ollama is off", step.text)
+
+    def test_waiting_for_the_api(self):
+        class Up(BaseHTTPRequestHandler):
+            def do_GET(self):  # noqa: N802
+                self.send_response(200 if self.path == "/api/version" else 404)
+                self.send_header("Content-Length", "2")
+                self.end_headers()
+                self.wfile.write(b"{}")
+
+            def log_message(self, *a):
+                pass
+        server = HTTPServer(("127.0.0.1", 0), Up)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        self.assertTrue(panel.wait_for_ollama(2, f"http://127.0.0.1:{server.server_address[1]}"))
+        self.assertFalse(panel.wait_for_ollama(0, "http://127.0.0.1:9"))      # nothing listens: it gives up at once
+
+
 class SkipTests(unittest.TestCase):
     """"No, I'll set it up myself": a skipped chore stops asking, and the page offers the way back."""
 
