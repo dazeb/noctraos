@@ -4,6 +4,11 @@
 set -Eeuo pipefail
 source "$REPO_ROOT/install/lib.sh"
 
+if ! desktop_is_gnome; then
+  warn "NOT APPLIED on this desktop: GNOME gsettings theme settings"
+  exit 0
+fi
+
 gs() { as_user gsettings set "$@" 2>/dev/null || warn "gsettings failed: $*"; }
 
 log "Window buttons to the right (Minimize, Maximize, Close)..."

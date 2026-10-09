@@ -6,6 +6,11 @@
 set -Eeuo pipefail
 source "$REPO_ROOT/install/lib.sh"
 
+if ! desktop_is_gnome; then
+  warn "NOT APPLIED: Super+Space search and the Start button need GNOME Shell (this desktop is $(desktop_name))"
+  exit 0
+fi
+
 SEARCH_UUID="noctraos-search@noctraos.local"
 BRANDING_UUID="noctraos-branding@noctraos.local"
 START_UUID="noctraos-start@noctraos.local"
