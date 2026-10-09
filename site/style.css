@@ -235,7 +235,7 @@ footer .about { display: grid; gap: 14px; max-width: 36ch; }
 /* Downloads table: a steady rhythm. File name, size and checksum each get their own line in a
    column wide enough to keep names whole; descriptions read at a comfortable line height; the
    download buttons share one width and stack with an even gap. */
-#files table { min-width: 760px; }
+#files table { min-width: 700px; }
 #files th, #files td { padding: 20px 22px; }
 #files th:first-child, #files td:first-child { width: 34%; min-width: 22rem; }
 #files th:last-child, #files td:last-child { width: 1%; white-space: nowrap; }
@@ -338,5 +338,6 @@ dialog.lb::backdrop { background: transparent; }
 .gap-top-sm { margin-top: 16px; }
 .term-line.narrow { max-width: 720px; }
 .alt-label { margin-bottom: 10px; }
-.wrap-code { white-space: normal; overflow-wrap: anywhere; }
+/* more specific than `.term-line code` (nowrap), or the long Proxmox command stretches the downloads table off the page */
+.term-line code.wrap-code { white-space: normal; overflow-wrap: anywhere; }
 @media (max-width: 640px) { .banner::after { background: linear-gradient(0deg, rgba(11, 10, 9, 0.72), rgba(11, 10, 9, 0.9)); } }
