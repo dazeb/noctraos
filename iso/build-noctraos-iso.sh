@@ -149,12 +149,29 @@ echo "  noctraos :: setting up your AI workstation"
 echo "  (you will be asked for your password to install software)"
 echo "======================================================"
 
+# A fresh install has no git yet (module 01 installs it), so the latest code also comes as a tarball: curl is always there.
+fetch_tarball() {
+  local tmp
+  tmp="$(mktemp -d)" || return 1
+  if curl -fsSL --max-time 300 "${REPO_URL%.git}/archive/refs/heads/$REPO_BRANCH.tar.gz" | tar -xz -C "$tmp" --strip-components=1 \
+     && [ -f "$tmp/install.sh" ]; then
+    chmod 755 "$tmp" && mv "$tmp" "$DEST"
+  else
+    rm -rf "$tmp"
+    return 1
+  fi
+}
+
 rm -rf "$DEST"
-if command -v git >/dev/null 2>&1 \
-   && curl -fsSI --max-time 8 https://github.com >/dev/null 2>&1 \
-   && git clone --depth 1 --branch "$REPO_BRANCH" "$REPO_URL" "$DEST" >/dev/null 2>&1; then
+if ! curl -fsSI --max-time 8 https://github.com >/dev/null 2>&1; then
+  cp -r /opt/noctraos "$DEST"
+  echo "noctraos: GitHub not reachable, using the provisioner snapshot baked into this ISO"
+elif command -v git >/dev/null 2>&1 && git clone --depth 1 --branch "$REPO_BRANCH" "$REPO_URL" "$DEST" >/dev/null 2>&1; then
   echo "noctraos: provisioner fetched from GitHub (latest)"
+elif rm -rf "$DEST" && fetch_tarball; then
+  echo "noctraos: provisioner downloaded from GitHub (latest, without git)"
 else
+  rm -rf "$DEST"
   cp -r /opt/noctraos "$DEST"
   echo "noctraos: using the provisioner snapshot baked into this ISO"
 fi

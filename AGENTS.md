@@ -491,9 +491,10 @@ tail -f /root/noctraos-build.log
 - **VNC typing into the VM console drops/mangles shifted characters** and
   rapid reconnects fail silently; vncdotool exit codes are always 1. Prefer
   SSH once sshd is up; use QEMU monitor `sendkey` for exact console input.
-- **The first-boot runner falls back to the baked snapshot when `git` is
-  absent** (fresh installs). Provisioner now installs openssh-server in
-  module 01 for post-install remote access.
+- **The first-boot runner fetches the latest provisioner without git** (fresh installs have none until module 01): git clone when git is
+  there, else a curl tarball of the branch from GitHub, and the baked snapshot only when GitHub is unreachable or the download is broken
+  (`tests/test_firstboot_fetch.py`). It used to fall back to the snapshot whenever git was missing, which ran an old provisioner on every
+  fresh ISO install. Provisioner now installs openssh-server in module 01 for post-install remote access.
 - **Unattended preseed: the first Ubiquity page stops the flow** — the
   "Updates and other software" page waits for Continue unless
   `ubiquity/download_updates`, `ubiquity/use_nonfree` and the Zorin-specific
