@@ -35,6 +35,9 @@ an issue so we can agree on the direction before you spend a weekend on it.
 4. Check the parts you changed, then open a pull request describing what
    changed, why, and how you checked it.
 
+NoctraOS is released under the [MIT License](LICENSE); by sending a change you
+agree that it is released under the same license.
+
 It's fine to open a draft PR or ask for help when you're stuck. Documentation
 and screenshot contributions don't need an OS rebuild.
 
