@@ -813,5 +813,58 @@ class PrivacyTests(unittest.TestCase):
         self.assertIsNone(panel.hermes_mode())
 
 
+class SetupChecklistTests(unittest.TestCase):
+    """The first-run steps in one list: what is left, what was skipped, what does not apply."""
+    UNDONE = {"git": {"installed": True, "name": "", "email": ""}, "github": {"installed": True, "signed_in": False, "login": ""}}
+    DONE = {"git": {"installed": True, "name": "Ada", "email": "ada@example.com"}, "github": {"installed": True, "signed_in": True, "login": "ada"}}
+    GPU = {"gpus": [{"name": "X", "vendor": "nvidia", "tier": "modern"}], "plan": {"nvidia": "modern"}}
+    EXTRAS = {"gpu_status": {"ready": False, "rows": []}, "onboarded": False, "weather_city": ""}
+
+    def steps(self, **changes):
+        status = {**STATUS, "accounts": self.UNDONE, "skipped": [], "gpu": self.GPU, **changes}
+        return {s.id: s for s in panel.setup_steps(status, self.EXTRAS)}
+
+    def test_a_fresh_machine_has_every_chore_to_do(self):
+        steps = self.steps()
+        self.assertEqual([i for i, s in steps.items() if s.state == "todo"], ["git", "github", "gpu", "hermes", "weather"])
+        self.assertEqual(panel.setup_summary(list(steps.values())), ("4 things left to set up", "warn"))   # weather is optional
+
+    def test_a_skipped_chore_keeps_its_row_but_stops_counting(self):
+        steps = self.steps(skipped=["git", "github", "gpu"])
+        self.assertEqual([steps[i].state for i in ("git", "github", "gpu")], ["skipped"] * 3)
+        self.assertTrue(all(steps[i].page for i in ("git", "github", "gpu")))            # the way back is one click
+        self.assertEqual(panel.setup_summary(list(steps.values()))[0], "1 thing left to set up")      # only Hermes
+
+    def test_a_done_chore_is_never_skipped(self):
+        steps = self.steps(accounts=self.DONE, skipped=["git", "github"])
+        self.assertEqual((steps["git"].state, steps["github"].state), ("done", "done"))
+
+    def test_everything_done_says_so(self):
+        extras = {"gpu_status": {"ready": True, "rows": []}, "onboarded": True, "weather_city": "Leeds"}
+        steps = panel.setup_steps({**STATUS, "accounts": self.DONE, "skipped": [], "gpu": self.GPU}, extras)
+        self.assertTrue(all(s.state == "done" for s in steps))
+        self.assertEqual(panel.setup_summary(steps), ("Setup is complete.", "ok"))
+
+    def test_no_usable_gpu_means_no_gpu_step(self):
+        self.assertNotIn("gpu", self.steps(gpu={"gpus": [], "plan": {}}))
+        self.assertNotIn("gpu", self.steps(gpu=None))
+
+    def test_hermes_and_models_wait_instead_of_nagging(self):
+        steps = self.steps(hermes={"installed": False, "mode": None}, ollama={"running": False})
+        self.assertEqual((steps["hermes"].state, steps["models"].state), ("waiting", "waiting"))
+        none = self.steps(ollama={"running": True, "models": 0, "default_model": "m"})
+        self.assertEqual(none["models"].state, "todo")
+
+    def test_hermes_is_started_by_its_launcher_and_says_it_is_cloud(self):
+        step = self.steps()["hermes"]
+        self.assertEqual(step.launch, (panel.HERMES,))
+        self.assertIn("cloud", step.text)
+
+    def test_an_unreadable_machine_does_not_raise(self):
+        self.assertTrue(panel.setup_steps({}, {}))
+        self.assertTrue(panel.setup_steps(None))
+        self.assertEqual(panel.setup_summary([]), ("Setup is complete.", "ok"))
+
+
 if __name__ == "__main__":
     unittest.main()
