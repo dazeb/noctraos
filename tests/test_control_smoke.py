@@ -128,19 +128,29 @@ print("PAGES", ",".join(seen))
 '''
 
 
-def have_display_stack():
-    if not shutil.which("xvfb-run") or not Path("/usr/bin/python3").exists():
-        return False
-    probe = subprocess.run(["/usr/bin/python3", "-c", "import gi; gi.require_version('Gtk','3.0'); from gi.repository import Gtk"],
-                           capture_output=True)
-    return probe.returncode == 0
+def gtk_python():
+    """The first system Python whose PyGObject loads GTK 3. Ubuntu's python3-gi is built for the distro's default python3,
+    which is not always /usr/bin/python3 (where that is 3.13, the bindings exist only for 3.12)."""
+    if not shutil.which("xvfb-run"):
+        return None
+    for py in ("/usr/bin/python3", "/usr/bin/python3.12"):
+        if not Path(py).exists():
+            continue
+        probe = subprocess.run([py, "-c", "import gi; gi.require_version('Gtk','3.0'); from gi.repository import Gtk"],
+                               capture_output=True)
+        if probe.returncode == 0:
+            return py
+    return None
 
 
-@unittest.skipUnless(have_display_stack(), "needs xvfb-run and system PyGObject/GTK 3")
+GTK_PYTHON = gtk_python()
+
+
+@unittest.skipUnless(GTK_PYTHON, "needs xvfb-run and system PyGObject/GTK 3")
 class SmokeTests(unittest.TestCase):
     def run_driver(self, scale):
         env = {**os.environ, "GDK_SCALE": str(scale), "NO_AT_BRIDGE": "1"}
-        return subprocess.run(["xvfb-run", "-a", "-s", "-screen 0 1280x800x24", "/usr/bin/python3", "-c", DRIVER, str(CONTROL)],
+        return subprocess.run(["xvfb-run", "-a", "-s", "-screen 0 1280x800x24", GTK_PYTHON, "-c", DRIVER, str(CONTROL)],
                               capture_output=True, text=True, env=env, timeout=180)
 
     def check(self, scale):
