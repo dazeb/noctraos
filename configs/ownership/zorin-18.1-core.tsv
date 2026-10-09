@@ -1,0 +1,62 @@
+# Owners that Zorin OS 18.1 Core ships with and NoctraOS images lost (iso/build-noctraos-iso.sh used
+# `mksquashfs -all-root`, which flattened every file to root:root; fixed, but images built that way exist).
+# Read by migrations/system/0001_restore_ownership.sh. Columns, tab separated: path, user, group, flag.
+# flag "R" applies to everything below the path that is still root:root. Only files that are exactly
+# root:root are touched, so an owner someone set on purpose is never overwritten. Modes were never lost.
+# Generated from the stock squashfs: `unsquashfs -lln` entries whose uid or gid is not 0, names from its
+# own /etc/passwd and /etc/group; /run, /home and the man cache children are left out (the last as one R line).
+/etc/chatscripts	root	dip	
+/etc/chatscripts/provider	root	dip	
+/etc/gnome-remote-desktop	gnome-remote-desktop	gnome-remote-desktop	
+/etc/gshadow	root	shadow	
+/etc/polkit-1/rules.d	root	polkitd	
+/etc/ppp	root	dip	
+/etc/ppp/peers	root	dip	
+/etc/ppp/peers/provider	root	dip	
+/etc/shadow	root	shadow	
+/etc/ssl/private	root	ssl-cert	
+/etc/ssl/private/ssl-cert-snakeoil.key	root	ssl-cert	
+/usr/bin/chage	root	shadow	
+/usr/bin/crontab	root	crontab	
+/usr/bin/expiry	root	shadow	
+/usr/bin/ssh-agent	root	_ssh	
+/usr/lib/dbus-1.0/dbus-daemon-launch-helper	root	messagebus	
+/usr/libexec/camel-lock-helper-1.2	root	mail	
+/usr/local/share/fonts	root	staff	
+/usr/sbin/pam_extrausers_chkpwd	root	shadow	
+/usr/sbin/pppd	root	dip	
+/usr/sbin/unix_chkpwd	root	shadow	
+/usr/share/ppd/custom	root	lpadmin	
+/var/cache/apt/archives/partial	_apt	root	
+/var/cache/cups-browsed	cups-browsed	lpadmin	
+/var/cache/man	man	man	R
+/var/crash	root	whoopsie	
+/var/lib/colord	colord	colord	
+/var/lib/colord/icc	colord	colord	
+/var/lib/gdm3	gdm	gdm	
+/var/lib/gdm3/.config	gdm	gdm	
+/var/lib/gdm3/.config/pulse	gdm	gdm	
+/var/lib/gdm3/.config/pulse/default.pa	gdm	gdm	
+/var/lib/gdm3/greeter-dconf-defaults	gdm	gdm	
+/var/lib/geoclue	geoclue	geoclue	
+/var/lib/gnome-remote-desktop	gnome-remote-desktop	gnome-remote-desktop	
+/var/lib/libuuid	uuidd	uuidd	
+/var/lib/openvpn/chroot	nm-openvpn	nm-openvpn	
+/var/lib/polkit-1	root	polkitd	
+/var/lib/saned	saned	saned	
+/var/lib/tpm	tss	tss	
+/var/lib/update-notifier/package-data-downloads/partial	_apt	root	
+/var/local	root	staff	
+/var/log	root	syslog	
+/var/log/btmp	root	utmp	
+/var/log/cups-browsed	cups-browsed	lpadmin	
+/var/log/hp/tmp	root	lp	
+/var/log/journal	root	systemd-journal	
+/var/log/lastlog	root	utmp	
+/var/log/speech-dispatcher	speech-dispatcher	root	
+/var/log/unattended-upgrades	root	adm	
+/var/log/wtmp	root	utmp	
+/var/mail	root	mail	
+/var/metrics	root	whoopsie	
+/var/spool/cron/crontabs	root	crontab	
+/var/spool/rsyslog	syslog	adm	
