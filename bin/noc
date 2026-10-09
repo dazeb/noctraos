@@ -9,6 +9,7 @@
 #   noc status        Overview data as JSON (versions, updates, Ollama, GPU, disk, Hermes)
 #   noc updates       what an update would do, as JSON (counts, apt download size, online)
 #   noc models        list [--json] | default [name] | presets [--json] | pull <model> | rm <model>
+#   noc llm           optional local AI: setup (GPU stack, Ollama, LLMFIT; no model) | fit (LLMFIT: find a model that fits)
 #   noc gpu           detect | install | status  (NVIDIA CUDA / AMD ROCm for local LLMs)
 #   noc disk          status | grow  (use the space when the system disk was made bigger)
 set -uo pipefail
@@ -242,6 +243,7 @@ cmd_models() {
     pull)
       local m="${2:-}"
       [ -z "$m" ] && { echo "usage: noc models pull <model>"; return 1; }
+      have ollama || { bad "local AI is not set up yet — run: noc llm setup"; return 1; }
       ollama pull "$m"
       ;;
     rm|remove|delete)
@@ -251,6 +253,36 @@ cmd_models() {
       ;;
     *)
       echo "usage: noc models [list [--json] | default [name] | presets [--json] | pull <model> | rm <model>]"
+      ;;
+  esac
+}
+
+# ---- optional local AI ----------------------------------------------------------------------
+# `noc llm setup` runs the optional step (install/optional/local_llm.sh: GPU stack, Ollama, LLMFIT) from the root-owned
+# snapshot that module 07 keeps, never from the person's clone. No model is downloaded there: `noc llm fit` shows which
+# models fit this computer (LLMFIT), and `noc models pull <name>` downloads the one the person picks.
+cmd_llm() {
+  local action="${1:-}" installer=/usr/local/share/noctraos/repo/install.sh
+  [ $# -gt 0 ] && shift
+  test_hooks && installer="${NOC_LLM_INSTALLER:-$installer}"
+  case "$action" in
+    setup)
+      # Root is refused, except for the test suite, which runs as root in CI (NOC_TEST_HOOKS).
+      if [ "$(id -u)" -eq 0 ] && [ -z "${NOC_TEST_HOOKS:-}" ]; then
+        bad "run this as your own user, not as root (it asks for your password when it needs it)"; return 1
+      fi
+      if [ ! -f "$installer" ]; then bad "the installer is not in place yet (re-run the NoctraOS installer)"; return 1; fi
+      bash "$installer" --only optional/local_llm.sh
+      ;;
+    fit)
+      local bin
+      bin="$(command -v llmfit || echo "$HOME/.local/bin/llmfit")"
+      if [ ! -x "$bin" ]; then bad "LLMFIT is not installed yet — run: noc llm setup"; return 1; fi
+      exec "$bin" "$@"
+      ;;
+    *)
+      echo "usage: noc llm [setup | fit [llmfit arguments]]"
+      return 1
       ;;
   esac
 }
@@ -331,7 +363,8 @@ step_apps() {
 }
 
 step_models() {
-  if have ollama && curl -fsS --max-time 5 "$OLLAMA_URL/api/tags" >/dev/null 2>&1; then
+  have ollama || return 0   # local AI is optional: nothing is installed, so nothing to refresh
+  if curl -fsS --max-time 5 "$OLLAMA_URL/api/tags" >/dev/null 2>&1; then
     local m
     while IFS= read -r m; do
       [ -z "$m" ] && continue
@@ -494,8 +527,11 @@ cmd_doctor() {
     local model_count
     model_count="$(curl -fsS "$OLLAMA_URL/api/tags" | jq '.models | length' 2>/dev/null || echo 0)"
     chk ok ollama-models "Ollama models" "$model_count local model(s)"
-  else
+  elif have ollama; then
     chk fail ollama "Ollama" "not responding on $OLLAMA_URL (try: systemctl status ollama)"
+  else
+    # Local AI is optional: a machine that never ran `noc llm setup` is not broken.
+    chk info ollama "Ollama" "not set up (optional: noc llm setup)"
   fi
 
   if have mise; then
@@ -812,6 +848,7 @@ main() {
     channel) shift; cmd_channel "$@" ;;
     skip)   shift; cmd_skip "$@" ;;
     models) shift; cmd_models "$@" ;;
+    llm)    shift; cmd_llm "$@" ;;
     bg)     shift; cmd_bg "$@" ;;
     disk)   shift; if [ -x "$DISKTOOL" ]; then exec "$DISKTOOL" "$@"; else bad "noc-disk not installed (re-run the installer)"; exit 1; fi ;;
     gpu)    shift; have noc-gpu && exec noc-gpu "$@" \
@@ -828,6 +865,7 @@ main() {
       echo "  noc channel     NoctraOS update channel: stable (default) or nightly (testers)"
       echo "  noc skip        setup chores you do yourself (list | add <id> | rm <id>)"
       echo "  noc models      manage local AI models (list | default | presets | pull | rm)"
+      echo "  noc llm         optional local AI: setup (engine, no model) | fit (find a model that fits)"
       echo "  noc bg          cycle or set the wallpaper (list | next | set)"
       echo "  noc gpu         GPU setup for local LLMs (detect | install | status)"
       echo "  noc disk        use the extra space when the disk was made bigger (status | grow)"

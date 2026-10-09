@@ -249,8 +249,8 @@ class Welcome(Gtk.ApplicationWindow):
         box.pack_start(label('Your AI', 'title'), False, False, 0)
         # What stays on this computer ...
         box.pack_start(label('On this computer', 'section'), False, False, 0)
-        box.pack_start(label('A language model runs here, so it works offline and your files stay '
-                             'yours. Find the agents in Start > Agents.', 'lede'), False, False, 0)
+        box.pack_start(label('Local models run here once you add one, so they work offline and your files '
+                             'stay yours. Find the agents in Start > Agents.', 'lede'), False, False, 0)
         self.model_status = label('', 'hint')
         box.pack_start(self.model_status, False, False, 0)
         # ... and what does not. Hermes' free tier is Nous Research's cloud service.
@@ -404,8 +404,7 @@ class Welcome(Gtk.ApplicationWindow):
         elif provisioned:
             self.model_status.set_text('No local model yet. Open AI Models from the Start menu.')
         else:
-            self.model_status.set_text('Finishing setup in the background. The local model is '
-                                       'still downloading.')
+            self.model_status.set_text('Finishing setup in the background.')
         if provisioned:
             self.status.set_text('')
         else:

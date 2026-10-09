@@ -7,6 +7,7 @@ stubs on PATH.
 import gzip
 import json
 import os
+import shutil
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 import subprocess
@@ -326,8 +327,17 @@ class DoctorStatusTests(unittest.TestCase):
         self.assertEqual(e.noc("disk", "grow", "--dry-run", **extra).stdout.strip(), "args: grow --dry-run")
 
     def test_doctor_json_ollama_down(self):
-        rows = json.loads(Env(self, ollama=False).noc("doctor", "--json").stdout)
+        e = Env(self, ollama=False)
+        e.stub("ollama", "true")  # installed, but its API does not answer
+        rows = json.loads(e.noc("doctor", "--json").stdout)
         self.assertEqual({r["id"]: r["status"] for r in rows}["ollama"], "fail")
+
+    @unittest.skipIf(shutil.which("ollama"), "the test needs a machine without Ollama")
+    def test_doctor_json_ollama_not_set_up_is_information_not_a_failure(self):
+        rows = json.loads(Env(self, ollama=False).noc("doctor", "--json").stdout)
+        row = {r["id"]: r for r in rows}["ollama"]
+        self.assertEqual(row["status"], "info")
+        self.assertIn("noc llm setup", row["detail"])
 
     def test_doctor_text_is_still_text(self):
         out = Env(self).noc("doctor").stdout
@@ -353,6 +363,51 @@ class DoctorStatusTests(unittest.TestCase):
         data = json.loads(Env(self, ollama=False).noc("status", "--json").stdout)
         self.assertFalse(data["ollama"]["running"])
         self.assertEqual(data["ollama"]["models"], 0)
+
+
+class LocalLlmTests(unittest.TestCase):
+    """`noc llm`: the optional local AI step. Nothing here downloads a model; the installer is a stand-in."""
+
+    def test_setup_runs_only_the_optional_module_from_the_installer(self):
+        e = Env(self)
+        log = Path(e.tmp.name) / "installer-args"
+        stand_in = Path(e.tmp.name) / "install.sh"
+        stand_in.write_text(f'#!/bin/sh\nprintf "%s\\n" "$@" > "{log}"\n')
+        result = e.noc("llm", "setup", NOC_LLM_INSTALLER=str(stand_in))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(log.read_text().split(), ["--only", "optional/local_llm.sh"])
+
+    def test_setup_refuses_when_the_installer_snapshot_is_missing(self):
+        result = Env(self).noc("llm", "setup", NOC_LLM_INSTALLER="/nonexistent/install.sh")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("not in place", result.stdout)
+
+    def test_fit_says_how_to_get_llmfit_when_it_is_missing(self):
+        e = Env(self)
+        result = e.noc("llm", "fit", HOME=str(e.home))
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("noc llm setup", result.stdout)
+
+    def test_fit_runs_llmfit_with_its_arguments(self):
+        e = Env(self)
+        e.stub("llmfit", 'echo "llmfit $*"')
+        self.assertEqual(e.noc("llm", "fit", "recommend", "--json").stdout.strip(), "llmfit recommend --json")
+
+    def test_usage_for_anything_else(self):
+        result = Env(self).noc("llm")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("usage: noc llm", result.stdout)
+
+    def test_models_pull_names_the_setup_step_when_nothing_is_installed(self):
+        e = Env(self, ollama=False)
+        result = e.noc("models", "pull", "llama3.2:3b", PATH=str(e.bin) + ":/usr/bin:/bin")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("noc llm setup", result.stdout)
+
+    def test_update_has_no_models_step_failure_without_local_ai(self):
+        e = Env(self, ollama=False)
+        result = e.noc("update", "--only", "models", PATH=str(e.bin) + ":/usr/bin:/bin")
+        self.assertNotIn("skipped model refresh", result.stdout + result.stderr)
 
 
 class SkipCommandTests(unittest.TestCase):

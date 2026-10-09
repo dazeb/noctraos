@@ -27,7 +27,7 @@ proxmox-install.sh          one-command Proxmox VE installer: downloads the rele
 boot.sh                     remote fetcher: clones repo to ~/.local/share/noctraos,
                             runs install.sh; env: NOCTRAOS_REPO_URL, NOCTRAOS_BRANCH, NOCTRAOS_HOME
 install.sh                  orchestrator: logging, TARGET_USER resolution, flags
-                            (--skip-ai, --skip-gui, --skip-gpu, --only <module>), runs modules 00-11 (plus 01b)
+                            (--skip-gui, --only <module>), runs modules 00-11 (plus 01b). Local AI is NOT in the first run: optional/ runs later via `noc llm setup`
 install/
   lib.sh                    shared helpers: log/warn/die, as_user(), apt_install(),
                             desktop_file_exists(). Modules MUST source it.
@@ -37,9 +37,8 @@ install/
                             guest utils, Hyper-V daemons; a no-op on bare metal; NOCTRAOS_VM_GUEST=all installs every set (images)
   02_mise.sh                mise binary, profile.d + bash.bashrc hooks, runtimes,
                             Herdr, Starship, lazygit, lazydocker
-  02b_gpu_drivers.sh        GPU detect + NVIDIA driver/CUDA or AMD ROCm (thin wrapper
-                            over bin/noc-gpu; before 03 so Ollama sees the GPU)
-  03_ai_core.sh             Ollama + qwen2.5-coder:7b + nomic-embed-text
+  optional/local_llm.sh     OPTIONAL, run later by `noc llm setup` (install.sh --only): GPU stack (bin/noc-gpu, before Ollama
+                            so it sees the GPU), Ollama engine + service, LLMFIT (pipx). Downloads NO model: the person picks one
   03b_ollama_update.sh      Ollama to the newest upstream release (vendor installer pinned to it); not in the full run, root, via the panel
   04_gui_apps.sh            Microsoft VS Code (apt repo) + extensions, Mission Center,
                             CopyQ; retires codium/chatbox/foot (user data kept)
@@ -61,9 +60,9 @@ install/
                             (update-alternatives, update-initramfs, update-grub)
   11_hermes.sh              Hermes Desktop preinstalled (runtime + Electron app build),
                             free Nous tier primary, local Ollama fallback; runs LAST (25+ min, no sudo)
-                            (module order in install.sh: 00 01 01b 02 02b 03 04 04_workstation 04c 04d 05 06 08 09 10 07 11)
+                            (module order in install.sh: 00 01 01b 02 04 04_workstation 04c 04d 05 06 08 09 10 07 11 — the first run never downloads a model)
 bin/
-  noc                       CLI: update [--json] [--only ..] | updates | doctor [--json] | status | models [list [--json]|default|presets|pull|rm]
+  noc                       CLI: update [--json] [--only ..] | updates | doctor [--json] | status | models [list [--json]|default|presets|pull|rm] | llm [setup|fit]
                             | skip [list [--json]|add|rm] | bg [list|next|set] | gpu. Sourceable (tests call its functions); NOC_OLLAMA_URL overrides the Ollama URL
   noc-gpu                   GPU detect [--json] | install | status [--json] (NVIDIA driver+CUDA, AMD ROCm); VERSION must match noc
   noctraos-control          wrapper that execs the system-Python Control Panel (control/)
@@ -321,10 +320,10 @@ iso/vm-sysprep.sh           run inside a fully provisioned VM before exporting i
 
 ```bash
 # static checks (docker shellcheck — not installed on this host)
-bash -n boot.sh install.sh install/*.sh bin/noc bin/noc-gpu bin/noc-privileged bin/noctraos-control bin/noctraos-agent \
+bash -n boot.sh install.sh install/*.sh install/optional/*.sh bin/noc bin/noc-gpu bin/noc-privileged bin/noctraos-control bin/noctraos-agent \
   bin/noctraos-copyq bin/noctraos-hermes bin/noctraos-search configs/nautilus-scripts/*     # other bin/ files are Python
 docker run --rm -v "$PWD:/mnt" koalaman/shellcheck:stable --severity=warning \
-  boot.sh install.sh install/*.sh bin/noc bin/noc-gpu bin/noc-privileged bin/noctraos-control bin/noctraos-agent \
+  boot.sh install.sh install/*.sh install/optional/*.sh bin/noc bin/noc-gpu bin/noc-privileged bin/noctraos-control bin/noctraos-agent \
   bin/noctraos-copyq bin/noctraos-hermes configs/nautilus-scripts/*     # same list as CI
 python3 -m unittest discover -s tests                # 501 tests: theme, GPU detection, noc JSON modes, root helper, Control Panel
 python3 scripts/render-theme.py --check              # committed theme outputs match palette.json
@@ -511,8 +510,8 @@ tail -f /root/noctraos-build.log
   `noctraos-cuda-toolkit-only` blocks that repo's driver packages — never remove
   it (mixed Ubuntu/NVIDIA `libnvidia-*` breaks the driver). It is written BEFORE the
   repo is registered and a failed write aborts (`write_apt_file`); AMD models that are
-  not positively recognised default to Vulkan, never to a ~15 GiB ROCm install. Module 02b must run
-  BEFORE 03: Ollama's installer exits early only if `nvidia-smi` exists, else it
+  not positively recognised default to Vulkan, never to a ~15 GiB ROCm install. The GPU step must run
+  BEFORE Ollama in optional/local_llm.sh: Ollama's installer exits early only if `nvidia-smi` exists, else it
   installs NVIDIA's DKMS `cuda-drivers` over ours. CUDA 13 dropped
   Maxwell/Pascal/Volta, so those stay on driver 580 + CUDA 12.9. NVIDIA's debs do
   not create `/usr/local/cuda`; `ensure_cuda_symlink` does.
@@ -564,7 +563,8 @@ tail -f /root/noctraos-build.log
   precedence everywhere is `NOCTRAOS_MODEL`, then that file, then `qwen2.5-coder:7b`. The Welcome
   app, `noctraos-hermes`, "Ask AI to Explain" and (by rewriting its `    model:` lines) the seeded
   Continue config read it, each with the same few lines of inline lookup: change them together.
-  `install/03_ai_core.sh` still installs the shipped model (the file does not exist yet).
+  Nothing installs a model: the first run and `noc llm setup` download no model at all (`tests/test_core_install.py`
+  keeps it so); `noc models pull` does, when the person asks.
 - **`noc ... --json` is a contract for the Control Panel** (`docs/control-panel-plan.md`): keep the
   keys of `doctor --json`, `status --json`, `models list --json`, `models presets --json` and the
   `update --json` event stream stable (tests/test_noc_cli.py pins them). In JSON mode `noc update`

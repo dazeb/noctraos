@@ -54,7 +54,7 @@ fi
 
 log "Checking disk space..."
 avail_gb="$(df -BG --output=avail / | tail -n 1 | tr -dc '0-9')"
-# A fresh install needs room for the models and runtimes. A machine that already finished
+# A fresh install needs room for the apps and runtimes (local models come later, optionally, with their own space). A machine that already finished
 # first-boot provisioning is only updating, so it needs far less.
 min_gb=25
 if [ -f "$TARGET_HOME/.local/share/noctraos/.provisioned" ]; then
@@ -92,15 +92,10 @@ if [ "$avail_gb" -lt "$min_gb" ]; then
     fi
   fi
   if [ "$avail_gb" -lt "$min_gb" ]; then
-    die "Only ${avail_gb}GiB free on / — ${min_gb}GiB minimum (AI models + language runtimes)."
+    die "Only ${avail_gb}GiB free on / — ${min_gb}GiB minimum (desktop apps + language runtimes)."
   fi
 fi
 log "OK: ${avail_gb}GiB free on /"
-
-ram_gb="$(free -g | awk 'NR==2 {print $2}')"
-if [ "$ram_gb" -lt 8 ]; then
-  warn "Only ~${ram_gb}GiB RAM — running 7B-class models locally needs 8GiB minimum (16GiB recommended). Ollama will otherwise swap heavily."
-fi
 
 if [ -z "${DISPLAY:-}" ] && [ -z "${WAYLAND_DISPLAY:-}" ]; then
   warn "No graphical session visible from this shell — desktop settings are applied via the user session bus and should still work."

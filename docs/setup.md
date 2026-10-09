@@ -57,8 +57,10 @@ cd noctraos
 ## Maintenance
 
 ```bash
-noc update        # apt + Flatpak apps + mise runtimes + AI model refresh
+noc update        # apt + Flatpak apps + mise runtimes + refresh the local models you have (if any)
 noc doctor        # health check: OS, Ollama + models, mise runtimes, VS Code, search, Hermes, AppManager, GPU, disk
+noc llm setup     # optional: local AI engine (Ollama), GPU stack and LLMFIT. Downloads no model
+noc llm fit       # LLMFIT: the models that fit this computer
 noc models list   # local models
 noc models pull <model>   # e.g. noc models pull llama3.2:3b
 noc models rm <model>
@@ -85,12 +87,13 @@ from mise).
   and the theme step needs the base's own shell and GTK themes. The provisioner
   accepts any Ubuntu-based `/etc/os-release`.*
 - A user with sudo (headless/SSH runs need passwordless sudo or cached credentials)
-- ≥ 25 GB free disk (models + runtimes); a re-run of an already provisioned machine
-  needs only 8 GB. The Hermes Desktop build adds about 5 GB. **8 GB RAM minimum**,
-  16 GB recommended for 7B-class local models (you get a warning below that)
+- ≥ 25 GB free disk (desktop apps + runtimes); a re-run of an already provisioned machine
+  needs only 8 GB. The Hermes Desktop build adds about 5 GB. Local models are optional
+  and need their own space (see `noc llm setup`): 16 GB RAM is recommended for 7B-class ones
 - Internet access (Ubuntu archive + Flathub + GitHub reachability is checked)
-- Setup takes roughly 25 to 40 minutes on first run; most of it is the Ollama model
-  download and the Hermes Desktop (Electron) build
+- Setup takes roughly 25 to 40 minutes on first run; most of it is the Hermes Desktop (Electron)
+  build. The first run downloads no language model: the installer only installs what the desktop
+  needs. Local AI is a separate, optional step (`noc llm setup`)
 
 ## Configuration
 
@@ -98,20 +101,19 @@ Environment variables, all optional:
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `NOCTRAOS_MODEL` | `qwen2.5-coder:7b` | Coding model pulled by module 03 |
-| `NOCTRAOS_EMBED_MODEL` | `nomic-embed-text` | Embedding model for RAG |
+| `NOCTRAOS_MODEL` | `qwen2.5-coder:7b` | Default model `noc`, Hermes and the Ask AI script use until you choose another (`noc models default`). Nothing is downloaded for it at install time |
 | `NOCTRAOS_REPO_URL` | `https://github.com/dazeb/noctraos.git` | Source repo (boot.sh + ISO first-boot) |
 | `NOCTRAOS_BRANCH` | `main` | Branch to pull |
 | `NOCTRAOS_HOME` | `~/.local/share/noctraos` | Provisioner install location |
 | `NOCTRAOS_LOG` | `/tmp/noctraos-install-<ts>.log` | Installer log path |
 | `NOCTRAOS_OLLAMA_URL` | `http://localhost:11434` | Endpoint used by the *Ask AI to Explain* script |
 
-Installer flags: `--skip-ai` (no Ollama/model downloads), `--skip-gui`
-(headless-ish: skips GUI apps, app policy, Nautilus scripts, themes, search,
-boot theme and Hermes), `--skip-gpu` (no GPU driver / CUDA / ROCm step), and
-`--only <module>` (run one module with the full environment, then stop — e.g.
+Installer flags: `--skip-gui` (headless-ish: skips GUI apps, app policy, Nautilus
+scripts, themes, search, boot theme and Hermes), and `--only <module>` (run one
+module with the full environment, then stop — e.g.
 `bash ~/.local/share/noctraos/install.sh --only 04d_appmanager.sh` to retry a
-flaky download).
+flaky download). The optional local AI step is `--only optional/local_llm.sh`, which
+`noc llm setup` runs for you.
 
 GPU variables (read by `noc gpu install`): `NOCTRAOS_GPU_PROFILE=runtime|full`
 (default `full`; `runtime` = libraries only, no compilers/SDK),
@@ -122,9 +124,9 @@ installed, so they work offline and never jump a ROCm major), and
 
 ## GPU setup
 
-Onboarding (module `02b_gpu_drivers`, before Ollama) reads `lspci`, works out
-which vendor and generation each GPU is, and installs only what that hardware
-can use. Run it again any time with `noc gpu install`; `--dry-run` shows every
+`noc llm setup` (the optional local AI step, which the first-run install does not run) starts with the
+GPU step: it reads `lspci`, works out which vendor and generation each GPU is, and installs only what
+that hardware can use, before Ollama is installed. Run the GPU step on its own any time with `noc gpu install`; `--dry-run` shows every
 action first. Machines with no NVIDIA/AMD GPU (VMs, Intel-only) are skipped.
 
 | Detected | Installed |

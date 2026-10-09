@@ -114,7 +114,7 @@ The GUI should consume structured output, not scrape coloured text:
   (suggested `~/.config/noctraos/model`, plain model name) and migrate **every** consumer to read
   it, otherwise the panel claims a default the AI integrations ignore. Today they hardcode
   `qwen2.5-coder:7b` or read a process-only `NOCTRAOS_MODEL`: `bin/noctraos-hermes:29`,
-  `bin/noctraos-welcome:35`, `install/03_ai_core.sh:6`, `configs/nautilus-scripts/Ask AI to Explain:7`,
+  `bin/noctraos-welcome:35`, `configs/nautilus-scripts/Ask AI to Explain:7`,
   `configs/vscode/continue_config.yaml` (seeded only when missing, so existing copies keep the old
   model; say so or rewrite the model lines on change) and `configs/hermes/onboarding.md`. Precedence:
   `NOCTRAOS_MODEL` env, then the file, then `qwen2.5-coder:7b`. Add a tested `noc models default`

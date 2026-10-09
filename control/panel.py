@@ -101,7 +101,7 @@ def _accounts_card(accounts, skipped=None):
 def _ollama_card(ollama):
     if not ollama.get('running'):
         return Card('ollama', 'Local AI', 'Not running',
-                    'Ollama is starting, or is not installed yet. Local AI works offline once it is.',
+                    'Local AI is optional. Ollama is not set up yet, or is not running.',
                     'warn', 'models')
     n = ollama.get('models', 0)
     detail = f'Default model: {ollama.get("default_model")}'
@@ -216,7 +216,7 @@ TERMINAL = {
     'disk': ['noc disk status', 'sudo noc disk grow'],
     'updates': ['noc update', 'noc update --only mise,models', 'noc channel', 'noc channel nightly'],
     'apps': ['noc apps', 'noc-upstream update --only <app>'],
-    'models': ['noc models list', 'noc models pull <model>', 'noc models default <model>', 'noc models rm <model>'],
+    'models': ['noc llm setup', 'noc llm fit', 'noc models list', 'noc models pull <model>', 'noc models default <model>', 'noc models rm <model>'],
     'privacy': ['noctraos-hermes local', 'noctraos-hermes cloud', 'noctraos-search --settings', 'noctraos-weather --setup'],
     'health': ['noc doctor'],
 }
@@ -1020,7 +1020,7 @@ def setup_steps(status, extras=None):
     elif ollama.get('running'):
         steps.append(Step('models', 'Local AI model', 'Ollama runs but has no model yet. Pick one to download.', 'todo', 'models', button='Choose'))
     else:
-        steps.append(Step('models', 'Local AI model', 'Ollama is starting, or is not installed yet.', 'waiting', 'models', button='Open'))
+        steps.append(Step('models', 'Local AI model', 'Local AI is optional and not set up yet.', 'waiting', 'models', button='Open'))
 
     hermes = status.get('hermes') or {}
     if not hermes.get('installed'):
