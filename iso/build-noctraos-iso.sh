@@ -101,6 +101,12 @@ echo "original compressor: $COMP"
 
 step "3/7 unpacking squashfs (this takes a few minutes)"
 unsquashfs -no-progress -d "$SQ_ROOT" "$ISO_TREE/casper/filesystem.squashfs" >/dev/null
+# Owners and groups must survive the round trip: the D-Bus launch helper is root:messagebus (4754), and as root:root the bus
+# cannot run it, so the Software Updater's apt daemon never starts. A build without CAP_CHOWN (rootless, a user namespace)
+# silently extracts everything as root, so check one file whose group is not root before going on.
+helper_gid="$(stat -c %g "$SQ_ROOT/usr/lib/dbus-1.0/dbus-daemon-launch-helper" 2>/dev/null || echo 0)"
+[ "$helper_gid" != 0 ] || {
+  echo "unpacking lost file ownership (dbus-daemon-launch-helper is group root): build as real root with CAP_CHOWN" >&2; exit 1; }
 
 step "4/7 injecting provisioner"
 rm -rf "$SQ_ROOT/opt/noctraos"
@@ -278,8 +284,14 @@ chown -R root:root "$SQ_ROOT/opt/noctraos" "$SQ_ROOT/usr/local/sbin/noctraos-fir
   "$SQ_ROOT/etc/skel/.config/autostart"
 
 step "5/7 repacking squashfs ($COMP — this is the long step)"
-mksquashfs "$SQ_ROOT" "$WORK/filesystem.squashfs" -comp "$COMP" -noappend -all-root \
+# No -all-root: it flattened every file to root:root (and broke the Software Updater, see migrations/system/0001).
+mksquashfs "$SQ_ROOT" "$WORK/filesystem.squashfs" -comp "$COMP" -noappend \
   -no-progress -info >/dev/null
+# Prove the image kept the owners: the launch helper must not be 0/0 in what we are about to ship.
+helper_owner="$(unsquashfs -lln "$WORK/filesystem.squashfs" usr/lib/dbus-1.0/dbus-daemon-launch-helper 2>/dev/null \
+  | awk '/dbus-daemon-launch-helper/ {print $2; exit}')"
+[ -n "$helper_owner" ] && [ "$helper_owner" != "0/0" ] || {
+  echo "the repacked squashfs lost file ownership (launch helper owner: ${helper_owner:-missing})" >&2; exit 1; }
 
 step "6/7 refreshing ISO metadata"
 # casper-md5check runs on every live boot against /cdrom/md5sum.txt (singular) and
