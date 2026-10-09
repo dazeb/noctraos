@@ -8,6 +8,7 @@
 #   noc updates       what an update would do, as JSON (counts, apt download size, online)
 #   noc models        list [--json] | default [name] | presets [--json] | pull <model> | rm <model>
 #   noc gpu           detect | install | status  (NVIDIA CUDA / AMD ROCm for local LLMs)
+#   noc disk          status | grow  (use the space when the system disk was made bigger)
 set -uo pipefail
 
 VERSION="0.4.0"
@@ -310,6 +311,8 @@ UPSTREAM=/usr/local/bin/noc-upstream
 test_hooks && UPSTREAM="${NOC_UPSTREAM:-$UPSTREAM}"
 ACCOUNTS=/usr/local/bin/noc-accounts
 test_hooks && ACCOUNTS="${NOC_ACCOUNTS:-$ACCOUNTS}"
+DISKTOOL=/usr/local/bin/noc-disk
+test_hooks && DISKTOOL="${NOC_DISKTOOL:-$DISKTOOL}"
 
 step_apps() {
   if [ ! -x "$UPSTREAM" ]; then
@@ -566,6 +569,11 @@ cmd_doctor() {
 
   [ -f /var/run/reboot-required ] && chk warn reboot "Reboot" "needed to finish an update"
   chk ok disk "Disk free on /" "$(df -h / | awk 'NR==2 {print $4}')"
+  local dsk
+  if [ -x "$DISKTOOL" ] && dsk="$("$DISKTOOL" status --json 2>/dev/null)" && [ "$(printf '%s' "$dsk" | jq -r '.can_grow // false')" = true ]; then
+    # No `fix`: the panel never grows a disk on one click. Control Panel > Hardware explains it and asks first.
+    chk warn disk-size "Disk size" "$(printf '%s' "$dsk" | jq -r '(.expandable_bytes / 1073741824 * 10 | floor) as $t | "\($t / 10 | floor).\($t % 10) GiB of the disk is not used yet. Open the Control Panel, Hardware, and choose Use all the disk space."')"
+  fi
 
   if [ "$JSON" = 1 ]; then
     printf '%s\n' "${CHECKS[@]}" | jq -s .
@@ -681,6 +689,10 @@ cmd_status() {
   if [ -x "$ACCOUNTS" ]; then accounts="$(timeout 15 "$ACCOUNTS" status --json 2>/dev/null)" || accounts=null; fi
   printf '%s' "$accounts" | jq -e . >/dev/null 2>&1 || accounts=null
 
+  local dsk=null
+  if [ -x "$DISKTOOL" ]; then dsk="$("$DISKTOOL" status --json 2>/dev/null)" || dsk=null; fi
+  printf '%s' "$dsk" | jq -e . >/dev/null 2>&1 || dsk=null
+
   local apps=null
   if [ -x "$UPSTREAM" ]; then apps="$(timeout 20 "$UPSTREAM" list --json --offline 2>/dev/null)" || apps=null; fi
   printf '%s' "$apps" | jq -e . >/dev/null 2>&1 || apps=null
@@ -693,12 +705,14 @@ cmd_status() {
     --arg model "$(effective_model)" --argjson gpu "$gpu" \
     --argjson free "$(df -B1 --output=avail / | awk 'NR==2 {print $1}')" \
     --argjson total "$(df -B1 --output=size / | awk 'NR==2 {print $1}')" \
-    --argjson ram "$(ram_gb)" --arg hmode "$hmode" --argjson hready "$hready" --argjson idx "$idx_age" --argjson apps "$apps" --argjson accounts "$accounts" \
+    --argjson ram "$(ram_gb)" --arg hmode "$hmode" --argjson hready "$hready" --argjson idx "$idx_age" --argjson apps "$apps" --argjson accounts "$accounts" --argjson dsk "$dsk" \
     '{version:$version, os:$os,
       updates:{apt:$apt, flatpak:$flatpak, reboot_required:$reboot},
       ollama:{running:$ollama, version:(if $oversion=="" then null else $oversion end), models:$nmodels, default_model:$model},
       gpu:$gpu,
-      disk:{root_free_bytes:$free, root_total_bytes:$total},
+      disk:({root_free_bytes:$free, root_total_bytes:$total}
+            + (if $dsk == null then {} else {expandable_bytes:($dsk.expandable_bytes // 0), can_grow:($dsk.can_grow // false),
+                                              disk_bytes:$dsk.disk_bytes, partition_bytes:$dsk.partition_bytes} end)),
       ram_gb:$ram,
       hermes:{installed:$hready, mode:(if $hmode=="" then null else $hmode end)},
       apps:$apps, accounts:$accounts,
@@ -715,6 +729,7 @@ main() {
     accounts) shift; cmd_accounts "$@" ;;
     models) shift; cmd_models "$@" ;;
     bg)     shift; cmd_bg "$@" ;;
+    disk)   shift; if [ -x "$DISKTOOL" ]; then exec "$DISKTOOL" "$@"; else bad "noc-disk not installed (re-run the installer)"; exit 1; fi ;;
     gpu)    shift; have noc-gpu && exec noc-gpu "$@" \
               || { bad "noc-gpu not installed (re-run the installer)"; exit 1; } ;;
     --version|-v) echo "noc $VERSION" ;;
@@ -728,6 +743,7 @@ main() {
       echo "  noc models      manage local AI models (list | default | presets | pull | rm)"
       echo "  noc bg          cycle or set the wallpaper (list | next | set)"
       echo "  noc gpu         GPU setup for local LLMs (detect | install | status)"
+      echo "  noc disk        use the extra space when the disk was made bigger (status | grow)"
       echo "  noctraos-control  the NoctraOS Control Panel (GUI)"
       ;;
   esac

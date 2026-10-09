@@ -52,6 +52,7 @@ sudo install -m 755 "$REPO_ROOT/bin/noc" /usr/local/bin/noc
 sudo install -m 755 "$REPO_ROOT/bin/noc-gpu" /usr/local/bin/noc-gpu
 sudo install -m 755 "$REPO_ROOT/bin/noc-upstream" /usr/local/bin/noc-upstream
 sudo install -m 755 "$REPO_ROOT/bin/noc-accounts" /usr/local/bin/noc-accounts
+sudo install -m 755 "$REPO_ROOT/bin/noc-disk" /usr/local/bin/noc-disk
 # Programs other modules installed (noctraos-hermes, noctraos-agent, the welcome app, ...) are refreshed in place, so an update
 # that changes one reaches machines that already have it. Only programs that are already there: a new one arrives with its own
 # module (menu entry, icon). This copies files only; it never touches a person's settings.
@@ -94,6 +95,10 @@ if [ ! -L /etc/systemd/user/timers.target.wants/noctraos-update-check.timer ]; t
 fi
 sudo install -D -m 644 "$REPO_ROOT/configs/autostart/noctraos-update-migrate.desktop" \
   /etc/xdg/autostart/noctraos-update-migrate.desktop
+# One notice per new amount of unused disk space (a virtual disk that was enlarged after install); nothing changes
+# until the person agrees in the Control Panel.
+sudo install -D -m 644 "$REPO_ROOT/configs/autostart/noctraos-disk-notice.desktop" \
+  /etc/xdg/autostart/noctraos-disk-notice.desktop
 
 # The helper re-runs install modules as root, so it must never run them from a clone the user can
 # edit: keep a root-owned snapshot of what the modules read and run only that. Refreshed only when

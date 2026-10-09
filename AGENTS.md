@@ -65,13 +65,16 @@ bin/
                             | bg [list|next|set] | gpu. Sourceable (tests call its functions); NOC_OLLAMA_URL overrides the Ollama URL
   noc-gpu                   GPU detect [--json] | install | status [--json] (NVIDIA driver+CUDA, AMD ROCm); VERSION must match noc
   noctraos-control          wrapper that execs the system-Python Control Panel (control/)
+  noc-disk                  notices a disk bigger than the system partition (an enlarged VM disk) and uses the space: `status [--json]` (no root,
+                            reads sysfs), `grow [--dry-run]` (root: sfdisk + partx + resize2fs/xfs_growfs/btrfs, online), `notify` (one desktop notice per new
+                            amount); `noc disk ...`, `noc status` (`disk.can_grow`), the panel's Disk card and Hardware page, and the first-boot preflight
   noc-accounts              first-time setup without a terminal: Git name/e-mail (`git config --global`) and the GitHub sign-in (`gh auth login --web`
                             device flow); `noc accounts ...`, the panel's Accounts page, the Overview card, a button in the Welcome app
   noc-upstream              tracks apps that come from their publisher's releases (Hermes, Ollama, AppManager, the coding agents):
                             installed vs newest release, version history, user-level updates; `noc apps`, the panel's Apps page
   noc-selfupdate            updates the NoctraOS layer itself (signed manifest + bundle, staged rollout, migrations, rollback);
                             installed to /usr/local/libexec/noctraos by module 07; check/status/notify/migrate user-side, apply/rollback as root
-  noc-privileged            root side of the panel, run through pkexec: allowlisted `update apt,flatpak,noctraos`, `update-channel`, `update-rollback`, `module <name>`, `gpu-install <vendor>`
+  noc-privileged            root side of the panel, run through pkexec: allowlisted `update apt,flatpak,noctraos`, `update-channel`, `update-rollback`, `module <name>`, `gpu-install <vendor>`, `disk-grow`
                             (installed to /usr/local/libexec/noctraos; policy in configs/polkit/)
   noctraos-hermes           Hermes Desktop launcher/installer: launch | local [--no-launch] | cloud | mode | install | ready | status.
                             Sets HERMES_GUEST_ONBOARDING=1 (free tier), seeds the Ollama fallback
@@ -112,7 +115,7 @@ configs/
   vscode/                   settings.json, extensions.list, continue_config.yaml,
                             vscode.sources (Microsoft apt repo)
   copyq/copyq.conf          clipboard history preseed (1000 entries, silent, tray)
-  autostart/                copyq, noctraos-welcome, noctraos-branding, noctraos-search-setup
+  autostart/                copyq, noctraos-welcome, noctraos-branding, noctraos-search-setup, noctraos-disk-notice
   applications/             agent (incl. Hermes) + Herdr + Local-LLM + Welcome/Appearance launchers, .directory files
   hermes/onboarding.md      first-run prompt Hermes gets until ~/.hermes/.noctraos-onboarded exists
   gsettings/, systemd/      search and Start-panel schemas; the file-index user timer
@@ -301,7 +304,7 @@ bash -n boot.sh install.sh install/*.sh bin/noc bin/noc-gpu bin/noc-privileged b
 docker run --rm -v "$PWD:/mnt" koalaman/shellcheck:stable --severity=warning \
   boot.sh install.sh install/*.sh bin/noc bin/noc-gpu bin/noc-privileged bin/noctraos-control bin/noctraos-agent \
   bin/noctraos-copyq bin/noctraos-hermes configs/nautilus-scripts/*     # same list as CI
-python3 -m unittest discover -s tests                # 151 tests: theme, GPU detection, noc JSON modes, root helper, Control Panel
+python3 -m unittest discover -s tests                # 367 tests: theme, GPU detection, noc JSON modes, root helper, Control Panel
 python3 scripts/render-theme.py --check              # committed theme outputs match palette.json
 
 # wallpaper iteration (venv at ~/workspace/scratch/zorin-img-venv: pillow+numpy)
@@ -497,6 +500,15 @@ tail -f /root/noctraos-build.log
   package name from the caller. The Updates page runs root steps first (one prompt), then the user's
   own steps through `noc update --json`; it never uses a bare `sudo` and has no cancel for apt (a
   half-finished upgrade is worse than a slow one).
+- **A bigger disk is noticed, never grown on its own.** A VM disk enlarged after install (Proxmox `qm resize`) leaves the new space outside the system
+  partition, so the first-boot preflight died with "Only 18GiB free" on a 64 GB disk (VM 106, 2026-10-09). `bin/noc-disk` reads the layout from sysfs
+  (no root), supports only the plain installer layout (root on the LAST partition, ext4/xfs/btrfs; LVM, encryption and a partition behind root are
+  reported and left alone), and `grow` does `sfdisk --no-reread --relocate gpt-bak-std`, `sfdisk --no-reread -N <n>` with `, +`, `partx -u`, then the
+  online filesystem grow. `--no-reread` is required: without it sfdisk refuses a disk with a mounted partition. It prints "re-reading the partition
+  table failed" even on success, so successful steps are quiet. Verified on a real mounted loop disk in a privileged container (2 GiB -> 8 GiB, no
+  restart); if a kernel ever keeps the old size, `grow` exits 10, leaves the filesystem alone and the next run finishes it (the filesystem-slack check).
+  The consent is always explicit: the panel dialog on the Hardware page, or a Y/n in the preflight terminal (the panel is not installed yet when preflight
+  fails, since module 07 comes later). The Health page deliberately has NO one-click `fix` for it. `noc-privileged disk-grow` takes no arguments.
 - **GPU setup in the Control Panel is never automatic.** The Hardware page shows what `noc-gpu` found,
   then a consent dialog (what gets installed, rough download size, restart/re-login needs, a free-disk
   check) and only on "Install" runs `pkexec noc-privileged gpu-install <nvidia|amd|all>`, which execs the

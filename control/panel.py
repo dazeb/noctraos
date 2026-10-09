@@ -128,6 +128,17 @@ def _hermes_card(hermes):
                 'Cloud service: prompts leave this computer.', 'warn', 'privacy')
 
 
+def _disk_card(disk, free, total, low):
+    title = f'{fmt_bytes(free)} free' if free is not None else 'Unknown'
+    if disk_can_grow(disk):
+        return Card('disk', 'Disk', title, f'The disk has {fmt_bytes(disk["expandable_bytes"])} more room than the system '
+                    'uses. Open Hardware to use it.', 'warn', 'hardware')
+    return Card('disk', 'Disk', title,
+                f'of {fmt_bytes(total)}. Low space slows updates and models.' if total and low
+                else (f'of {fmt_bytes(total)}' if total else ''),
+                'warn' if low else 'ok', 'hardware')
+
+
 def cards(status):
     """The Overview cards, in display order, from a `noc status` document."""
     disk = status.get('disk') or {}
@@ -141,10 +152,7 @@ def cards(status):
         _apps_card(status.get('apps')),
         _ollama_card(status.get('ollama') or {}),
         _gpu_card(status.get('gpu')),
-        Card('disk', 'Disk', f'{fmt_bytes(free)} free' if free is not None else 'Unknown',
-             f'of {fmt_bytes(total)}. Low space slows updates and models.' if total and low
-             else (f'of {fmt_bytes(total)}' if total else ''),
-             'warn' if low else 'ok', 'hardware'),
+        _disk_card(disk, free, total, low),
         _hermes_card(status.get('hermes') or {}),
         Card('search', 'Search index',
              'Not built yet' if age is None else f'Updated {fmt_age(age)}',
@@ -738,6 +746,49 @@ def install_blocker(detect, free_bytes):
     if need and free_bytes is not None and free_bytes < need * 1024 ** 3:
         return f'Not enough free disk space: about {need} GB is needed, {fmt_bytes(free_bytes)} is free.'
     return ''
+
+
+# ---- Disk: the system disk was made bigger than the system partition -------------------------------
+
+DISK_GROW = [PKEXEC, HELPER, 'disk-grow']
+
+
+def disk_can_grow(disk):
+    """True when `noc status` says the disk has room the system does not use (>= 1 GiB, a supported layout)."""
+    return bool(disk) and bool(disk.get('can_grow')) and (disk.get('expandable_bytes') or 0) > 0
+
+
+def disk_headline(disk):
+    """(text, level) for the Disk section of the Hardware page."""
+    if disk_can_grow(disk):
+        return (f'Your disk is bigger than the system uses: {fmt_bytes(disk["expandable_bytes"])} is not in use yet.', 'warn')
+    return ('The system uses all of the disk.', 'ok')
+
+
+def disk_grow_summary(disk):
+    """What using the space does, in plain words, for the consent dialog. Nothing happens until the person says yes."""
+    lines = []
+    if disk.get('disk_bytes') and disk.get('partition_bytes'):
+        lines.append(f'The disk is {fmt_bytes(disk["disk_bytes"])}, but the system only uses '
+                     f'{fmt_bytes(disk["partition_bytes"])} of it. This usually means the disk was made bigger after '
+                     'NoctraOS was installed.')
+    lines.append(f'NoctraOS can take up all of it: {fmt_bytes(disk.get("expandable_bytes") or 0)} more room for apps, '
+                 'models and files.')
+    lines.append('Your files are not touched and nothing is erased. It takes a few seconds and the computer stays on. '
+                 'If it cannot finish live, you will be asked to restart once.')
+    lines.append('Tip: if you keep important files only here, back them up first, as with any disk change.')
+    return lines
+
+
+def disk_grow_result(code):
+    """(message, restart_needed) for a finished `disk-grow`."""
+    if code == 0:
+        return 'Done. The system now uses the whole disk.', False
+    if code == 10:
+        return 'The change is saved. Restart the computer to finish, then use the space again.', True
+    if code == 2:
+        return 'Nothing to change: this disk layout is not resized automatically, or it is already full.', False
+    return exit_message(code) or 'It did not finish, and nothing was erased. Open Health for details.', False
 
 
 def hardware_state(detect, gstatus):

@@ -285,6 +285,45 @@ class DoctorStatusTests(unittest.TestCase):
         row = {r["id"]: r for r in json.loads(e.noc("doctor", "--json").stdout)}["gpu"]
         self.assertEqual((row["status"], row["detail"]), ("ok", "GPU: Test Card; AMD GPU uses Vulkan only (no ROCm)"))
 
+    DISK_GROWABLE = ('{"supported": true, "can_grow": true, "expandable_bytes": 35433480192, "disk_bytes": 68719476736, '
+                     '"partition_bytes": 33285996544, "reason": ""}')
+
+    def disk_env(self, doc):
+        e = Env(self)
+        e.stub("noc-disk", f"echo '{doc}'")
+        return e, {"NOC_DISKTOOL": str(e.bin / "noc-disk")}
+
+    def test_doctor_warns_when_the_disk_is_bigger_than_the_system_uses_and_offers_no_one_click_fix(self):
+        e, extra = self.disk_env(self.DISK_GROWABLE)
+        row = {r["id"]: r for r in json.loads(e.noc("doctor", "--json", **extra).stdout)}["disk-size"]
+        self.assertEqual(row["status"], "warn")
+        self.assertIn("33.0 GiB of the disk is not used yet", row["detail"])
+        self.assertIn("Hardware", row["detail"])
+        self.assertIsNone(row["fix"])
+
+    def test_doctor_has_no_disk_size_row_when_there_is_nothing_to_grow(self):
+        e, extra = self.disk_env('{"supported": true, "can_grow": false, "expandable_bytes": 0}')
+        ids = [r["id"] for r in json.loads(e.noc("doctor", "--json", **extra).stdout)]
+        self.assertNotIn("disk-size", ids)
+        ids = [r["id"] for r in json.loads(Env(self).noc("doctor", "--json", NOC_DISKTOOL="/nonexistent").stdout)]
+        self.assertNotIn("disk-size", ids)
+
+    def test_status_json_carries_the_expandable_disk_space(self):
+        e, extra = self.disk_env(self.DISK_GROWABLE)
+        disk = json.loads(e.noc("status", **extra).stdout)["disk"]
+        self.assertEqual((disk["can_grow"], disk["expandable_bytes"]), (True, 35433480192))
+        self.assertEqual((disk["disk_bytes"], disk["partition_bytes"]), (68719476736, 33285996544))
+        self.assertIn("root_free_bytes", disk)
+
+    def test_status_json_without_the_tool_keeps_the_old_disk_shape(self):
+        disk = json.loads(Env(self).noc("status", NOC_DISKTOOL="/nonexistent").stdout)["disk"]
+        self.assertEqual(set(disk), {"root_free_bytes", "root_total_bytes"})
+
+    def test_noc_disk_hands_over_to_the_tool(self):
+        e, extra = self.disk_env("ignored")
+        e.stub("noc-disk", 'echo "args: $*"')
+        self.assertEqual(e.noc("disk", "grow", "--dry-run", **extra).stdout.strip(), "args: grow --dry-run")
+
     def test_doctor_json_ollama_down(self):
         rows = json.loads(Env(self, ollama=False).noc("doctor", "--json").stdout)
         self.assertEqual({r["id"]: r["status"] for r in rows}["ollama"], "fail")
