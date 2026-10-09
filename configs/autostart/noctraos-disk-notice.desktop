@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=NoctraOS disk size notice
+Comment=Tell you once if the disk is bigger than the system uses
+Exec=/usr/local/bin/noc-disk notify
+NoDisplay=true
+X-GNOME-Autostart-enabled=true
+X-GNOME-Autostart-Delay=30
+OnlyShowIn=GNOME;

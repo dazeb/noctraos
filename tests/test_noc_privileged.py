@@ -80,6 +80,35 @@ class RefusalTests(unittest.TestCase):
         self.assertIn("must run as root", result.stderr)
 
 
+class DiskGrowVerbTests(unittest.TestCase):
+    """`disk-grow` is a verb with no arguments: the caller never names a disk, a partition or a command."""
+
+    def run_as_root(self, *args):
+        # main refuses when not root, so run it with `id` faked to 0 and the tool replaced by an echo stub.
+        with tempfile.TemporaryDirectory() as d:
+            stub = Path(d) / "noc-disk"
+            stub.write_text('#!/bin/sh\necho "noc-disk $*"\n')
+            stub.chmod(0o755)
+            script = f'id() {{ echo 0; }}; source "{HELPER}"; DISK="{stub}"; main {" ".join(args)}'
+            return subprocess.run(["bash", "-c", script], capture_output=True, text=True,
+                                  env={k: v for k, v in os.environ.items() if k != "PKEXEC_UID"})
+
+    def test_runs_the_tool_with_grow_and_nothing_else(self):
+        out = self.run_as_root("disk-grow")
+        self.assertEqual((out.returncode, out.stdout.strip()), (0, "noc-disk grow"))
+
+    def test_refuses_any_argument(self):
+        for extra in ("/dev/sda", "--dry-run", "sda2", "';id'"):
+            with self.subTest(extra=extra):
+                out = self.run_as_root("disk-grow", extra)
+                self.assertEqual(out.returncode, 2)
+                self.assertIn("takes no arguments", out.stderr)
+
+    def test_the_usage_line_lists_it(self):
+        out = self.run_as_root("nonsense")
+        self.assertIn("disk-grow", out.stderr)
+
+
 class PolicyTests(unittest.TestCase):
     def test_policy_pins_the_helper_and_asks_once(self):
         action = ET.parse(POLICY).getroot().find("action")

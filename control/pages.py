@@ -1171,6 +1171,16 @@ class HardwarePage(Page):
         self.headline = label('', 'lede')
         self.pack_start(self.headline, False, False, 0)
         self.holder = self.scroller()
+        self.disk = {}
+        self.busy_text = ''                 # what the progress line says while the GPU setup or the disk grow runs
+        self.grow = button('Use all the disk space…', 'suggested', on_click=lambda *_: self._confirm_grow())
+        self.terminal_disk = self.terminal_button('disk')
+        grow_row = Gtk.Box(spacing=10)
+        for item in (self.grow, self.terminal_disk):
+            item.set_no_show_all(True)
+            grow_row.pack_start(item, False, False, 0)
+        grow_row.set_halign(Gtk.Align.START)
+        self.pack_start(grow_row, False, False, 0)
         self.setup = button('Set up GPU for local AI…', 'suggested', on_click=lambda *_: self._confirm())
         self.skip = button("No, I'll set up the GPU myself", 'link', on_click=lambda *_: self.skip_chore('gpu'),
                            tooltip='Nothing is installed. The terminal commands are shown here instead.')
@@ -1205,8 +1215,14 @@ class HardwarePage(Page):
         self.detect = detect
         self.free_bytes = ((status or {}).get('disk') or {}).get('root_free_bytes')
         state = panel.hardware_state(detect, gstatus, skipped)
-        self.headline.set_text(state['headline'])
+        self.disk = (status or {}).get('disk') or {}
+        can_grow = panel.disk_can_grow(self.disk)
+        self.headline.set_text(panel.disk_headline(self.disk)[0] if can_grow else state['headline'])
         body = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8, margin_end=8)
+        if can_grow:
+            body.add(label('Disk size', 'section'))
+            for line in panel.disk_grow_summary(self.disk)[:2]:
+                body.add(label(line, 'card-detail', chars=80))
         self.unskip = None
         if state['skipped']:
             body.add(label(panel.skipped_text('gpu'), 'card-detail', selectable=True))
@@ -1236,7 +1252,61 @@ class HardwarePage(Page):
                                f'{panel.fmt_bytes(disk["root_total_bytes"])} on the system disk', 'card-detail'))
         self.swap(self.holder, body)
         self.setup.set_visible(state['can_install'])
+        self.grow.set_visible(can_grow)
+        self.terminal_disk.set_visible(can_grow)
         self.skip.set_visible(state['can_install'])
+
+    # -- use the unused disk space: an explicit summary and a yes, never on its own ---------
+    def _confirm_grow(self):
+        if self.running or not panel.disk_can_grow(self.disk):
+            return
+        dialog = Gtk.MessageDialog(transient_for=self.window, modal=True, message_type=Gtk.MessageType.QUESTION,
+                                   buttons=Gtk.ButtonsType.NONE, text='Use all of the disk?')
+        dialog.format_secondary_text('\n\n'.join(panel.disk_grow_summary(self.disk)))
+        dialog.add_button('Cancel', Gtk.ResponseType.CANCEL)
+        dialog.add_button('Use all the space', Gtk.ResponseType.OK)
+        answer = dialog.run()
+        dialog.destroy()
+        if answer == Gtk.ResponseType.OK:
+            self._grow()
+
+    def _grow(self):
+        self.running = True
+        self.grow.set_sensitive(False)
+        self.say(self.note, '')
+        self.busy_text = 'Using the rest of the disk…'
+        self.run.begin(self.busy_text)
+
+        def work():
+            for event in panel.run_events(panel.DISK_GROW):
+                if event['event'] == 'exit':
+                    return event['code']
+                GLib.idle_add(self._tick, event.get('line') or '')
+            return 1
+
+        background(work, self._grown)
+
+    def _grown(self, code):
+        self.running = False
+        self.run.hide()
+        self.grow.set_sensitive(True)
+        message, restart = panel.disk_grow_result(code)
+        self.say(self.note, message)
+        if restart:
+            self._offer_restart()
+        self.refresh()
+
+    def _offer_restart(self):
+        dialog = Gtk.MessageDialog(transient_for=self.window, modal=True, message_type=Gtk.MessageType.QUESTION,
+                                   buttons=Gtk.ButtonsType.NONE, text='Restart to finish?')
+        dialog.format_secondary_text('The new disk size is saved. A restart lets the system use it. Save your work '
+                                     'first. Afterwards, open Hardware and use the space once more to finish.')
+        dialog.add_button('Later', Gtk.ResponseType.CANCEL)
+        dialog.add_button('Restart now', Gtk.ResponseType.OK)
+        answer = dialog.run()
+        dialog.destroy()
+        if answer == Gtk.ResponseType.OK:
+            subprocess.Popen(['systemctl', 'reboot'])
 
     # -- install: always an explicit summary and a yes -------------------------------------
     def _confirm(self):
@@ -1262,7 +1332,8 @@ class HardwarePage(Page):
         self.setup.set_sensitive(False)
         self.skip.set_sensitive(False)
         self.say(self.note, '')
-        self.run.begin('Setting up the GPU…')
+        self.busy_text = 'Setting up the GPU…'
+        self.run.begin(self.busy_text)
 
         def work():
             problem = ''
@@ -1277,7 +1348,7 @@ class HardwarePage(Page):
     def _tick(self, line):
         if line:
             self.run.append(line)
-        self.run.set_status('Setting up the GPU…', None)
+        self.run.set_status(self.busy_text, None)
         return False
 
     def _finished(self, result):

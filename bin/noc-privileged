@@ -6,6 +6,7 @@
 #   noc-privileged update-rollback                put the previous NoctraOS layer back (code only; migrations stay)
 #   noc-privileged module <module-file>           re-run one install module (allowlist below)
 #   noc-privileged gpu-install <nvidia|amd|all>   noc-gpu install for one vendor (drivers + CUDA/ROCm/Vulkan)
+#   noc-privileged disk-grow                      noc-disk grow: use the unused space of the system disk (no arguments)
 #
 # This is an allowlist, never a shell: each operation is a fixed verb with validated arguments, it
 # only runs root-owned code (/usr/local/bin/noc and the root-owned snapshot of the repo written by
@@ -22,6 +23,7 @@ SELFUPDATE=/usr/local/libexec/noctraos/noc-selfupdate
 UPDATE_CHANNELS=(stable nightly)
 GPU=/usr/local/bin/noc-gpu
 GPU_VENDORS=(nvidia amd all)
+DISK=/usr/local/bin/noc-disk
 
 refuse() { echo "noc-privileged: $*" >&2; exit 2; }
 
@@ -85,7 +87,12 @@ main() {
       gpu_user="$(invoking_user)" || refuse "gpu-install: cannot tell which user asked (run it through pkexec)"
       # noc-gpu adds this user to the render/video groups; it is also what `sudo noc gpu install` uses.
       clean_env SUDO_USER="$gpu_user" TARGET_USER="$gpu_user" "$GPU" install --vendor "$2" ;;
-    *) refuse "usage: noc-privileged update <apt|flatpak|noctraos>[,...] | update-channel <channel> | update-rollback | module <name> | gpu-install <vendor>" ;;
+    disk-grow)
+      # Takes nothing from the caller: noc-disk works out the disk and partition itself and refuses anything it
+      # does not recognise (LVM, a partition behind the system one, an unknown filesystem).
+      [ $# -eq 1 ] || refuse "disk-grow: takes no arguments"
+      clean_env "$DISK" grow ;;
+    *) refuse "usage: noc-privileged update <apt|flatpak|noctraos>[,...] | update-channel <channel> | update-rollback | module <name> | gpu-install <vendor> | disk-grow" ;;
   esac
 }
 
