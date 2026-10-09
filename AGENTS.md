@@ -326,7 +326,7 @@ bash -n boot.sh install.sh install/*.sh bin/noc bin/noc-gpu bin/noc-privileged b
 docker run --rm -v "$PWD:/mnt" koalaman/shellcheck:stable --severity=warning \
   boot.sh install.sh install/*.sh bin/noc bin/noc-gpu bin/noc-privileged bin/noctraos-control bin/noctraos-agent \
   bin/noctraos-copyq bin/noctraos-hermes configs/nautilus-scripts/*     # same list as CI
-python3 -m unittest discover -s tests                # 465 tests: theme, GPU detection, noc JSON modes, root helper, Control Panel
+python3 -m unittest discover -s tests                # 484 tests: theme, GPU detection, noc JSON modes, root helper, Control Panel
 python3 scripts/render-theme.py --check              # committed theme outputs match palette.json
 
 # wallpaper iteration (venv at ~/workspace/scratch/zorin-img-venv: pillow+numpy)
@@ -360,6 +360,17 @@ tail -f /root/noctraos-build.log
 
 ## Known pitfalls (each cost real debugging time)
 
+- **Never repack the system with `mksquashfs -all-root`; ownership must survive the remaster.** Every image up to and including 0.4.0 was built
+  that way (since the first ISO commit), so all files were root:root. Stock Zorin has 200 files with another owner and 230 with another group;
+  the one that hurt first is `/usr/lib/dbus-1.0/dbus-daemon-launch-helper` (root:messagebus, 4754): the bus runs it as `messagebus`, which
+  has no execute right on a root:root copy, so `org.debian.apt` (aptd) never starts ("Failed to execute program org.debian.apt: Permission
+  denied") and the Software Updater freezes when you accept it. Also lost: `/etc/shadow` (shadow), `/usr/bin/crontab`, polkit, the man cache (the
+  installer log's "mandb ... Permission denied" lines were this, not noise). The build now checks the launch helper's group after unpacking and after
+  repacking, and `migrations/system/0001_restore_ownership.sh` repairs installed systems from `configs/ownership/zorin-18.1-core.tsv` (only files that are
+  still exactly root:root; chown clears setuid/setgid even as root, so the migration saves and restores each mode). Verified: a fresh `build-local.sh`
+  image has 200/230 non-root owners/groups like stock. To test the exec failure yourself use `runuser`/`su`; `setpriv` keeps root's capabilities and
+  bypasses the check. Existing 0.3.x/0.4.0 ISOs, QCOW2 and VMDK images stay affected until the next release; installed machines get the migration
+  through an update (needs a published serial, `iso/publish-update.sh`).
 - **xorriso refuses non-empty `-outdev`** ("media holds non-zero data"):
   the build script `rm -f`s the previous ISO before writing. Do not remove
   that line; do not silence xorriso's output.
