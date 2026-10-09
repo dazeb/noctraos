@@ -9,6 +9,7 @@ if [ "${CLAUDE_CODE_REMOTE:-}" != "true" ]; then
 fi
 
 YQ_VERSION=v4.54.1
+YQ_SHA256=8e34fc298390875de416e6a4afcb8cabeceb25d9aa8506c1a2f9353cf702ea5f   # yq_linux_amd64 of that release
 SUDO=""
 [ "$(id -u)" -eq 0 ] || SUDO="sudo -n"
 
@@ -30,13 +31,6 @@ if [ "${#missing[@]}" -gt 0 ]; then
   $SUDO apt-get install -y -qq "${missing[@]}" >/dev/null || warn "apt could not install: ${missing[*]}"
 fi
 
-# yq: the tests need mikefarah's v4; the apt package of the same name is a jq wrapper that rejects -o=json
-if ! yq --version 2>/dev/null | grep -q mikefarah; then
-  curl -sSfL -o /tmp/yq "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64" \
-    && $SUDO install -m 0755 /tmp/yq /usr/local/bin/yq || warn "could not install yq ${YQ_VERSION}"
-  rm -f /tmp/yq
-fi
-
 # chromium: the site lightbox test drives headless Chrome; link Playwright's copy when the container has one
 have_chrome=0
 for browser in google-chrome chromium chromium-browser; do
@@ -49,6 +43,25 @@ if [ "$have_chrome" -eq 0 ]; then
   else
     warn "no Chrome or Chromium found; the lightbox browser test will be skipped"
   fi
+fi
+
+# yq: the tests need mikefarah's v4; the apt package of the same name is a jq wrapper that rejects -o=json.
+# The binary goes into PATH, so it is installed only if it matches the SHA-256 the publisher lists for this release
+# (the "checksums" file of the release, column SHA-256); a mismatch is an error, not a warning.
+if ! yq --version 2>/dev/null | grep -q mikefarah; then
+  yq_tmp=$(mktemp)
+  if curl -sSfL -o "$yq_tmp" "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64"; then
+    if echo "${YQ_SHA256}  ${yq_tmp}" | sha256sum -c --status; then
+      $SUDO install -m 0755 "$yq_tmp" /usr/local/bin/yq || warn "could not install yq ${YQ_VERSION}"
+    else
+      rm -f "$yq_tmp"
+      echo "session-start: ERROR yq ${YQ_VERSION} does not match the pinned SHA-256; not installed" >&2
+      exit 1
+    fi
+  else
+    warn "could not download yq ${YQ_VERSION}"
+  fi
+  rm -f "$yq_tmp"
 fi
 
 exit 0
