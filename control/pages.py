@@ -411,6 +411,8 @@ class UpdatesPage(Page):
                         False, False, 0)
         self.offline = self.make_note()
         self.holder = self.scroller()
+        self.layer = self._layer_box()
+        self.pack_start(self.layer, False, False, 0)
         self.update_button = button('Update selected', 'suggested', on_click=lambda *_: self.start())
         self.update_button.set_halign(Gtk.Align.START)
         self.pack_start(self.update_button, False, False, 0)
@@ -428,6 +430,84 @@ class UpdatesPage(Page):
         self.spinner.start()
         self.update_button.set_sensitive(False)
         background(lambda: panel.noc_json('updates', timeout=120), self._loaded)
+        background(panel.layer_status, self._layer_loaded)
+
+    # -- the NoctraOS layer: channel and going back ------------------------------------------
+    def _layer_box(self):
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        box.add(label('NoctraOS updates', 'section'))
+        self.layer_head = label('', 'row-title')
+        self.layer_problem = label('', 'status-warn', chars=80)
+        box.add(self.layer_head)
+        box.add(self.layer_problem)
+        self.syncing = False
+        self.channel_radios = {}
+        group = None
+        for channel, (title, text) in panel.CHANNELS.items():
+            radio = Gtk.RadioButton.new_with_label_from_widget(group, f'{title}: {text}')
+            group = group or radio
+            radio.connect('toggled', lambda r, channel=channel: self._channel_toggled(r, channel))
+            self.channel_radios[channel] = radio
+            box.add(radio)
+        self.layer_state = None
+        self.rollback = button('Go back to the previous update', on_click=lambda *_: self._rollback(),
+                               tooltip='Puts the previous version of the NoctraOS features back. Your files and settings stay.')
+        self.rollback.set_halign(Gtk.Align.START)
+        box.add(self.rollback)
+        return self.tucked(box)
+
+    def _layer_loaded(self, status):
+        self.layer_state = status
+        summary = panel.layer_summary(status)
+        self.layer_head.set_text(summary['headline'])
+        self.layer_problem.set_text(summary['problem'])
+        self.layer_problem.set_visible(bool(summary['problem']))
+        self.syncing = True
+        for channel, radio in self.channel_radios.items():
+            radio.set_active(channel == summary['channel'])
+            radio.set_visible(summary['channel'] is not None)
+            radio.set_sensitive(not self.running)
+        self.syncing = False
+        self.rollback.set_visible(summary['can_rollback'])
+        self.layer.set_visible(True)
+
+    def _channel_toggled(self, radio, channel):
+        current = (self.layer_state or {}).get('channel')
+        argv = panel.channel_command(channel, current)
+        if self.syncing or not radio.get_active() or not argv:
+            return
+        if channel == 'nightly' and not self._confirm(
+                'Follow the nightly channel?', 'Nightly updates arrive before they are fully tested and can break things. '
+                'You can switch back to stable any time, but updates never go backwards, so stable will not '
+                'change anything until it catches up.', 'Use nightly'):
+            self._layer_loaded(self.layer_state)
+            return
+        self._run_layer(argv, 'Switching…', 'Done. You are on the ' + channel + ' channel.')
+
+    def _rollback(self):
+        argv = panel.rollback_command(self.layer_state)
+        if argv and self._confirm('Go back to the previous update?', 'The previous version of the NoctraOS features is put back. '
+                                  'Your files and settings are not touched. Newer steps that already ran are not undone.',
+                                  'Go back'):
+            self._run_layer(argv, 'Going back…', 'Done. The previous update is back.')
+
+    def _run_layer(self, argv, working, finished):
+        self.say(self.note, working)
+
+        def done(result):
+            ok, message = result
+            self.say(self.note, finished if ok else f'That did not work: {message}')
+            self.refresh()
+        background(lambda: panel.run_ok(argv, timeout=600), done)
+
+    def _confirm(self, title, text, action):
+        dialog = Gtk.MessageDialog(transient_for=self.window, modal=True, message_type=Gtk.MessageType.QUESTION,
+                                   buttons=Gtk.ButtonsType.NONE, text=title)
+        dialog.format_secondary_text(text)
+        dialog.add_buttons('Cancel', Gtk.ResponseType.CANCEL, action, Gtk.ResponseType.OK)
+        answer = dialog.run()
+        dialog.destroy()
+        return answer == Gtk.ResponseType.OK
 
     def _loaded(self, updates):
         self.spinner.stop()

@@ -3,6 +3,7 @@
 #   noc update        apt + Flatpak + NoctraOS features + mise runtimes + Hermes/agents + AI models  [--json] [--only apt,flatpak,noctraos,mise,apps,models]
 #   noc accounts      Git name/e-mail and GitHub sign-in: status [--json] | git set --name N --email E | github login|logout|suggest
 #   noc skip          setup chores you chose to do yourself: list [--json] | add <git|github|gpu> | rm <id>
+#   noc channel       which NoctraOS update channel this machine follows: (no argument: show it) | stable | nightly
 #   noc apps          tracked upstream apps (Hermes, Ollama, AppManager, coding agents): installed vs latest release  [--json] [--refresh]
 #   noc doctor        health check of the whole stack  [--json]
 #   noc status        Overview data as JSON (versions, updates, Ollama, GPU, disk, Hermes)
@@ -719,6 +720,18 @@ cmd_apps() {
   "$UPSTREAM" list "$@"
 }
 
+# noc channel [stable|nightly]: show, or (as root, through sudo) choose which update channel the NoctraOS layer follows. `stable`
+# is tested updates rolled out in stages; `nightly` is the newest changes first, for testers. A machine that moves from nightly to
+# stable gets nothing until stable catches up (updates never go backwards). The Control Panel does the same through noc-privileged.
+cmd_channel() {
+  if [ ! -x "$SELFUPDATE" ]; then bad "this install has no NoctraOS updater yet; run the one-line installer once (README) to add it"; return 1; fi
+  case "${1:-}" in
+    "") "$SELFUPDATE" status | awk -F': ' '$1 == "channel" || $1 == "serial" || $1 == "version" {printf "%s: %s\n", $1, $2}' ;;
+    stable|nightly) local sudo=sudo; [ "$(id -u)" -eq 0 ] && sudo=""; $sudo "$SELFUPDATE" set-channel "$1" ;;
+    *) bad "usage: noc channel [stable|nightly]"; return 1 ;;
+  esac
+}
+
 cmd_status() {
   local os="" ollama=false oversion="" nmodels=0 tags gpu hmode="" hready=false
   local idx="${XDG_CACHE_HOME:-$HOME/.cache}/noctraos-search/index.sqlite" idx_age=null
@@ -781,6 +794,7 @@ main() {
     updates) shift; cmd_updates "$@" ;;
     apps) shift; cmd_apps "$@" ;;
     accounts) shift; cmd_accounts "$@" ;;
+    channel) shift; cmd_channel "$@" ;;
     skip)   shift; cmd_skip "$@" ;;
     models) shift; cmd_models "$@" ;;
     bg)     shift; cmd_bg "$@" ;;
@@ -795,6 +809,7 @@ main() {
       echo "  noc status      versions, pending updates, Ollama, GPU, disk as JSON"
       echo "  noc updates     what an update would do: counts, download size, online (JSON)"
       echo "  noc accounts    Git name/e-mail and GitHub sign-in (status | git set | github login|logout)"
+      echo "  noc channel     NoctraOS update channel: stable (default) or nightly (testers)"
       echo "  noc skip        setup chores you do yourself (list | add <id> | rm <id>)"
       echo "  noc models      manage local AI models (list | default | presets | pull | rm)"
       echo "  noc bg          cycle or set the wallpaper (list | next | set)"

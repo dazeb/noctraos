@@ -205,7 +205,7 @@ TERMINAL = {
     'git': ['git config --global user.name "Your Name"', 'git config --global user.email you@example.com'],
     'github': ['gh auth login --web', 'gh auth setup-git'],
     'gpu': ['noc gpu status', 'noc gpu install'],
-    'updates': ['noc update', 'noc update --only mise,models'],
+    'updates': ['noc update', 'noc update --only mise,models', 'noc channel', 'noc channel nightly'],
     'apps': ['noc apps', 'noc-upstream update --only <app>'],
     'models': ['noc models list', 'noc models pull <model>', 'noc models default <model>', 'noc models rm <model>'],
     'privacy': ['noctraos-hermes local', 'noctraos-hermes cloud', 'noctraos-search --settings', 'noctraos-weather --setup'],
@@ -990,6 +990,66 @@ def setup_summary(steps):
     if chose:
         return 'Everything else is set up. You are doing the rest yourself.', 'info'
     return 'Setup is complete.', 'ok'
+
+
+# ---- The NoctraOS layer: which update channel, and going back ---------------------------------
+#
+# The updater (docs/updates.md) is a root-owned program; the panel only reads its status and asks the privileged helper for the
+# two things a person may want to change: the channel and a rollback. Both are fixed verbs there, never a path or a command.
+
+SELFUPDATE = '/usr/local/libexec/noctraos/noc-selfupdate'
+CHANNELS = {
+    'stable': ('Stable', 'Tested updates, rolled out in stages. Recommended.'),
+    'nightly': ('Nightly', 'The newest changes first, before they are fully tested. For people who want to help test.'),
+}
+
+
+def layer_status():
+    """`noc-selfupdate status --json` parsed, None when the updater is missing or fails."""
+    try:
+        out = subprocess.run([SELFUPDATE, 'status', '--json'], capture_output=True, text=True, timeout=15)
+        data = json.loads(out.stdout)
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return None
+    return data if isinstance(data, dict) and data.get('channel') in CHANNELS else None
+
+
+def layer_summary(status):
+    """What the Updates page says about the NoctraOS layer: {headline, problem, channel, can_rollback}. `problem` is a
+    sentence for something that needs attention (a migration that did not finish, a missing signing key, an update held back
+    after it failed), '' when all is well."""
+    if not isinstance(status, dict):
+        return {'headline': 'Update details are not available on this install yet.', 'problem': '', 'channel': None,
+                'can_rollback': False}
+    serial, version = status.get('serial') or 0, status.get('version') or '?'
+    applied = (status.get('applied') or '')[:10]
+    if serial:
+        headline = f'NoctraOS {version}, update {serial}' + (f', installed {applied}' if applied else '')
+    else:
+        headline = f'NoctraOS {version}, as first installed'
+    failed = status.get('failed_migrations') or []
+    if not status.get('signing_key', True):
+        problem = 'No update signing key is installed, so updates are refused.'
+    elif failed:
+        problem = f'A step of the last update did not finish ({", ".join(failed)}). It is tried again at the next update.'
+    elif status.get('held'):
+        problem = f'Update {status["held"]} did not work on this computer and was put back. The next update will be tried.'
+    else:
+        problem = ''
+    return {'headline': headline, 'problem': problem, 'channel': status.get('channel'),
+            'can_rollback': bool(status.get('can_rollback'))}
+
+
+def channel_command(target, current):
+    """argv that moves this machine to `target`, None when it is already there or the channel is unknown."""
+    if target not in CHANNELS or target == current:
+        return None
+    return [PKEXEC, HELPER, 'update-channel', target]
+
+
+def rollback_command(status):
+    """argv that puts the previous NoctraOS layer back, None when there is nothing to go back to."""
+    return [PKEXEC, HELPER, 'update-rollback'] if isinstance(status, dict) and status.get('can_rollback') else None
 
 
 def run_ok(argv, timeout=120):

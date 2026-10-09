@@ -4,12 +4,14 @@
 # migration as done. A fresh install pins it in install/06_desktop_theme.sh.
 set -u
 ID=noctraos-control.desktop
+# Where module 06/07 install launchers (tests point this at a temp directory).
+APPS="${NOCTRAOS_APPLICATIONS_DIR:-/usr/local/share/applications}"
 
 current="$(gsettings get org.gnome.shell favorite-apps 2>/dev/null)" || { echo "no desktop settings yet; retrying later" >&2; exit 1; }
 case "$current" in *"'$ID'"*) exit 0 ;; esac
 
 # Without the launcher a dock icon would be a blank question mark; module 06 installs it, so try again at the next login.
-if [ ! -f "/usr/local/share/applications/$ID" ]; then
+if [ ! -f "$APPS/$ID" ]; then
   echo "$ID is not installed yet; retrying later" >&2
   exit 1
 fi
