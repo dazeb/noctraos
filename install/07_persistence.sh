@@ -69,7 +69,9 @@ for f in "$REPO_ROOT"/control/*.py; do
   sudo install -m 644 "$f" "/usr/local/share/noctraos-control/$(basename "$f")"
 done
 sudo install -m 755 "$REPO_ROOT/bin/noctraos-control" /usr/local/bin/noctraos-control
-# The launcher (configs/applications/noctraos-control.desktop) and icon are installed by module 06.
+# Launchers and icons are refreshed here too (not only by module 06): an update re-runs this module, and a changed launcher
+# or icon should reach machines that already have it. install_launchers copies only what differs and touches no setting.
+install_launchers "$REPO_ROOT"
 
 log "Installing the privileged helper (one polkit prompt for updates and repairs)..."
 sudo install -d -m 755 /usr/local/libexec/noctraos

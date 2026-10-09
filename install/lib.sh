@@ -47,3 +47,26 @@ desktop_file_exists() {
   done
   return 1
 }
+
+# Install the NoctraOS launchers (configs/applications/*.desktop) and icons (assets/icons/noctraos-*.svg) system-wide, only
+# when a file is missing or differs, so a second run changes nothing. Used by module 06 (fresh installs) and module 07, which
+# an update re-runs: a changed launcher reaches machines that already have it without a migration. Touches no setting.
+install_launchers() {
+  local repo="$1" f dest changed=0
+  sudo mkdir -p /usr/local/share/applications /usr/local/share/icons/hicolor/scalable/apps
+  for f in "$repo"/configs/applications/*.desktop; do
+    [ -f "$f" ] || continue
+    dest="/usr/local/share/applications/$(basename "$f")"
+    cmp -s "$f" "$dest" 2>/dev/null || { sudo install -m 644 "$f" "$dest" && changed=1; }
+  done
+  for f in "$repo"/assets/icons/noctraos-*.svg; do
+    [ -f "$f" ] || continue
+    dest="/usr/local/share/icons/hicolor/scalable/apps/$(basename "$f")"
+    cmp -s "$f" "$dest" 2>/dev/null || { sudo install -m 644 "$f" "$dest" && changed=1; }
+  done
+  if [ "$changed" = 1 ]; then
+    sudo update-desktop-database >/dev/null 2>&1 || true
+    sudo gtk-update-icon-cache -q -t -f /usr/local/share/icons/hicolor 2>/dev/null || true
+  fi
+  return 0
+}

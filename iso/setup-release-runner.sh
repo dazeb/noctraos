@@ -9,7 +9,7 @@
 #
 # Safety (a shell runner runs pipeline code as you, with your Docker, KVM and ~/secrets):
 #   - it is a PROJECT runner for dazeb/noctraos only, locked, with a tag (`noctraos-release`) and no untagged jobs,
-#   - it is ref-protected: it only takes jobs from protected refs, and `v*` tags are made protected here,
+#   - it is ref-protected: it only takes jobs from protected refs, and `v*` and `update-*` tags are made protected here,
 #   - one job at a time. Only people who can push a protected tag can start a release.
 # The GitLab token comes from ~/secrets/gitlab.env (GITLAB_API_URL, GITLAB_API_KEY); nothing secret is printed.
 # Environment: RUNNER_PROJECT (dazeb/noctraos), RUNNER_TAG (noctraos-release), RUNNER_BUILD_DIR
@@ -96,9 +96,12 @@ install() {
   fi
   sed -i 's/^concurrent = .*/concurrent = 1/' "$CONF_DIR/config.toml"
 
-  say "protecting v* tags (only maintainers can push a release tag)"
-  api GET "/projects/$PID/protected_tags" | jq -e '.[]|select(.name=="v*")' >/dev/null \
-    || api POST "/projects/$PID/protected_tags" --data-urlencode 'name=v*' --data-urlencode create_access_level=40 >/dev/null
+  # v* starts a release, update-* publishes an update to installed machines: both reach the signing key, so only maintainers.
+  say "protecting v* and update-* tags (only maintainers can push a release or update tag)"
+  for pattern in 'v*' 'update-*'; do
+    api GET "/projects/$PID/protected_tags" | jq -e --arg n "$pattern" '.[]|select(.name==$n)' >/dev/null \
+      || api POST "/projects/$PID/protected_tags" --data-urlencode "name=$pattern" --data-urlencode create_access_level=40 >/dev/null
+  done
 
   cat > "$UNIT_FILE" <<UNITEOF
 [Unit]

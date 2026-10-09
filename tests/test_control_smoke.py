@@ -101,6 +101,18 @@ shown = texts(overview, [])
 for want in ("3 things left to set up", "Git name and e-mail", "GitHub sign-in", "GPU for local AI", "Meet Hermes", "Open Hermes", "Pick a city"):
     assert want in shown, (want, shown)
 overview._loaded((None, {}))
+# The NoctraOS update section: the installed update, the channel that is chosen, and Go back only when there is something to go back to.
+updates = window.pages["updates"]
+layer = {"channel": "nightly", "serial": 4, "version": "1.0", "applied": "2026-10-09T10:00:00Z", "can_rollback": True,
+         "held": 0, "failed_migrations": ["0002_x.sh"], "signing_key": True}
+updates._layer_loaded(layer)
+assert updates.layer.get_visible() and "update 4" in updates.layer_head.get_text()
+assert updates.channel_radios["nightly"].get_active() and not updates.channel_radios["stable"].get_active()
+assert updates.rollback.get_visible() and updates.layer_problem.get_visible() and "0002_x.sh" in updates.layer_problem.get_text()
+updates._layer_loaded({**layer, "channel": "stable", "can_rollback": False, "failed_migrations": []})
+assert updates.channel_radios["stable"].get_active() and not updates.rollback.get_visible() and not updates.layer_problem.get_visible()
+updates._layer_loaded(None)
+assert updates.layer.get_visible() and not updates.channel_radios["stable"].get_visible() and not updates.rollback.get_visible()
 for page_id in ("updates", "apps", "models", "hardware", "health", "privacy", "accounts"):
     page = window.pages[page_id]
     tips = []

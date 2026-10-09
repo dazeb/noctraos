@@ -54,6 +54,11 @@ if [ "$CHANNEL" = stable ]; then
 fi
 [ "$CHANNEL" = nightly ] && [ "$MODE" = nightly ] && [ -z "$ROLLOUT" ] && ROLLOUT=100
 
+# One publish at a time on this workstation: two jobs choosing "the next serial" together would race for the same number.
+# (The CI update jobs, the rolling nightly timer and a manual run all come through here.)
+exec 9>"${UPDATE_PUBLISH_LOCK:-${XDG_RUNTIME_DIR:-/tmp}/noctraos-update-publish.lock}"
+flock -n 9 || die "another update publish is running on this computer; wait for it and try again"
+
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 mkdir -p "$WORK/out"

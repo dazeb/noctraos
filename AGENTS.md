@@ -139,6 +139,10 @@ iso/build-release.sh        release build: ISOs -> VM -> provisioned disk -> qco
 iso/publish-release.sh      upload to dl.noctraos.dev, verify through the public hostname, create the GitHub release; never overwrites a version
 iso/renew-update-channels.sh, setup-update-renewal.sh   weekly systemd user timer that re-signs the update manifests before
                             they expire (30 days); `setup-update-renewal.sh status` shows the real expiry of each channel
+iso/ci-publish-update.sh    what the GitLab update jobs run: nightly from an update-* (or v*) tag, only for commits in GitHub main; promote/widen the
+                            stable rollout of THIS pipeline's update, never lowering it (docs/updates.md, "The pipeline")
+iso/nightly-update.sh, setup-nightly-update.sh   daily user timer (opt-in): publish GitHub main to the nightly channel when an update-carried file
+                            changed and the checks pass; never touches stable
 iso/publish-update.sh       rolling updates for installed systems: build/promote/renew a signed update on the nightly/stable channel,
                             both stores, read back and verified (docs/updates.md); needs ~/secrets/noctraos-update-signing
 iso/vm-image.sh, r2-env.sh, boot-test-image.sh   shared by nightly and release: the VM provisioning, rclone env, exported-disk boot test
@@ -251,7 +255,7 @@ iso/vm-sysprep.sh           run inside a fully provisioned VM before exporting i
   release workstation, (5) a published bundle `updates/bundles/noctraos-N.tar.gz` is never replaced: publish the next serial,
   (6) manifests expire after 30 days: the weekly timer from `iso/setup-update-renewal.sh` renews both channels; check it with
   `iso/setup-update-renewal.sh status`, and never switch the workstation off for a month without renewing by hand.
-  Not wired into the tag pipeline yet; machines installed from 0.3.2 or earlier need the one-line installer once to get the updater.
+  (7) updates ship through the pipeline: an `update-YYYY.MM.DD` tag (protected like `v*`) runs `update-nightly`, and the `update-stable-10/50/100` manual jobs stage it (`iso/ci-publish-update.sh`; only commits in GitHub main, never a lowered rollout). Machines installed from 0.3.2 or earlier need the one-line installer once to get the updater.
 - **VM disks and ISO scratch go on the fastest local disk** (rule from the user, 2026-10-08). `iso/disks.sh` picks it:
   the candidates in `NOCTRAOS_DISK_CANDIDATES`, best first, the first that is a real Linux filesystem (never NTFS/FAT/tmpfs)
   with enough free space. Measured with `iso/fastest-disk.sh` on 2026-10-08: the Crucial P310 2 TB (`/run/media/dazeb/2tb`) writes 2.2 GB/s
@@ -319,7 +323,7 @@ bash -n boot.sh install.sh install/*.sh bin/noc bin/noc-gpu bin/noc-privileged b
 docker run --rm -v "$PWD:/mnt" koalaman/shellcheck:stable --severity=warning \
   boot.sh install.sh install/*.sh bin/noc bin/noc-gpu bin/noc-privileged bin/noctraos-control bin/noctraos-agent \
   bin/noctraos-copyq bin/noctraos-hermes configs/nautilus-scripts/*     # same list as CI
-python3 -m unittest discover -s tests                # 383 tests: theme, GPU detection, noc JSON modes, root helper, Control Panel
+python3 -m unittest discover -s tests                # 425 tests: theme, GPU detection, noc JSON modes, root helper, Control Panel
 python3 scripts/render-theme.py --check              # committed theme outputs match palette.json
 
 # wallpaper iteration (venv at ~/workspace/scratch/zorin-img-venv: pillow+numpy)

@@ -625,5 +625,35 @@ class HermesModeTests(unittest.TestCase):
         self.assertFalse(self.calls.exists())
 
 
+class ChannelTests(unittest.TestCase):
+    """`noc channel`: the terminal route to the same choice the Updates page offers."""
+
+    def env(self):
+        e = Env(self, ollama=False)
+        e.stub("selfupdate", 'if [ "$1" = status ]; then printf "channel: stable\\nserial: 3\\nversion: 0.4.1\\nmirrors: [x]\\n"; '
+                             'else echo "$@" >> "$HOME/calls"; fi')
+        e.stub("sudo", 'exec "$@"')                              # a real sudo would ask for a password in a test
+        return e, {"NOC_SELFUPDATE": str(e.bin / "selfupdate")}
+
+    def test_it_shows_the_channel_and_the_installed_update(self):
+        e, extra = self.env()
+        out = e.noc("channel", **extra).stdout
+        self.assertEqual(out.splitlines(), ["channel: stable", "serial: 3", "version: 0.4.1"])
+
+    def test_it_sets_only_the_two_known_channels(self):
+        e, extra = self.env()
+        self.assertEqual(e.noc("channel", "nightly", **extra).returncode, 0)
+        self.assertEqual((e.home / "calls").read_text().strip(), "set-channel nightly")
+        for bad in ("beta", "../x", "stable; id"):
+            self.assertEqual(e.noc("channel", bad, **extra).returncode, 1, bad)
+        self.assertEqual((e.home / "calls").read_text().strip(), "set-channel nightly")      # nothing else reached the updater
+
+    def test_without_an_updater_it_says_so(self):
+        e = Env(self, ollama=False)
+        result = e.noc("channel", NOC_SELFUPDATE="/nonexistent/su")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("no NoctraOS updater", result.stdout + result.stderr)
+
+
 if __name__ == "__main__":
     unittest.main()

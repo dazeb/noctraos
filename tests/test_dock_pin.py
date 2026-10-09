@@ -30,15 +30,12 @@ class PinMigrationTests(unittest.TestCase):
         store = tmp / "favorites"
         if favorites is not None:
             store.write_text(favorites + "\n")
-        # The migration looks for the launcher where module 06 installs it; point that at a temp dir.
-        script = MIGRATION.read_text().replace("/usr/local/share/applications", str(tmp / "apps"))
         (tmp / "apps").mkdir()
         if launcher:
             (tmp / "apps" / ID).write_text("[Desktop Entry]\n")
-        runner = tmp / "run.sh"
-        runner.write_text(script)
-        result = subprocess.run(["bash", str(runner)], env={**os.environ, "PATH": f"{tmp / 'bin'}:{os.environ['PATH']}",
-                                                            "FAKE_FAVORITES": str(store)}, capture_output=True, text=True)
+        result = subprocess.run(["bash", str(MIGRATION)], capture_output=True, text=True,
+                                env={**os.environ, "PATH": f"{tmp / 'bin'}:{os.environ['PATH']}", "FAKE_FAVORITES": str(store),
+                                     "NOCTRAOS_APPLICATIONS_DIR": str(tmp / "apps")})
         return result, store.read_text().strip() if store.exists() else None
 
     def test_it_appends_to_the_existing_favorites(self):

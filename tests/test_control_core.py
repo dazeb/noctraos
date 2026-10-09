@@ -866,5 +866,54 @@ class SetupChecklistTests(unittest.TestCase):
         self.assertEqual(panel.setup_summary([]), ("Setup is complete.", "ok"))
 
 
+class UpdateLayerTests(unittest.TestCase):
+    """The Updates page's NoctraOS section: which update is installed, the channel, going back."""
+    STATUS = {"channel": "stable", "serial": 3, "version": "0.4.1", "applied": "2026-10-09T10:00:00Z", "can_rollback": True,
+              "held": 0, "failed_migrations": [], "signing_key": True, "mirrors": ["https://x"]}
+
+    def test_it_names_the_installed_update(self):
+        s = panel.layer_summary(self.STATUS)
+        self.assertEqual(s["headline"], "NoctraOS 0.4.1, update 3, installed 2026-10-09")
+        self.assertEqual((s["problem"], s["channel"], s["can_rollback"]), ("", "stable", True))
+        first = panel.layer_summary({**self.STATUS, "serial": 0, "applied": "", "can_rollback": False})
+        self.assertEqual((first["headline"], first["can_rollback"]), ("NoctraOS 0.4.1, as first installed", False))
+
+    def test_problems_are_said_in_plain_words(self):
+        failed = panel.layer_summary({**self.STATUS, "failed_migrations": ["0002_x.sh"]})["problem"]
+        self.assertIn("0002_x.sh", failed)
+        self.assertIn("tried again", failed)
+        self.assertIn("Update 5", panel.layer_summary({**self.STATUS, "held": 5})["problem"])
+        self.assertIn("signing key", panel.layer_summary({**self.STATUS, "signing_key": False})["problem"])
+
+    def test_no_updater_is_not_an_error(self):
+        s = panel.layer_summary(None)
+        self.assertIsNone(s["channel"])
+        self.assertFalse(s["can_rollback"])
+        self.assertIn("not available", s["headline"])
+
+    def test_channel_and_rollback_go_through_the_privileged_helper_only(self):
+        self.assertEqual(panel.channel_command("nightly", "stable"), [panel.PKEXEC, panel.HELPER, "update-channel", "nightly"])
+        self.assertIsNone(panel.channel_command("stable", "stable"))          # already there
+        for target in ("beta", "", "stable; id", "../x", None):
+            self.assertIsNone(panel.channel_command(target, "stable"), target)
+        self.assertEqual(panel.rollback_command(self.STATUS), [panel.PKEXEC, panel.HELPER, "update-rollback"])
+        self.assertIsNone(panel.rollback_command({**self.STATUS, "can_rollback": False}))
+        self.assertIsNone(panel.rollback_command(None))
+
+    def test_the_status_reader_survives_a_missing_or_broken_updater(self):
+        original = panel.SELFUPDATE
+        self.addCleanup(setattr, panel, "SELFUPDATE", original)
+        panel.SELFUPDATE = "/nonexistent/noc-selfupdate"
+        self.assertIsNone(panel.layer_status())
+        panel.SELFUPDATE = "/bin/false"
+        self.assertIsNone(panel.layer_status())
+        panel.SELFUPDATE = "/bin/echo"                                         # prints "status --json": not JSON
+        self.assertIsNone(panel.layer_status())
+
+    def test_the_channels_are_exactly_the_helpers_channels(self):
+        helper = (ROOT / "bin/noc-privileged").read_text()
+        self.assertIn("UPDATE_CHANNELS=(" + " ".join(panel.CHANNELS) + ")", helper)
+
+
 if __name__ == "__main__":
     unittest.main()
