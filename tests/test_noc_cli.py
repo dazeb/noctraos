@@ -354,6 +354,50 @@ class DoctorStatusTests(unittest.TestCase):
         self.assertEqual(data["ollama"]["models"], 0)
 
 
+class SkipCommandTests(unittest.TestCase):
+    """`noc skip`: the setup chores a person chose to do themselves, kept in one file the panel and Welcome app read."""
+
+    def skipped(self, e):
+        return json.loads(e.noc("skip", "list", "--json").stdout)
+
+    def test_empty_by_default_and_a_json_list(self):
+        e = Env(self, ollama=False)
+        self.assertEqual(self.skipped(e), [])
+        self.assertEqual(e.noc("skip").returncode, 0)
+
+    def test_add_is_remembered_once_and_rm_takes_it_back(self):
+        e = Env(self, ollama=False)
+        for chore in ("github", "gpu", "github"):
+            self.assertEqual(e.noc("skip", "add", chore).returncode, 0)
+        self.assertEqual(self.skipped(e), ["github", "gpu"])        # no duplicates, a fixed order
+        self.assertEqual(sorted((e.home / ".config/noctraos/skipped").read_text().split()), ["github", "gpu"])
+        self.assertEqual(e.noc("skip", "rm", "github").returncode, 0)
+        self.assertEqual(self.skipped(e), ["gpu"])
+        self.assertEqual(e.noc("skip", "rm", "github").returncode, 0)  # taking back what is not skipped is fine
+        self.assertEqual(e.noc("skip", "rm", "gpu").returncode, 0)
+        self.assertEqual(self.skipped(e), [])
+
+    def test_unknown_chores_and_commands_are_refused(self):
+        e = Env(self, ollama=False)
+        for args in (("add", "everything"), ("add",), ("rm", "../x"), ("frobnicate",)):
+            result = e.noc("skip", *args)
+            self.assertEqual(result.returncode, 1, args)
+        self.assertEqual(self.skipped(e), [])
+
+    def test_a_hand_edited_file_cannot_inject_anything(self):
+        e = Env(self, ollama=False)
+        path = e.home / ".config/noctraos"
+        path.mkdir(parents=True)
+        (path / "skipped").write_text("gpu\nrm -rf /\n\"; evil\ngit extra\n")
+        self.assertEqual(self.skipped(e), ["gpu"])
+
+    def test_status_carries_the_list(self):
+        e = Env(self, ollama=False)
+        self.assertEqual(json.loads(e.noc("status", "--json").stdout)["skipped"], [])
+        e.noc("skip", "add", "git")
+        self.assertEqual(json.loads(e.noc("status", "--json").stdout)["skipped"], ["git"])
+
+
 class UpdatesCommandTests(unittest.TestCase):
     def run_updates(self, e):
         return json.loads(e.noc("updates", NOC_ONLINE_URLS=e.url + "/api/version").stdout)
@@ -618,6 +662,36 @@ class HermesModeTests(unittest.TestCase):
         self.config("model:\n  provider: openrouter\n")
         self.assertEqual(self.hermes("cloud").returncode, 1)
         self.assertFalse(self.calls.exists())
+
+
+class ChannelTests(unittest.TestCase):
+    """`noc channel`: the terminal route to the same choice the Updates page offers."""
+
+    def env(self):
+        e = Env(self, ollama=False)
+        e.stub("selfupdate", 'if [ "$1" = status ]; then printf "channel: stable\\nserial: 3\\nversion: 0.4.1\\nmirrors: [x]\\n"; '
+                             'else echo "$@" >> "$HOME/calls"; fi')
+        e.stub("sudo", 'exec "$@"')                              # a real sudo would ask for a password in a test
+        return e, {"NOC_SELFUPDATE": str(e.bin / "selfupdate")}
+
+    def test_it_shows_the_channel_and_the_installed_update(self):
+        e, extra = self.env()
+        out = e.noc("channel", **extra).stdout
+        self.assertEqual(out.splitlines(), ["channel: stable", "serial: 3", "version: 0.4.1"])
+
+    def test_it_sets_only_the_two_known_channels(self):
+        e, extra = self.env()
+        self.assertEqual(e.noc("channel", "nightly", **extra).returncode, 0)
+        self.assertEqual((e.home / "calls").read_text().strip(), "set-channel nightly")
+        for bad in ("beta", "../x", "stable; id"):
+            self.assertEqual(e.noc("channel", bad, **extra).returncode, 1, bad)
+        self.assertEqual((e.home / "calls").read_text().strip(), "set-channel nightly")      # nothing else reached the updater
+
+    def test_without_an_updater_it_says_so(self):
+        e = Env(self, ollama=False)
+        result = e.noc("channel", NOC_SELFUPDATE="/nonexistent/su")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("no NoctraOS updater", result.stdout + result.stderr)
 
 
 if __name__ == "__main__":

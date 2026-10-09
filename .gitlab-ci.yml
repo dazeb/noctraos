@@ -21,6 +21,18 @@
 # only this project's jobs, and `v*` tags are protected, so a branch pipeline cannot reach it.
 # Everything else (the checks below) runs on the normal Docker runner. docs/release-runbook.md.
 #
+# Updates for machines that are already installed (docs/updates.md) have their own jobs, on the same runner, because the signing
+# key lives on the workstation. Two ways in:
+#
+#   a tag update-YYYY.MM.DD[-N]   an update without an ISO. The tag message is the "what's new" line the Updates page shows;
+#                                 lines `Relogin: yes` / `Reboot: yes` in it say the person must sign out or restart afterwards.
+#   a release tag vX.Y.Z          after release-site, the same version also goes out as an update.
+#
+#   update-nightly   publish the tagged commit as the next update on the nightly channel (testers); the commit must be in GitHub main
+#   update-stable-10 / -50 / -100   MANUAL: promote that update to the stable channel at 10 percent of machines, then widen it. Do these
+#                                   one at a time over a few days while nightly testers report; a job refuses anything but this
+#                                   pipeline's update and never lowers a rollout (iso/ci-publish-update.sh).
+#
 # Push to GitLab with `git push gitlab <branch>`.
 
 stages:
@@ -28,6 +40,7 @@ stages:
   - release-build
   - release-publish
   - release-site
+  - update
 
 variables:
   TZ: UTC
@@ -37,6 +50,7 @@ variables:
 workflow:
   rules:
     - if: $CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/
+    - if: $CI_COMMIT_TAG =~ /^update-[0-9]{4}\.[0-9]{2}\.[0-9]{2}(-[0-9]+)?$/
     - if: $CI_COMMIT_TAG
       when: never
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
@@ -120,3 +134,51 @@ release-site:
   timeout: 45m
   script:
     - scripts/release-site-pr.sh "$RELEASE_BUILD_DIR"
+
+# ---- updates for installed machines (update-* tags, and vX.Y.Z after the release) ----------------
+
+.update:
+  tags: [noctraos-release]
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/
+    - if: $CI_COMMIT_TAG =~ /^update-[0-9]{4}\.[0-9]{2}\.[0-9]{2}(-[0-9]+)?$/
+  variables:
+    GIT_DEPTH: "0"          # the commit is checked against GitHub main's history
+  # One publish at a time (publish-update.sh also takes a lock): serials are handed out one by one.
+  resource_group: noctraos-update
+
+update-nightly:
+  extends: .update
+  stage: update
+  # An update tag waits for the checks; a release tag also waits for the release to be out.
+  needs:
+    - {job: shell, optional: true}
+    - {job: version, optional: true}
+    - {job: tests, optional: true}
+    - {job: release-site, optional: true}
+  timeout: 30m
+  script:
+    - iso/ci-publish-update.sh nightly "$CI_COMMIT_TAG"
+
+.update-stable:
+  extends: .update
+  stage: update
+  needs: [update-nightly]
+  when: manual
+  allow_failure: true       # a manual job nobody has pressed yet must not hold the pipeline open
+  timeout: 30m
+
+update-stable-10:
+  extends: .update-stable
+  script:
+    - iso/ci-publish-update.sh promote 10
+
+update-stable-50:
+  extends: .update-stable
+  script:
+    - iso/ci-publish-update.sh widen 50
+
+update-stable-100:
+  extends: .update-stable
+  script:
+    - iso/ci-publish-update.sh widen 100

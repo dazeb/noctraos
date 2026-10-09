@@ -161,6 +161,7 @@ def main(argv=None):
     m.add_argument('--out', required=True)
     s = sub.add_parser('serial')
     s.add_argument('manifests', nargs='*')
+    sub.add_parser('items', help='print the top-level paths a bundle carries, one per line')
     args = p.parse_args(argv)
     if args.cmd == 'bundle':
         if args.serial < 1:
@@ -169,6 +170,8 @@ def main(argv=None):
         print(json.dumps(info))
     elif args.cmd == 'manifest':
         print(build_manifest(args))
+    elif args.cmd == 'items':
+        print('\n'.join(ITEMS))
     else:
         print(next_serial(args.manifests))
     return 0

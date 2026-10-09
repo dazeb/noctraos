@@ -18,8 +18,12 @@ make it powerful instead.
    conventional desktop expects it: taskbar and start button, window buttons, a
    task manager (Mission Center), Files, a system tray. We follow users' habits;
    we do not clone another OS's look.
-2. **No terminal required.** The terminal is there for those who want it
-   (the agents live in it), but nothing day-to-day depends on it.
+2. **No terminal required, and never forced on you either.** The terminal is there
+   for those who want it (the agents live in it), but nothing day-to-day depends
+   on it. The mouse comes first and the terminal a close second: every setup
+   chore in the Control Panel can be declined ("No, I'll set it up myself") and
+   every action has a small Terminal tip with the commands. Nobody has to read a
+   command to use the panel, and nobody has to use the panel to set a thing up.
 3. **AI is built in, not bolted on.** Local models (Ollama), a curated agents
    menu, an editor wired to local AI, and file actions such as *Ask AI to
    Explain*.

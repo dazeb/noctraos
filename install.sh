@@ -63,6 +63,9 @@ fi
 
 run_module 00_preflight.sh
 run_module 01_system.sh
+# Non-core: a VM without its guest agent still works, but the host cannot shut it down cleanly or read its address.
+run_module 01b_vm_guest.sh \
+  || warn "VM guest tools did not install — continuing. Retry: bash ~/.local/share/noctraos/install.sh --only 01b_vm_guest.sh"
 run_module 02_mise.sh
 
 # GPU drivers + CUDA/ROCm come before the AI core so Ollama sees a working GPU.

@@ -76,6 +76,57 @@ check is a plain GET of two static files.
 What it does not do: it cannot undo migrations (see below), and it does not snapshot the whole filesystem as
 Omarchy does with Snapper (Zorin installs on ext4). `rollback` restores the NoctraOS layer's code only.
 
+## The pipeline: from a merged change to people's machines
+
+```
+PR merged to GitHub main
+   |  (a) tag update-YYYY.MM.DD  ->  GitLab update-nightly          or   (b) the daily timer (rolling nightly)
+   v
+nightly channel  (testers who chose it in the Updates page get it; rollout 100%)
+   |  press update-stable-10 in the pipeline, wait, then -50, then -100        (manual jobs)
+   v
+stable channel  (everyone else, in stages: 10%, 50%, 100%)
+```
+
+**(a) A tagged update.** Tag a commit that is already in GitHub `main` and push the tag to GitLab:
+
+```bash
+git fetch origin && git tag -a update-2026.10.09 -m "Control Panel icon in the dock
+
+Relogin: no" origin/main
+git push gitlab origin/main:refs/heads/main update-2026.10.09     # GitLab must have the commit
+```
+
+The tag **message** is the "what's new" line the Updates page shows (first line); `Relogin: yes` and `Reboot: yes` lines in the body
+set the flags that tell the person to sign out or restart. `update-*` tags are protected like `v*` (only maintainers can push
+them: `iso/setup-release-runner.sh` makes them so), because the job that runs has the signing key. The pipeline
+(`.gitlab-ci.yml`, runs on the `noctraos-release` runner) is:
+
+| job | what it does | who gets it |
+|---|---|---|
+| `shell`, `version`, `tests` | the usual checks, including a bundle of this very repository applied by the real client | nobody |
+| `update-nightly` | `iso/ci-publish-update.sh nightly`: refuses a commit that is not in GitHub `main`, then `publish-update.sh nightly` (both stores, read back and verified) | nightly testers |
+| `update-stable-10` (manual) | `promote 10`: this update, from nightly to stable, 10% of machines | 10% of stable |
+| `update-stable-50`, `update-stable-100` (manual) | `widen 50` / `widen 100`: the same update, more machines | 50%, then everyone |
+
+The manual jobs are safe to press in any order or twice: each refuses anything but **this pipeline's** update (a newer nightly or
+stable stays alone) and never lowers a rollout. A release tag `vX.Y.Z` runs the same jobs after `release-site`, so a release is
+also an update (its notes are `NoctraOS X.Y.Z`).
+
+**(b) Rolling nightly.** `iso/setup-nightly-update.sh install` (once, on the release workstation) starts a daily user timer running
+`iso/nightly-update.sh`: it fetches GitHub `main`, does nothing when no file an update carries changed since the nightly now served
+(a website or docs commit spends no serial), runs the unit tests and the theme check, and publishes `main` to **nightly only**, notes
+`Nightly 2026-10-09 abc1234: <subject>`. Failed checks send a desktop notification and publish nothing. It never touches stable.
+Installing the timer is a decision, not a default: nothing runs it until you do.
+
+**Safety that does not depend on remembering:** `publish-update.sh` takes a lock (two publishes cannot pick the same serial),
+never overwrites a bundle, and verifies through the public hostnames; the CI front only ships code that is in `main`; promotion is
+manual and staged; `iso/renew-update-channels.sh` keeps the manifests alive.
+
+**On the machine.** The Updates page lists the NoctraOS step like any other, shows which update is installed and which channel
+it follows, lets a tester switch to **Nightly** (a confirmation: it can break things) or back to **Stable**, and offers **Go back to the
+previous update** when there is one. Terminal: `noc channel [stable|nightly]`, `noc update --only noctraos`.
+
 ## Channels and promotion
 
 * `nightly`: every bundle the publisher cares to push from `main`. For testers and for CI.
@@ -130,9 +181,11 @@ never override a person's choice. A failed migration is recorded, retried at the
 (row `noctraos-update`); it does not roll the update back, because half a migration is not undone by old code.
 
 What an update refreshes without a migration: module 07's files (`noc`, `noc-gpu`, `noc-upstream`, the root helper, the Control
-Panel, the updater) and every installed `/usr/local/bin/noctraos-*` program. Files that modules 06, 08 and 09 install (extensions,
-the search app, themes, launchers, schemas) are **not** refreshed, because those modules also apply desktop settings; a change to
-them ships with a migration that re-runs the module (see `migrations/README.md`).
+Panel, the updater), every installed `/usr/local/bin/noctraos-*` program, and the NoctraOS **launchers and icons**
+(`install_launchers` in `install/lib.sh`: copies only what differs, touches no setting). Files that modules 06, 08 and 09 install
+(extensions, the search app, themes, schemas) are **not** refreshed, because those modules also apply desktop settings; a change to
+them ships with a migration that re-runs the module (see `migrations/README.md`). Pinning something to the dock is a per-account
+setting, so it is a user migration (`migrations/user/0001_pin_control_panel.sh`).
 
 Do not put work in a migration that an install module already does for fresh installs without also making the module
 the source of truth: fresh machines run modules, updated machines run modules (07) plus migrations.
@@ -163,8 +216,7 @@ expiry of each public manifest; `run` renews now.
 
 ## Limits and next steps
 
-* Not wired into the tag pipeline yet: pushing `vX.Y.Z` still publishes ISOs only. A natural next job is `publish-update.sh nightly --ref vX.Y.Z` plus a first `stable --rollout 10`.
 * **Published so far (2026-10-08):** update 1 (a baseline: the same files as 0.4.0) and update 2 (the 403 fix) on `nightly`; update 2 on `stable` at 100%. Every host must answer a missing manifest as "nothing published": S3-style storage says 403, which the client treats like 404 for the manifest. The 0.4.0 images contain the client from before that fix and receive it as update 2.
-* A nightly timer on the release runner (build the newest `main` if it changed and its tests pass) would make nightly truly rolling.
-* An update-level boot test: boot the previous release's qcow2, apply the update from a local mirror, run `noc doctor`. The unit tests cover the logic with real signing; they do not boot a desktop.
+* **Needs doing once by a person:** run `iso/setup-release-runner.sh install` again (it now also protects `update-*` tags; it is idempotent) and, if you want a rolling nightly, `iso/setup-nightly-update.sh install`. Neither has been run from this repository's CI.
+* An update-level boot test: boot the previous release's qcow2, apply the update from a local mirror, run `noc doctor`. The unit tests cover the logic with real signing and apply a bundle of this very repository (`tests/test_update_pipeline.py`); they do not boot a desktop.
 * A `.deb` in a signed apt repository (the bucket can host one) would let apt and Software Updater carry the NoctraOS layer; the manifest/bundle format stays useful for the nightly channel.

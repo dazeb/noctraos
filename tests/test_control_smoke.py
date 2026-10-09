@@ -61,23 +61,96 @@ assert not press("x", ctrl=True), "an unrelated key must pass through"
 assert not press("0", ctrl=True), "Ctrl+0 is never a page"
 assert len(seen) <= 9, "Ctrl+1..9 is all the digit shortcuts there are: add a different way to reach page 10"
 window.open_page("no-such-page")
+
+# The skip choice reaches the widgets: feed the Accounts and Hardware pages by hand (the helpers above are all missing).
+pump(1.0)
+accounts = window.pages["accounts"]
+undone = {"git": {"installed": True, "name": "", "email": ""}, "github": {"installed": True, "signed_in": False, "login": ""}}
+accounts._loaded((undone, []))
+assert accounts.skip_git.get_visible() and accounts.skip_github.get_visible() and accounts.terminal_github.get_visible()
+assert accounts.git_form.get_visible() and not accounts.git_skipped.get_visible() and not accounts.github_skipped.get_visible()
+accounts._loaded((undone, ["github"]))
+assert accounts.github_skipped.get_visible() and not accounts.skip_github.get_visible() and not accounts.signin.get_visible()
+assert accounts.git_form.get_visible() and accounts.skip_git.get_visible()
+accounts._loaded((undone, ["git", "github"]))
+assert accounts.git_skipped.get_visible() and not accounts.git_form.get_visible()
+assert "Nothing left" in accounts.headline.get_text(), accounts.headline.get_text()
+done = {"git": {"installed": True, "name": "Ada", "email": "ada@example.com"}, "github": {"installed": True, "signed_in": True, "login": "ada"}}
+accounts._loaded((done, ["git", "github"]))
+assert not accounts.git_skipped.get_visible() and not accounts.github_skipped.get_visible() and not accounts.skip_git.get_visible()
+assert accounts.signout.get_visible() and not accounts.skip_github.get_visible()
+hardware = window.pages["hardware"]
+gpu = {"gpus": [{"name": "X", "vendor": "nvidia", "tier": "modern"}], "plan": {"nvidia": "modern"}}
+hardware._loaded((gpu, {"ready": False, "rows": []}, None, []))
+assert hardware.setup.get_visible() and hardware.skip.get_visible() and hardware.unskip is None
+hardware._loaded((gpu, {"ready": False, "rows": []}, None, ["gpu"]))
+assert not hardware.setup.get_visible() and not hardware.skip.get_visible() and hardware.unskip is not None
+# The setup checklist on the Overview: what is left gets a row and a button, finished steps are only counted.
+overview = window.pages["overview"]
+status = {"version": "1", "ollama": {"running": True, "models": 1, "default_model": "m"}, "hermes": {"installed": True, "mode": "cloud"},
+          "accounts": undone, "skipped": ["github"], "gpu": gpu}
+overview._loaded((status, {"gpu_status": {"ready": False, "rows": []}, "onboarded": False, "weather_city": ""}))
+def texts(widget, found):
+    if isinstance(widget, (Gtk.Label, Gtk.Button)):
+        found.append(widget.get_text() if isinstance(widget, Gtk.Label) else widget.get_label())
+    if isinstance(widget, Gtk.Container):
+        for child in widget.get_children():
+            texts(child, found)
+    return found
+shown = texts(overview, [])
+for want in ("3 things left to set up", "Git name and e-mail", "GitHub sign-in", "GPU for local AI", "Meet Hermes", "Open Hermes", "Pick a city"):
+    assert want in shown, (want, shown)
+overview._loaded((None, {}))
+# The NoctraOS update section: the installed update, the channel that is chosen, and Go back only when there is something to go back to.
+updates = window.pages["updates"]
+layer = {"channel": "nightly", "serial": 4, "version": "1.0", "applied": "2026-10-09T10:00:00Z", "can_rollback": True,
+         "held": 0, "failed_migrations": ["0002_x.sh"], "signing_key": True}
+updates._layer_loaded(layer)
+assert updates.layer.get_visible() and "update 4" in updates.layer_head.get_text()
+assert updates.channel_radios["nightly"].get_active() and not updates.channel_radios["stable"].get_active()
+assert updates.rollback.get_visible() and updates.layer_problem.get_visible() and "0002_x.sh" in updates.layer_problem.get_text()
+updates._layer_loaded({**layer, "channel": "stable", "can_rollback": False, "failed_migrations": []})
+assert updates.channel_radios["stable"].get_active() and not updates.rollback.get_visible() and not updates.layer_problem.get_visible()
+updates._layer_loaded(None)
+assert updates.layer.get_visible() and not updates.channel_radios["stable"].get_visible() and not updates.rollback.get_visible()
+for page_id in ("updates", "apps", "models", "hardware", "health", "privacy", "accounts"):
+    page = window.pages[page_id]
+    tips = []
+    def walk(widget):
+        if isinstance(widget, Gtk.Button) and widget.get_style_context().has_class("terminal"):
+            tips.append(widget.get_tooltip_text())
+        if isinstance(widget, Gtk.Container):
+            for child in widget.get_children():
+                walk(child)
+    walk(page)
+    assert tips and all(t.startswith("In a terminal:") for t in tips), (page_id, tips)
 print("PAGES", ",".join(seen))
 '''
 
 
-def have_display_stack():
-    if not shutil.which("xvfb-run") or not Path("/usr/bin/python3").exists():
-        return False
-    probe = subprocess.run(["/usr/bin/python3", "-c", "import gi; gi.require_version('Gtk','3.0'); from gi.repository import Gtk"],
-                           capture_output=True)
-    return probe.returncode == 0
+def gtk_python():
+    """The first system Python whose PyGObject loads GTK 3. Ubuntu's python3-gi is built for the distro's default python3,
+    which is not always /usr/bin/python3 (where that is 3.13, the bindings exist only for 3.12)."""
+    if not shutil.which("xvfb-run"):
+        return None
+    for py in ("/usr/bin/python3", "/usr/bin/python3.12"):
+        if not Path(py).exists():
+            continue
+        probe = subprocess.run([py, "-c", "import gi; gi.require_version('Gtk','3.0'); from gi.repository import Gtk"],
+                               capture_output=True)
+        if probe.returncode == 0:
+            return py
+    return None
 
 
-@unittest.skipUnless(have_display_stack(), "needs xvfb-run and system PyGObject/GTK 3")
+GTK_PYTHON = gtk_python()
+
+
+@unittest.skipUnless(GTK_PYTHON, "needs xvfb-run and system PyGObject/GTK 3")
 class SmokeTests(unittest.TestCase):
     def run_driver(self, scale):
         env = {**os.environ, "GDK_SCALE": str(scale), "NO_AT_BRIDGE": "1"}
-        return subprocess.run(["xvfb-run", "-a", "-s", "-screen 0 1280x800x24", "/usr/bin/python3", "-c", DRIVER, str(CONTROL)],
+        return subprocess.run(["xvfb-run", "-a", "-s", "-screen 0 1280x800x24", GTK_PYTHON, "-c", DRIVER, str(CONTROL)],
                               capture_output=True, text=True, env=env, timeout=180)
 
     def check(self, scale):

@@ -140,6 +140,41 @@ class Page(Gtk.Box):
                 action()
                 return
 
+    def terminal_button(self, key):
+        """A small "Terminal" button: hovering shows the commands for this action in a terminal, clicking copies them. The
+        commands stay out of sight for anyone who never looks (mouse first, terminal a close second: docs/objectives.md)."""
+        def copy(*_):
+            copy_to_clipboard(panel.terminal_commands(key))
+            note = getattr(self, 'note', None)
+            if note:
+                self.say(note, 'Copied. Paste it into a terminal.')
+        return button('Terminal', 'terminal', on_click=copy, tooltip=panel.terminal_tip(key))
+
+    @staticmethod
+    def tucked(widget):
+        """A widget that starts hidden and is shown or hidden with set_visible() (window.show_all() leaves it alone)."""
+        widget.show_all()
+        widget.set_no_show_all(True)
+        widget.hide()
+        return widget
+
+    def skip_chore(self, chore, skip=True):
+        """Record that the person will do `chore` themselves (or take that back), then check the page again."""
+        argv = panel.skip_command(chore, skip)
+        if not argv:
+            return
+
+        def done(result):
+            ok, message = result
+            if not ok:
+                self.say(self.note, f'Could not save that choice: {message}')
+            elif skip:
+                self.say(self.note, f'Okay, {panel.SKIPPABLE[chore]} is yours. The terminal commands are shown below.')
+            else:
+                self.say(self.note, 'Back on. You can set it up here whenever you like.')
+            self.refresh()
+        background(lambda: panel.run_ok(argv), done)
+
     def make_note(self):
         """A one-line status label that takes no room while it is empty."""
         note = label('', 'muted')
@@ -196,33 +231,86 @@ class CardWidget(Gtk.EventBox):
 
 
 class OverviewPage(Page):
+    MARKS = {'done': ('✓', 'status-ok'), 'todo': ('●', 'status-warn'), 'skipped': ('–', 'status-info'), 'waiting': ('…', 'status-info')}
+
     def __init__(self, window):
         super().__init__(window)
         self.spinner = Gtk.Spinner()
         self.pack_start(header('Overview', self.spinner, button('Refresh', on_click=lambda *_: self.refresh(), tooltip='Check again (Ctrl+R)'),
                                button('Run health check', on_click=lambda *_: window.open_page('health', True), tooltip='Open Health and check everything now')),
                         False, False, 0)
-        self.pack_start(label('The state of this workstation.', 'lede'), False, False, 0)
+        self.pack_start(label('The state of this workstation, and what is left to set up.', 'lede'), False, False, 0)
         self.holder = self.scroller()
         self.refresh()
+
+    def on_show(self):
+        # Coming back from Accounts or Hardware: the checklist should already show what was just done.
+        if getattr(self, 'loaded', False):
+            self.refresh()
 
     def refresh(self):
         self.spinner.start()
         self.swap(self.holder, Gtk.Label(label='Checking…', xalign=0, margin_top=8))
-        background(lambda: panel.noc_json('status'), self._loaded)
+        background(lambda: (panel.noc_json('status'), panel.setup_extras()), self._loaded)
 
-    def _loaded(self, status):
+    def _loaded(self, result):
+        status, extras = result
         self.spinner.stop()
+        self.loaded = True
         if status is None:
             self.swap(self.holder, label('Could not read the system state. Is `noc` installed? '
                                          'Run the installer again, then press Refresh.', 'muted'))
             return
+        body = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12, margin_end=8)
+        body.add(self._setup_section(panel.setup_steps(status, extras)))
         flow = Gtk.FlowBox(selection_mode=Gtk.SelectionMode.NONE, homogeneous=True, row_spacing=12,
                            column_spacing=12, min_children_per_line=2, max_children_per_line=3,
                            valign=Gtk.Align.START)
         for card in panel.cards(status):
             flow.add(CardWidget(card, self.window.open_page))
-        self.swap(self.holder, flow)
+        body.add(flow)
+        self.swap(self.holder, body)
+
+    def _setup_section(self, steps):
+        """Every first-run step with its state. Finished steps are only counted; what is left (and what was skipped, so the
+        way back stays in sight) gets a row with a button that does it."""
+        headline, level = panel.setup_summary(steps)
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        box.get_style_context().add_class('card')
+        box.get_style_context().add_class(level)
+        box.add(label('SETUP', 'card-title'))
+        box.add(label(headline, 'card-value'))
+        shown = [s for s in steps if s.state != 'done']
+        done = len(steps) - len(shown)
+        if done and shown:
+            box.add(label(f'{done} of {len(steps)} steps done.', 'card-detail'))
+        for step in shown:
+            box.add(self._step_row(step))
+        return box
+
+    def _step_row(self, step):
+        row = Gtk.Box(spacing=12, margin_top=6)
+        mark, css = self.MARKS[step.state]
+        row.pack_start(label(mark, 'mark', css, xalign=0.5, wrap=False), False, False, 0)
+        text = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        text.add(label(step.title + ('  (optional)' if step.optional else ''), 'row-title', xalign=0, wrap=False))
+        text.add(label(step.text, 'card-detail', chars=70))
+        row.pack_start(text, True, True, 0)
+        if step.state != 'waiting' or step.page:
+            classes = ['suggested'] if step.state == 'todo' and not step.optional else []
+            action = button(step.button, *classes, on_click=lambda *_: self._do(step))
+            action.set_valign(Gtk.Align.CENTER)       # a tall row must not stretch its button
+            row.pack_end(action, False, False, 0)
+        return row
+
+    def _do(self, step):
+        if step.launch:
+            try:
+                subprocess.Popen(list(step.launch), start_new_session=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            except OSError:
+                pass
+        elif step.page:
+            self.window.open_page(step.page)
 
 
 # ---- Health ----------------------------------------------------------------------------------
@@ -236,7 +324,7 @@ class HealthPage(Page):
         self.recheck = button('Re-check', on_click=lambda *_: self.run_check(), tooltip='Run the checks again (Ctrl+R)')
         self.copy = button('Copy report', on_click=self._copy,
                            tooltip='The whole check as text for a bug report. No files or prompts.')
-        self.pack_start(header('Health', self.spinner, self.recheck, self.copy), False, False, 0)
+        self.pack_start(header('Health', self.spinner, self.recheck, self.copy, self.terminal_button('health')), False, False, 0)
         self.headline = label('', 'lede')
         self.pack_start(self.headline, False, False, 0)
         self.note = self.make_note()
@@ -319,12 +407,14 @@ class UpdatesPage(Page):
         self.running = False
         self.checks = {}
         self.spinner = Gtk.Spinner()
-        self.pack_start(header('Updates', self.spinner, button('Refresh', on_click=lambda *_: self.refresh(), tooltip='Check again (Ctrl+R)')),
-                        False, False, 0)
+        self.pack_start(header('Updates', self.spinner, button('Refresh', on_click=lambda *_: self.refresh(), tooltip='Check again (Ctrl+R)'),
+                               self.terminal_button('updates')), False, False, 0)
         self.pack_start(label('Choose what to update. Nothing changes until you press Update.', 'lede'),
                         False, False, 0)
         self.offline = self.make_note()
         self.holder = self.scroller()
+        self.layer = self._layer_box()
+        self.pack_start(self.layer, False, False, 0)
         self.update_button = button('Update selected', 'suggested', on_click=lambda *_: self.start())
         self.update_button.set_halign(Gtk.Align.START)
         self.pack_start(self.update_button, False, False, 0)
@@ -342,6 +432,85 @@ class UpdatesPage(Page):
         self.spinner.start()
         self.update_button.set_sensitive(False)
         background(lambda: panel.noc_json('updates', timeout=120), self._loaded)
+        background(panel.layer_status, self._layer_loaded)
+
+    # -- the NoctraOS layer: channel and going back ------------------------------------------
+    def _layer_box(self):
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        box.add(label('NoctraOS updates', 'section'))
+        self.layer_head = label('', 'row-title')
+        self.layer_problem = label('', 'status-warn', chars=80)
+        box.add(self.layer_head)
+        box.add(self.layer_problem)
+        self.syncing = False
+        self.channel_radios = {}
+        group = None
+        for channel, (title, text) in panel.CHANNELS.items():
+            radio = Gtk.RadioButton.new_with_label_from_widget(group, f'{title}: {text}')
+            group = group or radio
+            radio.connect('toggled', lambda r, channel=channel: self._channel_toggled(r, channel))
+            self.channel_radios[channel] = radio
+            box.add(radio)
+        self.layer_state = None
+        self.rollback = button('Go back to the previous update', on_click=lambda *_: self._rollback(),
+                               tooltip='Puts the previous version of the NoctraOS features back. Your files and settings stay.')
+        self.rollback.set_halign(Gtk.Align.START)
+        box.add(self.rollback)
+        return self.tucked(box)
+
+    def _layer_loaded(self, status):
+        self.layer_state = status
+        summary = panel.layer_summary(status)
+        self.layer_head.set_text(summary['headline'])
+        self.layer_problem.set_text(summary['problem'])
+        self.layer_problem.set_visible(bool(summary['problem']))
+        self.syncing = True
+        for channel, radio in self.channel_radios.items():
+            radio.set_active(channel == summary['channel'])
+            radio.set_visible(summary['channel'] is not None)
+            radio.set_sensitive(not self.running)
+        self.syncing = False
+        self.rollback.set_visible(summary['can_rollback'])
+        self.layer.set_visible(True)
+
+    def _channel_toggled(self, radio, channel):
+        current = (self.layer_state or {}).get('channel')
+        argv = panel.channel_command(channel, current)
+        if self.syncing or not radio.get_active() or not argv:
+            return
+        if channel == 'nightly' and not self._confirm(
+                'Follow the nightly channel?', 'Nightly updates arrive before they are fully tested and can break things. '
+                'You can switch back to stable any time, but updates never go backwards, so stable will not '
+                'change anything until it catches up.', 'Use nightly'):
+            self._layer_loaded(self.layer_state)
+            return
+        self._run_layer(argv, 'Switching…', 'Done. You are on the ' + channel + ' channel.')
+
+    def _rollback(self):
+        argv = panel.rollback_command(self.layer_state)
+        if argv and self._confirm('Go back to the previous update?', 'The previous version of the NoctraOS features is put back. '
+                                  'Your files and settings are not touched, and steps that already ran are not undone. '
+                                  'That update is not offered again; the next one is.',
+                                  'Go back'):
+            self._run_layer(argv, 'Going back…', 'Done. The previous update is back.')
+
+    def _run_layer(self, argv, working, finished):
+        self.say(self.note, working)
+
+        def done(result):
+            ok, message = result
+            self.say(self.note, finished if ok else f'That did not work: {message}')
+            self.refresh()
+        background(lambda: panel.run_ok(argv, timeout=600), done)
+
+    def _confirm(self, title, text, action):
+        dialog = Gtk.MessageDialog(transient_for=self.window, modal=True, message_type=Gtk.MessageType.QUESTION,
+                                   buttons=Gtk.ButtonsType.NONE, text=title)
+        dialog.format_secondary_text(text)
+        dialog.add_buttons('Cancel', Gtk.ResponseType.CANCEL, action, Gtk.ResponseType.OK)
+        answer = dialog.run()
+        dialog.destroy()
+        return answer == Gtk.ResponseType.OK
 
     def _loaded(self, updates):
         self.spinner.stop()
@@ -453,6 +622,7 @@ class AccountsPage(Page):
         self.pack_start(label('Git stamps every change you save with a name and an e-mail address. Without them it '
                               'refuses to save anything. It is only a label: nothing is sent anywhere by entering it.',
                               'card-detail', chars=80), False, False, 0)
+        self.git_form = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         grid = Gtk.Grid(column_spacing=12, row_spacing=8)
         self.name = Gtk.Entry(placeholder_text='Your name', hexpand=True, width_chars=34)
         self.email = Gtk.Entry(placeholder_text='you@example.com', hexpand=True, width_chars=34)
@@ -460,12 +630,21 @@ class AccountsPage(Page):
             grid.attach(label(text, 'muted', xalign=0, wrap=False), 0, row, 1, 1)
             grid.attach(entry, 1, row, 1, 1)
             entry.connect('activate', lambda *_: self.save())
-        self.pack_start(grid, False, False, 0)
+        self.git_form.add(grid)
         self.save_button = button('Save', 'suggested', on_click=lambda *_: self.save())
-        self.save_button.set_halign(Gtk.Align.START)
-        self.pack_start(self.save_button, False, False, 0)
+        self.skip_git = button("No, I'll set up Git myself", 'link', on_click=lambda *_: self.skip_chore('git'),
+                               tooltip='Nothing is saved. The terminal commands are shown here instead.')
+        self.terminal_git = self.terminal_button('git')
+        git_buttons = Gtk.Box(spacing=10)
+        for item in (self.save_button, self.skip_git, self.terminal_git):
+            git_buttons.pack_start(item, False, False, 0)
+        git_buttons.set_halign(Gtk.Align.START)
+        self.git_form.add(git_buttons)
+        self.pack_start(self.git_form, False, False, 0)
         self.git_note = label('', 'card-detail', chars=80)
         self.pack_start(self.git_note, False, False, 0)
+        self.git_skipped = self.tucked(self._skipped_box('git'))
+        self.pack_start(self.git_skipped, False, False, 0)
 
         # -- GitHub: signing in
         self.pack_start(label('GitHub', 'section'), False, False, 10)
@@ -479,12 +658,17 @@ class AccountsPage(Page):
         self.signout = button('Sign out', on_click=lambda *_: self.sign_out())
         self.use_github = button('Use my GitHub name and e-mail', on_click=lambda *_: self.use_github_details(),
                                  tooltip='Fills in and saves the name and e-mail from your GitHub account.')
-        for b in (self.signin, self.use_github, self.signout):
+        self.skip_github = button("No, I'll set up GitHub myself", 'link', on_click=lambda *_: self.skip_chore('github'),
+                                  tooltip='You stay signed out. The terminal commands are shown here instead.')
+        self.terminal_github = self.terminal_button('github')
+        for b in (self.signin, self.use_github, self.signout, self.skip_github, self.terminal_github):
             buttons.pack_start(b, False, False, 0)
         self.pack_start(buttons, False, False, 0)
         self.private = Gtk.CheckButton(label='Keep my e-mail private (recommended)', active=True)
         self.private.set_tooltip_text("Uses GitHub's private address, which works even when your e-mail is hidden on GitHub.")
         self.pack_start(self.private, False, False, 0)
+        self.github_skipped = self.tucked(self._skipped_box('github'))
+        self.pack_start(self.github_skipped, False, False, 0)
 
         # -- the one-time code, shown while the person approves in the browser
         self.code_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8, no_show_all=True)
@@ -515,27 +699,54 @@ class AccountsPage(Page):
             return
         self.loaded = True
         self.spinner.start()
-        background(lambda: panel.noc_json('accounts', 'status', '--json', timeout=60), self._loaded)
+        background(lambda: (panel.noc_json('accounts', 'status', '--json', timeout=60),
+                            panel.noc_json('skip', 'list', '--json')), self._loaded)
 
-    def _loaded(self, data):
+    def _skipped_box(self, chore):
+        """What replaces a chore the person skipped: the commands for doing it themselves, and a way back."""
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        box.add(label(panel.skipped_text(chore), 'card-detail', chars=80, selectable=True))
+        again = button('Set it up here after all', on_click=lambda *_: self.skip_chore(chore, False))
+        again.set_halign(Gtk.Align.START)
+        box.add(again)
+        return box
+
+    def _loaded(self, result):
         self.spinner.stop()
-        state = panel.accounts_state(data)
+        data, skipped = result
+        state = panel.accounts_state(data, skipped)
         self.state = state
         if state is None:
             self.headline.set_text('The accounts helper did not answer. Update the NoctraOS features (Updates page) first.')
             return
-        self.headline.set_text('Everything is set up.' if state['done'] else
-                               'Two quick things to do once, so your AI tools can save and share your work.')
+        if state['done']:
+            headline = 'Everything is set up.'
+        elif state['todo']:
+            headline = ('Two quick things' if len(state['todo']) == 2 else 'One quick thing') + \
+                ' to do once, so your AI tools can save and share your work.'
+        else:
+            headline = 'Nothing left for you here. You chose to do the rest yourself.'
+        self.headline.set_text(headline)
         if not self.name.get_text().strip():
             self.name.set_text(state['name'])
         if not self.email.get_text().strip():
             self.email.set_text(state['email'])
         self.git_note.set_text(('✓ ' + state['git_text'] + (f' <{state["email"]}>.' if state['email'] else '.'))
-                               if state['git_ready'] else 'Not set yet.')
+                               if state['git_ready'] else '' if state['git_skipped'] else 'Not set yet.')
         self.github_status.set_text(('✓ ' + state['github_text'] + '.') if state['signed_in'] else state['github_text'] + '.')
         busy = self.signing
-        self.signin.set_visible(not state['signed_in'] and state['gh_installed'])
+        # A chore the person chose to do themselves shows its terminal commands instead of the form or the button.
+        self.git_form.set_visible(not state['git_skipped'])
+        self.skip_git.set_visible(not state['git_ready'])
+        self.terminal_git.set_visible(not state['git_ready'])
+        self.git_skipped.set_visible(state['git_skipped'])
+        self.github_status.set_visible(not state['github_skipped'])
+        self.github_skipped.set_visible(state['github_skipped'])
+        self.signin.set_visible(not state['signed_in'] and state['gh_installed'] and not state['github_skipped'])
         self.signin.set_sensitive(not busy)
+        self.skip_github.set_visible(not state['signed_in'] and not state['github_skipped'])
+        self.skip_github.set_sensitive(not busy)
+        self.terminal_github.set_visible(not state['signed_in'] and not state['github_skipped'])
         self.signout.set_visible(state['signed_in'])
         self.use_github.set_visible(state['signed_in'])
         self.private.set_visible(state['signed_in'] or self.signing)
@@ -657,7 +868,8 @@ class AppsPage(Page):
         self.spinner = Gtk.Spinner()
         self.pack_start(header('Apps', self.spinner,
                                button('Check now', on_click=lambda *_: self.refresh(force=True),
-                                      tooltip='Look up the newest releases again (Ctrl+R)')), False, False, 0)
+                                      tooltip='Look up the newest releases again (Ctrl+R)'),
+                               self.terminal_button('apps')), False, False, 0)
         self.headline = label('', 'lede')
         self.pack_start(self.headline, False, False, 0)
         self.note = self.make_note()
@@ -764,8 +976,8 @@ class ModelsPage(Page):
     def __init__(self, window):
         super().__init__(window)
         self.spinner = Gtk.Spinner()
-        self.pack_start(header('AI models', self.spinner, button('Refresh', on_click=lambda *_: self.refresh(), tooltip='Check again (Ctrl+R)')),
-                        False, False, 0)
+        self.pack_start(header('AI models', self.spinner, button('Refresh', on_click=lambda *_: self.refresh(), tooltip='Check again (Ctrl+R)'),
+                               self.terminal_button('models')), False, False, 0)
         self.sub = label('Models run on this computer through Ollama.', 'lede')
         self.pack_start(self.sub, False, False, 0)
         self.note = self.make_note()
@@ -954,8 +1166,8 @@ class HardwarePage(Page):
         self.detect = None
         self.free_bytes = None
         self.spinner = Gtk.Spinner()
-        self.pack_start(header('Hardware', self.spinner, button('Refresh', on_click=lambda *_: self.refresh(), tooltip='Check again (Ctrl+R)')),
-                        False, False, 0)
+        self.pack_start(header('Hardware', self.spinner, button('Refresh', on_click=lambda *_: self.refresh(), tooltip='Check again (Ctrl+R)'),
+                               self.terminal_button('gpu')), False, False, 0)
         self.headline = label('', 'lede')
         self.pack_start(self.headline, False, False, 0)
         self.holder = self.scroller()
@@ -965,9 +1177,15 @@ class HardwarePage(Page):
         self.grow.set_no_show_all(True)
         self.pack_start(self.grow, False, False, 0)
         self.setup = button('Set up GPU for local AI…', 'suggested', on_click=lambda *_: self._confirm())
-        self.setup.set_halign(Gtk.Align.START)
-        self.setup.set_no_show_all(True)
-        self.pack_start(self.setup, False, False, 0)
+        self.skip = button("No, I'll set up the GPU myself", 'link', on_click=lambda *_: self.skip_chore('gpu'),
+                           tooltip='Nothing is installed. The terminal commands are shown here instead.')
+        self.unskip = None                  # built with the page body when the GPU was skipped
+        row = Gtk.Box(spacing=10)
+        for item in (self.setup, self.skip):
+            item.set_no_show_all(True)
+            row.pack_start(item, False, False, 0)
+        row.set_halign(Gtk.Align.START)
+        self.pack_start(row, False, False, 0)
         self.note = self.make_note()
         self.run = RunLog()
         self.pack_start(self.run, False, False, 0)
@@ -982,15 +1200,16 @@ class HardwarePage(Page):
         self.spinner.start()
 
         def work():
-            return panel.gpu_json('detect', '--json'), panel.gpu_json('status', '--json'), panel.noc_json('status')
+            return (panel.gpu_json('detect', '--json'), panel.gpu_json('status', '--json'), panel.noc_json('status'),
+                    panel.noc_json('skip', 'list', '--json'))
         background(work, self._loaded)
 
     def _loaded(self, result):
         self.spinner.stop()
-        detect, gstatus, status = result
+        detect, gstatus, status, skipped = result
         self.detect = detect
         self.free_bytes = ((status or {}).get('disk') or {}).get('root_free_bytes')
-        state = panel.hardware_state(detect, gstatus)
+        state = panel.hardware_state(detect, gstatus, skipped)
         self.disk = (status or {}).get('disk') or {}
         can_grow = panel.disk_can_grow(self.disk)
         self.headline.set_text(panel.disk_headline(self.disk)[0] if can_grow else state['headline'])
@@ -999,6 +1218,12 @@ class HardwarePage(Page):
             body.add(label('Disk size', 'section'))
             for line in panel.disk_grow_summary(self.disk)[:2]:
                 body.add(label(line, 'card-detail', chars=80))
+        self.unskip = None
+        if state['skipped']:
+            body.add(label(panel.skipped_text('gpu'), 'card-detail', selectable=True))
+            self.unskip = button('Set it up here after all', on_click=lambda *_: self.skip_chore('gpu', False))
+            self.unskip.set_halign(Gtk.Align.START)
+            body.add(self.unskip)
         body.add(label('Graphics', 'section'))
         for gpu in state['gpus']:
             body.add(label(gpu['name'], 'row-title'))
@@ -1023,6 +1248,7 @@ class HardwarePage(Page):
         self.swap(self.holder, body)
         self.setup.set_visible(state['can_install'])
         self.grow.set_visible(can_grow)
+        self.skip.set_visible(state['can_install'])
 
     # -- use the unused disk space: an explicit summary and a yes, never on its own ---------
     def _confirm_grow(self):
@@ -1097,6 +1323,7 @@ class HardwarePage(Page):
             return
         self.running = True
         self.setup.set_sensitive(False)
+        self.skip.set_sensitive(False)
         self.say(self.note, '')
         self.run.begin('Setting up the GPU…')
 
@@ -1121,6 +1348,7 @@ class HardwarePage(Page):
         self.running = False
         self.run.hide()
         self.setup.set_sensitive(True)
+        self.skip.set_sensitive(True)
         if code == 0:
             self.say(self.note, 'Done. Check the status above; a restart may be needed to finish.')
         else:
@@ -1136,8 +1364,8 @@ class PrivacyPage(Page):
         self.mode = None
         self.syncing = False
         self.spinner = Gtk.Spinner()
-        self.pack_start(header('Privacy', self.spinner, button('Refresh', on_click=lambda *_: self.refresh(), tooltip='Check again (Ctrl+R)')),
-                        False, False, 0)
+        self.pack_start(header('Privacy', self.spinner, button('Refresh', on_click=lambda *_: self.refresh(), tooltip='Check again (Ctrl+R)'),
+                               self.terminal_button('privacy')), False, False, 0)
         self.pack_start(label('Where what you type can go, and the settings that decide it.', 'lede'),
                         False, False, 0)
         scroller = self.scroller()

@@ -81,16 +81,21 @@ def _apps_card(apps):
     return Card('apps', 'Apps', 'Up to date', f'Hermes {hermes["installed"]}' if hermes else '', 'ok', 'apps')
 
 
-def _accounts_card(accounts):
+def _accounts_card(accounts, skipped=None):
     """Git needs a name and e-mail before the first commit, and GitHub a sign-in before the first push: both stop a
-    newcomer cold with a cryptic message, so the Overview says plainly when they are not done yet."""
-    state = accounts_state(accounts)
+    newcomer cold with a cryptic message, so the Overview says plainly when they are not done yet. A chore the person
+    chose to do themselves is not nagged about."""
+    state = accounts_state(accounts, skipped)
     if state is None:
         return Card('accounts', 'Accounts', 'Not checked yet', 'Git name and e-mail, GitHub sign-in.', 'info', 'accounts')
     if state['done']:
         return Card('accounts', 'Accounts', 'Ready', f'{state["git_text"]}. {state["github_text"]}.', 'ok', 'accounts')
-    todo = [t for t, ok in (('Git name and e-mail', state['git_ready']), ('GitHub sign-in', state['signed_in'])) if not ok]
-    return Card('accounts', 'Accounts', 'Needs setting up', ' and '.join(todo) + ' (one minute, no terminal).', 'warn', 'accounts')
+    if state['todo']:
+        return Card('accounts', 'Accounts', 'Needs setting up',
+                    ' and '.join(SKIPPABLE[t] for t in state['todo']) + ' (one minute, no terminal).', 'warn', 'accounts')
+    return Card('accounts', 'Accounts', 'You are doing this yourself',
+                'Skipped: ' + ' and '.join(SKIPPABLE[t] for t in state['skipped']) + '. Open Accounts to change that.',
+                'info', 'accounts')
 
 
 def _ollama_card(ollama):
@@ -148,7 +153,7 @@ def cards(status):
     return [
         Card('version', 'NoctraOS', f'Version {status.get("version", "?")}', status.get('os') or '', 'ok', 'about'),
         _updates_card(status.get('updates') or {}),
-        _accounts_card(status.get('accounts')),
+        _accounts_card(status.get('accounts'), status.get('skipped')),
         _apps_card(status.get('apps')),
         _ollama_card(status.get('ollama') or {}),
         _gpu_card(status.get('gpu')),
@@ -193,6 +198,58 @@ def noc_json(*args, timeout=90):
         return None
 
 
+# ---- Doing it yourself: skipped chores and terminal tips ---------------------------------------
+#
+# The panel is mouse first and the terminal a close second (docs/objectives.md). Two things follow: every setup chore
+# can be declined ("No, I'll set it up myself", remembered by `noc skip`), and every action has a small "Terminal" tip
+# that names the commands for it. The commands stay out of sight until the person hovers or clicks.
+
+SKIPPABLE = {'git': 'Git name and e-mail', 'github': 'GitHub sign-in', 'gpu': 'GPU setup for local AI'}
+
+# What each action is in a terminal, by the id the page uses. Plain tools (git, gh) come first where a person who knows a
+# terminal would reach for them; the `noc` form is the one the panel itself runs. tests/test_control_core.py checks that
+# every command here exists, so a renamed verb cannot leave a stale tip behind.
+TERMINAL = {
+    'git': ['git config --global user.name "Your Name"', 'git config --global user.email you@example.com'],
+    'github': ['gh auth login --web', 'gh auth setup-git'],
+    'gpu': ['noc gpu status', 'noc gpu install'],
+    'updates': ['noc update', 'noc update --only mise,models', 'noc channel', 'noc channel nightly'],
+    'apps': ['noc apps', 'noc-upstream update --only <app>'],
+    'models': ['noc models list', 'noc models pull <model>', 'noc models default <model>', 'noc models rm <model>'],
+    'privacy': ['noctraos-hermes local', 'noctraos-hermes cloud', 'noctraos-search --settings', 'noctraos-weather --setup'],
+    'health': ['noc doctor'],
+}
+
+
+def terminal_commands(key):
+    """The terminal commands for an action, one per line, as text to copy; '' for an unknown key."""
+    return '\n'.join(TERMINAL.get(key, []))
+
+
+def terminal_tip(key):
+    """The tooltip of a page's Terminal button."""
+    commands = TERMINAL.get(key)
+    if not commands:
+        return ''
+    return 'In a terminal:\n' + '\n'.join(f'  {c}' for c in commands) + '\n\nClick to copy.'
+
+
+def skipped_set(skipped):
+    """The chores in a `noc skip list --json` answer (or a `noc status` document's `skipped`), unknown ids dropped."""
+    return {s for s in skipped if s in SKIPPABLE} if isinstance(skipped, list) else set()
+
+
+def skip_command(chore, skip=True):
+    """argv that records (or, with skip=False, takes back) the choice to do a chore yourself; None for an unknown chore."""
+    return [NOC, 'skip', 'add' if skip else 'rm', chore] if chore in SKIPPABLE else None
+
+
+def skipped_text(chore):
+    """Shown in place of a chore the person skipped: what they chose, and the terminal route they now own."""
+    return ('You chose to set this up yourself. In a terminal:\n' +
+            '\n'.join(f'  {c}' for c in TERMINAL.get(chore, [])) + '\n\nChange your mind any time with the button below.')
+
+
 # ---- Health ----------------------------------------------------------------------------------
 
 HERMES = '/usr/local/bin/noctraos-hermes'
@@ -206,6 +263,7 @@ FIXES = {
     'hermes:install': [HERMES, 'install'],
     # Through the allowlisted root helper: one polkit prompt, never a terminal or a bare sudo.
     'module:04d_appmanager.sh': [PKEXEC, HELPER, 'module', '04d_appmanager.sh'],
+    'module:01b_vm_guest.sh': [PKEXEC, HELPER, 'module', '01b_vm_guest.sh'],
 }
 
 
@@ -413,6 +471,10 @@ def update_rows(updates):
         if a.get('relogin') or a.get('reboot'):
             detail += '. You will need to ' + ('restart' if a.get('reboot') else 'sign out and back in') + ' afterwards.'
         row('noctraos', detail, True, True)
+    elif nu.get('status') == 'held':
+        row('noctraos', 'An update was put back on this computer. It is not offered again; the next one will be.', False, False)
+    elif nu.get('status') == 'expired':
+        row('noctraos', 'The update information is out of date. Try again when you are online.', False, False)
     elif nu.get('status') in ('current', 'staged'):
         row('noctraos', 'Up to date.' if nu['status'] == 'current' else 'Up to date. A newer update is being rolled out in stages and will reach you soon.', False, False)
     else:
@@ -542,14 +604,20 @@ ACCOUNTS_LOGIN = [ACCOUNTS, 'github', 'login', '--json']
 _EMAIL = re.compile(r'^[^@\s<>]+@[^@\s<>]+\.[^@\s<>]+$')
 
 
-def accounts_state(accounts):
-    """What the Accounts page and card say, from `noc accounts status --json`; None when it did not answer."""
+def accounts_state(accounts, skipped=None):
+    """What the Accounts page and card say, from `noc accounts status --json` (and the `noc skip` list); None when it did
+    not answer. `done` means both chores are really done; `todo` are the ones still asking, `skipped` the ones the person
+    chose to do themselves (a chore that is already done is never "skipped")."""
     if not isinstance(accounts, dict) or 'git' not in accounts:
         return None
     git, hub = accounts.get('git') or {}, accounts.get('github') or {}
     git_ready = bool(git.get('name') and git.get('email'))
     signed = bool(hub.get('signed_in'))
-    return {'git_ready': git_ready, 'signed_in': signed, 'done': git_ready and signed,
+    chosen = skipped_set(skipped)
+    todo = [t for t, ok in (('git', git_ready), ('github', signed)) if not ok and t not in chosen]
+    passed = [t for t, ok in (('git', git_ready), ('github', signed)) if not ok and t in chosen]
+    return {'git_ready': git_ready, 'signed_in': signed, 'done': git_ready and signed, 'todo': todo, 'skipped': passed,
+            'git_skipped': 'git' in passed, 'github_skipped': 'github' in passed,
             'name': git.get('name') or '', 'email': git.get('email') or '', 'login': hub.get('login') or '',
             'gh_installed': bool(hub.get('installed')),
             'git_text': f'Git signs your work as {git["name"]}' if git_ready else 'Git does not know your name yet',
@@ -791,11 +859,12 @@ def disk_grow_result(code):
     return exit_message(code) or 'It did not finish, and nothing was erased. Open Health for details.', False
 
 
-def hardware_state(detect, gstatus):
+def hardware_state(detect, gstatus, skipped=None):
     """Headline and rows for the Hardware page.
 
-    Returns {headline, level, gpus: [{name, verdict}], rows: [{status, text}], can_install, reboot}.
-    `can_install` is true only when there is something to install and the stack is not ready."""
+    Returns {headline, level, gpus: [{name, verdict}], rows: [{status, text}], can_install, skipped, reboot}.
+    `can_install` is true only when there is something to install, the stack is not ready and the person has not chosen
+    to set the GPU up themselves (`skipped`; then the page offers to take that back instead)."""
     gpus = [{'name': g.get('name', 'GPU'), 'verdict': gpu_verdict(g)} for g in (detect or {}).get('gpus', [])]
     # noc-gpu's rows end with a "run: noc gpu install" hint for people at a terminal; the page has a button.
     rows = [{**r, 'text': _GPU_HINT.sub('', r.get('text', ''))} for r in (gstatus or {}).get('rows', [])]
@@ -810,12 +879,16 @@ def hardware_state(detect, gstatus):
         headline, level = 'Restart to finish the GPU setup', 'warn'
     elif ready:
         headline, level = 'Your GPU is set up for local AI', 'ok'
+    elif vendors and 'gpu' in skipped_set(skipped):
+        headline, level = 'A GPU was found. You chose to set it up yourself.', 'info'
     elif vendors:
         headline, level = 'A GPU was found but is not set up for local AI yet', 'warn'
     else:
         headline, level = 'This GPU is not usable for local AI. Models run on the CPU.', 'info'
+    offer = bool(vendors) and not ready and not reboot
+    chosen = offer and 'gpu' in skipped_set(skipped)
     return {'headline': headline, 'level': level, 'gpus': gpus, 'rows': rows, 'reboot': reboot,
-            'can_install': bool(vendors) and not ready and not reboot}
+            'can_install': offer and not chosen, 'skipped': chosen}
 
 
 def gpu_install_argv(detect):
@@ -865,6 +938,173 @@ def switch_command(target, current):
     if current in (None, 'other') or target == current:
         return None
     return {'local': HERMES_LOCAL, 'cloud': HERMES_CLOUD}.get(target)
+
+
+# ---- Setup checklist -------------------------------------------------------------------------
+#
+# The first-run chores in one list, so a person who skipped the Welcome app (or clicked "No, I'll do it myself") has one
+# place to come back to: the top of the Overview page, reached from the Control Panel icon in the dock.
+
+HERMES_ONBOARDED = os.path.join(os.environ.get('HERMES_HOME', os.path.expanduser('~/.hermes')), '.noctraos-onboarded')
+
+
+@dataclass
+class Step:
+    id: str
+    title: str
+    text: str
+    state: str                  # done | todo | skipped | waiting (waiting: cannot be done yet, nothing to nag about)
+    page: str = ''              # sidebar page that does it, '' when `launch` does
+    launch: tuple = ()          # program to start instead (argv)
+    button: str = 'Set up'
+    optional: bool = False      # never counts as "left to do"
+
+
+def weather_city():
+    """The city picked for the Start panel's weather, '' when none (or the setting cannot be read)."""
+    try:
+        out = subprocess.run(['gsettings', 'get', 'org.gnome.shell.extensions.noctraos-start', 'weather-city'],
+                             capture_output=True, text=True, timeout=5).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        return ''
+    return out.strip("'")
+
+
+def setup_extras():
+    """What the checklist needs beyond `noc status`; slow-ish, so call it on a thread."""
+    return {'gpu_status': gpu_json('status', '--json'), 'onboarded': os.path.exists(HERMES_ONBOARDED),
+            'weather_city': weather_city()}
+
+
+def setup_steps(status, extras=None):
+    """The setup checklist from a `noc status` document and setup_extras(). A step that does not apply to this machine
+    (no usable GPU) is left out; a skipped chore keeps its row, so the way back stays in sight."""
+    status, extras = status or {}, extras or {}
+    skipped = status.get('skipped')
+    steps = []
+
+    acc = accounts_state(status.get('accounts'), skipped)
+    if acc is not None:
+        for chore, ready, title, done_text, todo_text in (
+                ('git', acc['git_ready'], 'Git name and e-mail', acc['git_text'],
+                 'Git refuses to save your work until it knows your name. One minute, no terminal.'),
+                ('github', acc['signed_in'], 'GitHub sign-in', acc['github_text'],
+                 'Lets your AI tools save and share projects on GitHub. You approve it in your browser.')):
+            if ready:
+                steps.append(Step(chore, title, done_text, 'done', 'accounts'))
+            elif chore in acc['skipped']:
+                steps.append(Step(chore, title, 'You chose to do this yourself.', 'skipped', 'accounts', button='Open'))
+            else:
+                steps.append(Step(chore, title, todo_text, 'todo', 'accounts'))
+
+    detect = status.get('gpu')
+    gpu = hardware_state(detect, extras.get('gpu_status'), skipped)
+    if install_vendors(detect) or gpu['reboot']:
+        if gpu['reboot']:
+            steps.append(Step('gpu', 'GPU for local AI', 'Restart the computer to finish the GPU setup.', 'todo', 'hardware', button='Open'))
+        elif gpu['skipped']:
+            steps.append(Step('gpu', 'GPU for local AI', 'You chose to do this yourself.', 'skipped', 'hardware', button='Open'))
+        elif gpu['can_install']:
+            steps.append(Step('gpu', 'GPU for local AI', 'Your GPU makes local models much faster. Needs a download and a restart.',
+                              'todo', 'hardware'))
+        else:
+            steps.append(Step('gpu', 'GPU for local AI', gpu['headline'], 'done', 'hardware'))
+
+    ollama = status.get('ollama') or {}
+    if ollama.get('running') and ollama.get('models'):
+        steps.append(Step('models', 'Local AI model', f'{ollama["default_model"]} is ready.', 'done', 'models'))
+    elif ollama.get('running'):
+        steps.append(Step('models', 'Local AI model', 'Ollama runs but has no model yet. Pick one to download.', 'todo', 'models', button='Choose'))
+    else:
+        steps.append(Step('models', 'Local AI model', 'Ollama is starting, or is not installed yet.', 'waiting', 'models', button='Open'))
+
+    hermes = status.get('hermes') or {}
+    if not hermes.get('installed'):
+        steps.append(Step('hermes', 'Meet Hermes', 'Hermes Desktop is still being set up on first boot.', 'waiting', 'privacy', button='Open'))
+    elif extras.get('onboarded'):
+        steps.append(Step('hermes', 'Meet Hermes', 'You have met Hermes.', 'done', 'privacy'))
+    else:
+        steps.append(Step('hermes', 'Meet Hermes', 'Your AI agent asks who you are and how it should behave. Its free tier is a cloud '
+                          'service; Privacy keeps it local.', 'todo', launch=(HERMES,), button='Open Hermes'))
+
+    if extras.get('weather_city'):
+        steps.append(Step('weather', 'Weather', f'Showing {extras["weather_city"]} in the Start panel.', 'done', launch=tuple(WEATHER_SETUP),
+                          button='Change', optional=True))
+    elif 'weather_city' in extras:
+        steps.append(Step('weather', 'Weather', 'Optional. Pick a city for the Start panel. Only the city name is sent, to Open-Meteo.',
+                          'todo', launch=tuple(WEATHER_SETUP), button='Pick a city', optional=True))
+    return steps
+
+
+def setup_summary(steps):
+    """(headline, level) for the checklist: what is left, not counting optional steps or ones that cannot be done yet."""
+    left = [s for s in steps if s.state == 'todo' and not s.optional]
+    chose = [s for s in steps if s.state == 'skipped']
+    if left:
+        return f'{len(left)} thing{"" if len(left) == 1 else "s"} left to set up', 'warn'
+    if chose:
+        return 'Everything else is set up. You are doing the rest yourself.', 'info'
+    return 'Setup is complete.', 'ok'
+
+
+# ---- The NoctraOS layer: which update channel, and going back ---------------------------------
+#
+# The updater (docs/updates.md) is a root-owned program; the panel only reads its status and asks the privileged helper for the
+# two things a person may want to change: the channel and a rollback. Both are fixed verbs there, never a path or a command.
+
+SELFUPDATE = '/usr/local/libexec/noctraos/noc-selfupdate'
+CHANNELS = {
+    'stable': ('Stable', 'Tested updates, rolled out in stages. Recommended.'),
+    'nightly': ('Nightly', 'The newest changes first, before they are fully tested. For people who want to help test.'),
+}
+
+
+def layer_status():
+    """`noc-selfupdate status --json` parsed, None when the updater is missing or fails."""
+    try:
+        out = subprocess.run([SELFUPDATE, 'status', '--json'], capture_output=True, text=True, timeout=15)
+        data = json.loads(out.stdout)
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return None
+    return data if isinstance(data, dict) and data.get('channel') in CHANNELS else None
+
+
+def layer_summary(status):
+    """What the Updates page says about the NoctraOS layer: {headline, problem, channel, can_rollback}. `problem` is a
+    sentence for something that needs attention (a migration that did not finish, a missing signing key, an update held back
+    after it failed), '' when all is well."""
+    if not isinstance(status, dict):
+        return {'headline': 'Update details are not available on this install yet.', 'problem': '', 'channel': None,
+                'can_rollback': False}
+    serial, version = status.get('serial') or 0, status.get('version') or '?'
+    applied = (status.get('applied') or '')[:10]
+    if serial:
+        headline = f'NoctraOS {version}, update {serial}' + (f', installed {applied}' if applied else '')
+    else:
+        headline = f'NoctraOS {version}, as first installed'
+    failed = status.get('failed_migrations') or []
+    if not status.get('signing_key', True):
+        problem = 'No update signing key is installed, so updates are refused.'
+    elif failed:
+        problem = f'A step of the last update did not finish ({", ".join(failed)}). It is tried again at the next update.'
+    elif status.get('held'):
+        problem = f'Update {status["held"]} was put back on this computer, so it is not offered again. The next update will be.'
+    else:
+        problem = ''
+    return {'headline': headline, 'problem': problem, 'channel': status.get('channel'),
+            'can_rollback': bool(status.get('can_rollback'))}
+
+
+def channel_command(target, current):
+    """argv that moves this machine to `target`, None when it is already there or the channel is unknown."""
+    if target not in CHANNELS or target == current:
+        return None
+    return [PKEXEC, HELPER, 'update-channel', target]
+
+
+def rollback_command(status):
+    """argv that puts the previous NoctraOS layer back, None when there is nothing to go back to."""
+    return [PKEXEC, HELPER, 'update-rollback'] if isinstance(status, dict) and status.get('can_rollback') else None
 
 
 def run_ok(argv, timeout=120):

@@ -25,10 +25,12 @@ CANDIDATES=(
   "$VSCODE_DESKTOP"
   io.missioncenter.MissionCenter.desktop
   org.gnome.Terminal.desktop
+  noctraos-control.desktop
 )
 favorites=()
 for c in "${CANDIDATES[@]}"; do
-  if desktop_file_exists "$c"; then
+  # The Control Panel launcher is installed further down in this module, so on a first run only the repo has it yet.
+  if desktop_file_exists "$c" || [ "$c" = noctraos-control.desktop ]; then
     favorites+=("$c")
   else
     warn "Skipping missing desktop entry: $c"
@@ -50,16 +52,11 @@ sudo install -m 755 "$REPO_ROOT/bin/noctraos-hermes" /usr/local/bin/noctraos-her
 sudo install -m 755 "$REPO_ROOT/bin/noctraos-welcome" /usr/local/bin/noctraos-welcome
 sudo install -m 755 "$REPO_ROOT/bin/noctraos-appearance" /usr/local/bin/noctraos-appearance
 sudo install -D -m 644 "$REPO_ROOT/configs/hermes/onboarding.md" /usr/local/share/noctraos/hermes/onboarding.md
-for f in "$REPO_ROOT"/configs/applications/*.desktop; do
-  [ -f "$f" ] && sudo install -m 644 "$f" /usr/local/share/applications/
-done
+install_launchers "$REPO_ROOT"
 sudo install -m 644 "$REPO_ROOT/configs/applications/noctraos-agents.directory" \
   /usr/share/desktop-directories/
 sudo install -m 644 "$REPO_ROOT/configs/xdg/noctraos-agents.menu" \
   /etc/xdg/menus/applications-merged/
-for i in "$REPO_ROOT"/assets/icons/noctraos-*.svg; do
-  [ -f "$i" ] && sudo install -m 644 "$i" /usr/local/share/icons/hicolor/scalable/apps/
-done
 sudo update-desktop-database >/dev/null 2>&1 || true
 # Hermes ships its own icon; install the upstream artwork system-wide (see assets/icons/hermes/NOTICE.md).
 for i in "$REPO_ROOT"/assets/icons/hermes/hicolor/*/apps/hermes.png; do

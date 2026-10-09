@@ -19,8 +19,8 @@ Rules (the updater and `docs/updates.md` rely on them):
    system would be left worse than before.
 6. Name files `NNNN_short-name.sh` (four digits, lowercase). Numbers are never reused or reordered once released.
 
-**What an update refreshes by itself:** module 07 (`noc`, `noc-gpu`, `noc-upstream`, the root helper, the Control Panel, the updater)
-and every `/usr/local/bin/noctraos-*` program that is already installed. It does **not** re-run modules 06, 08 or 09: they apply
+**What an update refreshes by itself:** module 07 (`noc`, `noc-gpu`, `noc-upstream`, the root helper, the Control Panel, the updater),
+every `/usr/local/bin/noctraos-*` program that is already installed, and the NoctraOS launchers and icons (`install_launchers`). It does **not** re-run modules 06, 08 or 09: they apply
 desktop settings, and re-applying those on every update could undo what a person chose. If your change touches what those modules
 install (GNOME Shell extensions, the search app, themes, launchers, menu entries, schemas), add a system migration that re-runs the
 module, for example `SUDO_USER="$NOCTRAOS_USER" bash "$NOCTRAOS_SNAPSHOT/install.sh" --only 09_super_search.sh`, and set

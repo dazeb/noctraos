@@ -718,6 +718,119 @@ class HardwareTests(unittest.TestCase):
         self.assertEqual(panel.hardware_state(None, None)["level"], "info")
 
 
+ROOT = Path(__file__).resolve().parents[1]
+
+
+class SkipTests(unittest.TestCase):
+    """"No, I'll set it up myself": a skipped chore stops asking, and the page offers the way back."""
+
+    def test_set_ignores_junk(self):
+        self.assertEqual(panel.skipped_set(["github", "gpu", "nonsense", 3]), {"github", "gpu"})
+        for bad in (None, "github", {"github": True}, 7):
+            self.assertEqual(panel.skipped_set(bad), set())
+
+    def test_commands(self):
+        self.assertEqual(panel.skip_command("github"), [panel.NOC, "skip", "add", "github"])
+        self.assertEqual(panel.skip_command("gpu", skip=False), [panel.NOC, "skip", "rm", "gpu"])
+        self.assertIsNone(panel.skip_command("everything"))                    # only chores the panel knows
+        self.assertNotIn("sudo", panel.skip_command("git"))
+
+    def test_a_skip_never_covers_a_chore_that_is_done(self):
+        s = panel.accounts_state(ACCOUNTS_DONE, ["git", "github"])
+        self.assertTrue(s["done"])
+        self.assertEqual((s["todo"], s["skipped"]), ([], []))
+
+    def test_accounts_state_sorts_chores_into_todo_and_skipped(self):
+        s = panel.accounts_state(ACCOUNTS_NONE, ["github"])
+        self.assertEqual((s["todo"], s["skipped"]), (["git"], ["github"]))
+        self.assertTrue(s["github_skipped"] and not s["git_skipped"] and not s["done"])
+        self.assertEqual(panel.accounts_state(ACCOUNTS_NONE)["todo"], ["git", "github"])
+
+    def test_card_stops_asking_once_everything_left_is_skipped(self):
+        status = {**STATUS, "accounts": ACCOUNTS_NONE}
+        both = by_id({**status, "skipped": ["git", "github"]})["accounts"]
+        self.assertEqual((both.value, both.level, both.page), ("You are doing this yourself", "info", "accounts"))
+        self.assertIn("Git name and e-mail and GitHub sign-in", both.detail)
+        half = by_id({**status, "skipped": ["github"]})["accounts"]
+        self.assertEqual((half.value, half.level), ("Needs setting up", "warn"))     # Git is still undone and not skipped
+        self.assertNotIn("GitHub", half.detail)
+        self.assertEqual(by_id(status)["accounts"].level, "warn")                    # no skip list: nothing changes
+
+    def test_gpu_skip_hides_the_install_but_keeps_the_way_back(self):
+        d = det("modern", gpus=[NV])
+        s = panel.hardware_state(d, NOT_READY, ["gpu"])
+        self.assertEqual((s["can_install"], s["skipped"], s["level"]), (False, True, "info"))
+        self.assertIn("yourself", s["headline"])
+        asking = panel.hardware_state(d, NOT_READY, [])
+        self.assertEqual((asking["can_install"], asking["skipped"]), (True, False))
+        done = panel.hardware_state(d, READY, ["gpu"])                                 # set up after all: skipping is moot
+        self.assertEqual((done["skipped"], done["level"]), (False, "ok"))
+        reboot = panel.hardware_state(d, {**NOT_READY, "reboot_pending": True}, ["gpu"])
+        self.assertIn("Restart", reboot["headline"])
+        self.assertFalse(panel.hardware_state(det(), {"gpus": [], "ready": False, "rows": []}, ["gpu"])["skipped"])
+
+    def test_skipped_text_names_the_commands(self):
+        text = panel.skipped_text("github")
+        self.assertIn("yourself", text)
+        self.assertIn("gh auth login --web", text)
+
+
+class TerminalTipTests(unittest.TestCase):
+    """Every action has a small Terminal tip. A tip that names a command that does not exist is worse than none."""
+
+    NOC_SRC = (ROOT / "bin/noc").read_text()
+
+    def commands(self):
+        return [(key, command) for key, lines in panel.TERMINAL.items() for command in lines]
+
+    def test_tip_and_copy_text(self):
+        tip = panel.terminal_tip("github")
+        self.assertTrue(tip.startswith("In a terminal:"))
+        self.assertIn("  gh auth login --web", tip)
+        self.assertEqual(panel.terminal_commands("github"), "gh auth login --web\ngh auth setup-git")
+        self.assertEqual((panel.terminal_tip("nope"), panel.terminal_commands("nope")), ("", ""))
+
+    def test_every_chore_you_can_skip_has_a_tip(self):
+        for chore in panel.SKIPPABLE:
+            self.assertIn(chore, panel.TERMINAL, chore)
+
+    def test_every_tip_is_used_by_a_page_and_every_page_tip_exists(self):
+        import re
+        used = set(re.findall(r"terminal_button\('(\w+)'\)", (ROOT / "control/pages.py").read_text()))
+        self.assertEqual(used, set(panel.TERMINAL))
+
+    def test_commands_exist(self):
+        import re
+        for key, command in self.commands():
+            words = command.split()
+            program = words[0]
+            if program in ("git", "gh"):
+                continue
+            self.assertTrue((ROOT / "bin" / program).is_file(), f"{key}: {program} is not a program of this system")
+            if program == "noc":
+                verb = words[1]
+                self.assertRegex(self.NOC_SRC, rf"(?m)^\s+{verb}\)", f"{key}: noc has no '{verb}'")
+                script, rest = {"gpu": "bin/noc-gpu"}.get(verb, "bin/noc"), words[2:]
+            else:
+                script, rest = f"bin/{program}", words[1:]
+            text = (ROOT / script).read_text()
+            for word in rest:
+                if re.fullmatch(r"[a-z]+", word):                 # a sub-command, not a flag, a placeholder or an example
+                    self.assertIn(word, text, f"{key}: {script} has no '{word}'")
+
+    def test_placeholders_are_obvious(self):
+        for key, command in self.commands():
+            for token in command.split():
+                if token.startswith("<"):
+                    self.assertTrue(token.endswith(">"), f"{key}: {command}")
+
+    def test_the_welcome_app_gives_the_same_commands(self):
+        welcome = (ROOT / "bin/noctraos-welcome").read_text()
+        for key in ("git", "github"):
+            for command in panel.TERMINAL[key]:
+                self.assertIn(command, welcome, f"{key}: {command}")
+
+
 class PrivacyTests(unittest.TestCase):
     def test_hermes_text_never_calls_the_cloud_local(self):
         cloud = panel.hermes_privacy("cloud")
@@ -752,6 +865,118 @@ class PrivacyTests(unittest.TestCase):
         panel.HERMES = "/nonexistent/hermes"
         self.addCleanup(setattr, panel, "HERMES", original)
         self.assertIsNone(panel.hermes_mode())
+
+
+class SetupChecklistTests(unittest.TestCase):
+    """The first-run steps in one list: what is left, what was skipped, what does not apply."""
+    UNDONE = {"git": {"installed": True, "name": "", "email": ""}, "github": {"installed": True, "signed_in": False, "login": ""}}
+    DONE = {"git": {"installed": True, "name": "Ada", "email": "ada@example.com"}, "github": {"installed": True, "signed_in": True, "login": "ada"}}
+    GPU = {"gpus": [{"name": "X", "vendor": "nvidia", "tier": "modern"}], "plan": {"nvidia": "modern"}}
+    EXTRAS = {"gpu_status": {"ready": False, "rows": []}, "onboarded": False, "weather_city": ""}
+
+    def steps(self, **changes):
+        status = {**STATUS, "accounts": self.UNDONE, "skipped": [], "gpu": self.GPU, **changes}
+        return {s.id: s for s in panel.setup_steps(status, self.EXTRAS)}
+
+    def test_a_fresh_machine_has_every_chore_to_do(self):
+        steps = self.steps()
+        self.assertEqual([i for i, s in steps.items() if s.state == "todo"], ["git", "github", "gpu", "hermes", "weather"])
+        self.assertEqual(panel.setup_summary(list(steps.values())), ("4 things left to set up", "warn"))   # weather is optional
+
+    def test_a_skipped_chore_keeps_its_row_but_stops_counting(self):
+        steps = self.steps(skipped=["git", "github", "gpu"])
+        self.assertEqual([steps[i].state for i in ("git", "github", "gpu")], ["skipped"] * 3)
+        self.assertTrue(all(steps[i].page for i in ("git", "github", "gpu")))            # the way back is one click
+        self.assertEqual(panel.setup_summary(list(steps.values()))[0], "1 thing left to set up")      # only Hermes
+
+    def test_a_done_chore_is_never_skipped(self):
+        steps = self.steps(accounts=self.DONE, skipped=["git", "github"])
+        self.assertEqual((steps["git"].state, steps["github"].state), ("done", "done"))
+
+    def test_everything_done_says_so(self):
+        extras = {"gpu_status": {"ready": True, "rows": []}, "onboarded": True, "weather_city": "Leeds"}
+        steps = panel.setup_steps({**STATUS, "accounts": self.DONE, "skipped": [], "gpu": self.GPU}, extras)
+        self.assertTrue(all(s.state == "done" for s in steps))
+        self.assertEqual(panel.setup_summary(steps), ("Setup is complete.", "ok"))
+
+    def test_no_usable_gpu_means_no_gpu_step(self):
+        self.assertNotIn("gpu", self.steps(gpu={"gpus": [], "plan": {}}))
+        self.assertNotIn("gpu", self.steps(gpu=None))
+
+    def test_hermes_and_models_wait_instead_of_nagging(self):
+        steps = self.steps(hermes={"installed": False, "mode": None}, ollama={"running": False})
+        self.assertEqual((steps["hermes"].state, steps["models"].state), ("waiting", "waiting"))
+        none = self.steps(ollama={"running": True, "models": 0, "default_model": "m"})
+        self.assertEqual(none["models"].state, "todo")
+
+    def test_hermes_is_started_by_its_launcher_and_says_it_is_cloud(self):
+        step = self.steps()["hermes"]
+        self.assertEqual(step.launch, (panel.HERMES,))
+        self.assertIn("cloud", step.text)
+
+    def test_an_unreadable_machine_does_not_raise(self):
+        self.assertTrue(panel.setup_steps({}, {}))
+        self.assertTrue(panel.setup_steps(None))
+        self.assertEqual(panel.setup_summary([]), ("Setup is complete.", "ok"))
+
+
+class UpdateLayerTests(unittest.TestCase):
+    """The Updates page's NoctraOS section: which update is installed, the channel, going back."""
+    STATUS = {"channel": "stable", "serial": 3, "version": "0.4.1", "applied": "2026-10-09T10:00:00Z", "can_rollback": True,
+              "held": 0, "failed_migrations": [], "signing_key": True, "mirrors": ["https://x"]}
+
+    def test_it_names_the_installed_update(self):
+        s = panel.layer_summary(self.STATUS)
+        self.assertEqual(s["headline"], "NoctraOS 0.4.1, update 3, installed 2026-10-09")
+        self.assertEqual((s["problem"], s["channel"], s["can_rollback"]), ("", "stable", True))
+        first = panel.layer_summary({**self.STATUS, "serial": 0, "applied": "", "can_rollback": False})
+        self.assertEqual((first["headline"], first["can_rollback"]), ("NoctraOS 0.4.1, as first installed", False))
+
+    def test_problems_are_said_in_plain_words(self):
+        failed = panel.layer_summary({**self.STATUS, "failed_migrations": ["0002_x.sh"]})["problem"]
+        self.assertIn("0002_x.sh", failed)
+        self.assertIn("tried again", failed)
+        self.assertIn("Update 5 was put back", panel.layer_summary({**self.STATUS, "held": 5})["problem"])
+        self.assertIn("signing key", panel.layer_summary({**self.STATUS, "signing_key": False})["problem"])
+
+    def test_a_held_or_expired_update_is_not_called_unverifiable(self):
+        def row(status):
+            updates = {"apt": {"count": 0}, "flatpak": 0, "noctraos": {"status": status}}
+            return next(r for r in panel.update_rows(updates) if r["id"] == "noctraos")
+        self.assertIn("put back", row("held")["detail"])
+        self.assertIn("out of date", row("expired")["detail"])
+        for status in ("held", "expired", "current", "staged", "unreachable", "unverified"):
+            self.assertFalse(row(status)["available"], status)           # nothing to tick, and no wrong "could not verify"
+        self.assertIn("Could not verify", row("unverified")["detail"])
+
+    def test_no_updater_is_not_an_error(self):
+        s = panel.layer_summary(None)
+        self.assertIsNone(s["channel"])
+        self.assertFalse(s["can_rollback"])
+        self.assertIn("not available", s["headline"])
+
+    def test_channel_and_rollback_go_through_the_privileged_helper_only(self):
+        self.assertEqual(panel.channel_command("nightly", "stable"), [panel.PKEXEC, panel.HELPER, "update-channel", "nightly"])
+        self.assertIsNone(panel.channel_command("stable", "stable"))          # already there
+        for target in ("beta", "", "stable; id", "../x", None):
+            self.assertIsNone(panel.channel_command(target, "stable"), target)
+        self.assertEqual(panel.rollback_command(self.STATUS), [panel.PKEXEC, panel.HELPER, "update-rollback"])
+        self.assertIsNone(panel.rollback_command({**self.STATUS, "can_rollback": False}))
+        self.assertIsNone(panel.rollback_command(None))
+
+    def test_the_status_reader_survives_a_missing_or_broken_updater(self):
+        original = panel.SELFUPDATE
+        self.addCleanup(setattr, panel, "SELFUPDATE", original)
+        panel.SELFUPDATE = "/nonexistent/noc-selfupdate"
+        self.assertIsNone(panel.layer_status())
+        panel.SELFUPDATE = "/bin/false"
+        self.assertIsNone(panel.layer_status())
+        panel.SELFUPDATE = "/bin/echo"                                         # prints "status --json": not JSON
+        self.assertIsNone(panel.layer_status())
+
+    def test_the_channels_are_exactly_the_helpers_channels(self):
+        helper = (ROOT / "bin/noc-privileged").read_text()
+        self.assertIn("UPDATE_CHANNELS=(" + " ".join(panel.CHANNELS) + ")", helper)
 
 
 if __name__ == "__main__":

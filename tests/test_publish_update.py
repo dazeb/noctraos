@@ -13,6 +13,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "iso/publish-update.sh"
 MAKE = ROOT / "scripts/make-update.py"
+HAVE_SSH_KEYGEN = shutil.which("ssh-keygen") is not None
 
 # remote "r2:b/updates/x" -> $STORE/r2/b/updates/x ; "hz:noctraos-releases/..." -> $STORE/hz/noctraos-releases/...
 RCLONE = r'''#!/usr/bin/env bash
@@ -48,6 +49,7 @@ else cat "$f"; fi
 '''
 
 
+@unittest.skipUnless(HAVE_SSH_KEYGEN, "ssh-keygen is needed to sign the update")
 class Publish(unittest.TestCase):
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()

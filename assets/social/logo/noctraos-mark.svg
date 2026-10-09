@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="1 4 30 24">
+  <title>Noctra OS</title>
+  <polygon points="2,26 13,6 18,16" fill="#ff6a13"/>
+  <polygon points="13,26 22,10 30,26" fill="#ff6a13" opacity="0.55"/>
+</svg>

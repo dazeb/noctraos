@@ -7,18 +7,19 @@ once; the scripts named here exist so you do not have to repeat the discovery.
 ## Rolling updates for installed systems (between releases)
 
 A release is an ISO and VM disks for new machines. Machines that are already installed get new features through a
-signed update channel instead: `iso/publish-update.sh nightly|stable|renew` (design, safety and the promotion path in
-[updates.md](updates.md)). It is **not** part of the tag pipeline yet. The usual flow after merging to `main`:
+signed update channel instead (design, safety and the promotion path in [updates.md](updates.md)). It **is** part of the
+pipeline now:
 
 ```bash
-iso/publish-update.sh nightly --ref origin/main --notes "what changed, one line"   # next serial, both stores, read back and verified
-# a few days later, after nightly testers are happy:
-iso/publish-update.sh stable --rollout 10 && iso/publish-update.sh stable --from stable --rollout 100
-iso/publish-update.sh renew stable                                                  # at least every 2 weeks (manifests expire after 30)
+git fetch origin && git tag -a update-2026.10.09 -m "what changed, one line" origin/main   # main only: the job refuses anything else
+git push gitlab origin/main:refs/heads/main update-2026.10.09
+# GitLab: update-nightly publishes it to testers; later press update-stable-10, then -50, then -100 (manual jobs)
+iso/setup-update-renewal.sh status                                                           # manifests expire after 30 days: the weekly timer renews
 ```
 
-Needs `~/secrets/noctraos-update-signing` (private; never commit) and the usual store credentials. Do not publish an
-update while a release build runs from the same `main` (the same rule as merging).
+A `vX.Y.Z` release tag runs the same update jobs after `release-site`. `iso/publish-update.sh` still works by hand (same lock, same
+checks) when GitLab is down. Needs `~/secrets/noctraos-update-signing` on the runner's workstation (private; never in CI variables).
+Do not publish an update while a release build runs from the same `main` (the same rule as merging).
 
 ## Before you tag (learned on 0.4.0)
 
