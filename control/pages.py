@@ -1390,6 +1390,25 @@ class PrivacyPage(Page):
             radio.connect('toggled', lambda r, target=target: self._toggled(r, target))
             body.add(radio)
         body.add(label('A change applies the next time Hermes starts: close it and open it again.', 'muted'))
+        self.remote = None
+        body.add(label('Remote login', 'section'))
+        self.remote_head = label('', 'row-title')
+        self.remote_text = label('', 'card-detail', chars=80)
+        self.remote_button = self._action_button('', self._switch_remote)
+        for item in (self.remote_head, self.remote_text, self.remote_button):
+            body.add(item)
+        body.add(label('Clipboard history', 'section'))
+        self.clip_head = label('', 'row-title')
+        self.clip_text = label('', 'card-detail', chars=80)
+        self.clip_button = self._action_button('Clear clipboard history…', self._clear_clipboard)
+        for item in (self.clip_head, self.clip_text, self.clip_button):
+            body.add(item)
+        body.add(label('Saved passwords', 'section'))
+        self.key_head = label('', 'row-title')
+        self.key_text = label('', 'card-detail', chars=80)
+        self.key_button = self._action_button('Open Passwords and Keys', lambda: self._launch([panel.SEAHORSE]))
+        for item in (self.key_head, self.key_text, self.key_button):
+            body.add(item)
         body.add(label('Search', 'section'))
         body.add(label('Super+Space searches apps, files in your home folder, clipboard history, the web and '
                        'browser history. Each of those can be switched off, and the folders chosen.',
@@ -1401,6 +1420,14 @@ class PrivacyPage(Page):
         body.add(self._launch_button('Weather settings…', panel.WEATHER_SETUP))
         scroller.add(body)
         self.sync_controls(None)
+        self.sync_extras({})
+
+    def _action_button(self, text, action):
+        """A left-aligned button that stays hidden until the state it acts on is known."""
+        item = button(text, on_click=lambda *_: action())
+        item.set_halign(Gtk.Align.START)
+        item.set_no_show_all(True)
+        return item
 
     def _launch_button(self, text, argv):
         item = button(text, on_click=lambda *_: self._launch(argv))
@@ -1419,11 +1446,63 @@ class PrivacyPage(Page):
 
     def refresh(self):
         self.spinner.start()
-        background(panel.hermes_mode, self._loaded)
+        background(panel.privacy_snapshot, self._loaded)
 
-    def _loaded(self, mode):
+    def _loaded(self, snapshot):
         self.spinner.stop()
-        self.sync_controls(mode)
+        self.sync_controls(snapshot['hermes'])
+        self.sync_extras(snapshot)
+
+    def sync_extras(self, snapshot):
+        """Remote login, clipboard history and saved passwords; `{}` (nothing read yet) shows none of them."""
+        known = 'remote' in snapshot
+        self.remote = snapshot.get('remote')
+        remote = panel.remote_access_privacy(self.remote) if known else None
+        self.remote_head.set_text(remote['headline'] if remote else '')
+        self.remote_text.set_text(remote['text'] if remote else '')
+        self.remote_button.set_label(remote['button'] if remote else '')
+        self.remote_button.set_visible(bool(remote and remote['can_switch']))
+        clip = panel.clipboard_privacy(snapshot.get('clipboard')) if known else None
+        self.clip_head.set_text(clip['headline'] if clip else '')
+        self.clip_text.set_text(clip['text'] if clip else '')
+        self.clip_button.set_visible(bool(clip and clip['can_clear']))
+        can_open = bool(snapshot.get('can_open_keyring'))
+        key = panel.keyring_privacy(snapshot.get('keyring'), can_open) if known else None
+        self.key_head.set_text(key['headline'] if key else '')
+        self.key_text.set_text(key['text'] if key else '')
+        self.key_button.set_visible(bool(key and can_open and snapshot.get('keyring') == 'unprotected'))
+
+    def _switch_remote(self):
+        target = 'off' if self.remote == 'on' else 'on'
+        argv = panel.remote_access_command(target, self.remote)
+        if not argv:
+            return
+        if target == 'on' and not self._ask('Turn on remote login?',
+                                            'Other computers that can reach this one over the network will be able to sign in '
+                                            'with your account name and password. Use a strong password.',
+                                            'Keep it off', 'Turn it on'):
+            return
+        self.say(self.note, 'Switching… you will be asked for your password.')
+
+        def done(result):
+            ok, message = result
+            self.say(self.note, f'Done. Remote login is {target}.' if ok else f'Could not switch: {message}')
+            self.refresh()
+        background(lambda: panel.run_ok(argv), done)
+
+    def _clear_clipboard(self):
+        if not self._ask('Clear the clipboard history?',
+                         'Everything CopyQ has saved is deleted from this computer. This cannot be undone.',
+                         'Keep it', 'Clear it'):
+            return
+        self.say(self.note, 'Clearing…')
+
+        def done(result):
+            ok, message = result
+            self.say(self.note, 'Done. The clipboard history is empty.' if ok
+                     else f'Could not clear it: {message or "CopyQ did not answer."}')
+            self.refresh()
+        background(panel.clear_clipboard_history, done)
 
     def sync_controls(self, mode):
         self.mode = mode
@@ -1455,11 +1534,17 @@ class PrivacyPage(Page):
         background(lambda: panel.run_ok(argv), done)
 
     def _confirm_cloud(self):
+        return self._ask('Send what you type to Hermes to the cloud?',
+                         "The Nous free tier is Nous Research's cloud service. What you type to "
+                         'Hermes will leave this computer. You can switch back any time.',
+                         'Keep it local', 'Use the cloud')
+
+    def _ask(self, title, text, cancel, ok):
+        """A two-button question; True only for the second button."""
         dialog = Gtk.MessageDialog(transient_for=self.window, modal=True, message_type=Gtk.MessageType.QUESTION,
-                                   buttons=Gtk.ButtonsType.NONE, text='Send what you type to Hermes to the cloud?')
-        dialog.format_secondary_text("The Nous free tier is Nous Research's cloud service. What you type to "
-                                     'Hermes will leave this computer. You can switch back any time.')
-        dialog.add_buttons('Keep it local', Gtk.ResponseType.CANCEL, 'Use the cloud', Gtk.ResponseType.OK)
+                                   buttons=Gtk.ButtonsType.NONE, text=title)
+        dialog.format_secondary_text(text)
+        dialog.add_buttons(cancel, Gtk.ResponseType.CANCEL, ok, Gtk.ResponseType.OK)
         answer = dialog.run()
         dialog.destroy()
         return answer == Gtk.ResponseType.OK

@@ -7,6 +7,7 @@
 #   noc-privileged module <module-file>           re-run one install module (allowlist below)
 #   noc-privileged gpu-install <nvidia|amd|all>   noc-gpu install for one vendor (drivers + CUDA/ROCm/Vulkan)
 #   noc-privileged disk-grow                      noc-disk grow: use the unused space of the system disk (no arguments)
+#   noc-privileged remote-access <on|off>         turn the SSH server (remote login) on or off, now and at boot
 #
 # This is an allowlist, never a shell: each operation is a fixed verb with validated arguments, it
 # only runs root-owned code (/usr/local/bin/noc and the root-owned snapshot of the repo written by
@@ -24,6 +25,10 @@ UPDATE_CHANNELS=(stable nightly)
 GPU=/usr/local/bin/noc-gpu
 GPU_VENDORS=(nvidia amd all)
 DISK=/usr/local/bin/noc-disk
+SYSTEMCTL=/usr/bin/systemctl
+REMOTE_ACCESS_STATES=(on off)
+# Ubuntu 24.04 starts sshd from the socket; the releases before it use the service alone.
+SSH_UNITS=(ssh.socket ssh.service)
 
 refuse() { echo "noc-privileged: $*" >&2; exit 2; }
 
@@ -42,6 +47,27 @@ validate_channel() { in_list "${1:-}" "${UPDATE_CHANNELS[@]}"; }
 validate_vendor() { in_list "${1:-}" "${GPU_VENDORS[@]}"; }
 
 validate_module() { in_list "$1" "${MODULES[@]}" && [ -f "$SNAPSHOT/install/$1" ]; }
+
+validate_remote_access() { in_list "${1:-}" "${REMOTE_ACCESS_STATES[@]}"; }
+
+unit_exists() { "$SYSTEMCTL" cat "$1" >/dev/null 2>&1; }
+
+# remote_access <on|off>: off stops and disables the socket and the service; on enables the way Ubuntu ships it (the socket
+# where there is one, which starts the service on demand, else the service). Fails when there is no SSH server.
+remote_access() {
+  local u found=0
+  for u in "${SSH_UNITS[@]}"; do
+    unit_exists "$u" || continue
+    found=1
+    if [ "$1" = off ]; then
+      clean_env "$SYSTEMCTL" disable --now "$u" || return 1
+    else
+      clean_env "$SYSTEMCTL" enable --now "$u" || return 1
+      break
+    fi
+  done
+  [ "$found" -eq 1 ] || { echo "noc-privileged: remote-access: openssh-server is not installed" >&2; return 1; }
+}
 
 # The desktop user that asked: install.sh needs it (it refuses to run as bare root).
 invoking_user() {
@@ -92,7 +118,11 @@ main() {
       # does not recognise (LVM, a partition behind the system one, an unknown filesystem).
       [ $# -eq 1 ] || refuse "disk-grow: takes no arguments"
       clean_env "$DISK" grow ;;
-    *) refuse "usage: noc-privileged update <apt|flatpak|noctraos>[,...] | update-channel <channel> | update-rollback | module <name> | gpu-install <vendor> | disk-grow" ;;
+    remote-access)
+      [ $# -eq 2 ] || refuse "remote-access: expected on or off"
+      validate_remote_access "$2" || refuse "remote-access: must be one of: ${REMOTE_ACCESS_STATES[*]}"
+      remote_access "$2" ;;
+    *) refuse "usage: noc-privileged update <apt|flatpak|noctraos>[,...] | update-channel <channel> | update-rollback | module <name> | gpu-install <vendor> | disk-grow | remote-access <on|off>" ;;
   esac
 }
 

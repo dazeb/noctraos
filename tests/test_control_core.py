@@ -1,8 +1,12 @@
 """The Control Panel's formatting logic: `noc status` JSON in, cards out. No GTK needed."""
 from http.server import BaseHTTPRequestHandler, HTTPServer
+import importlib.util
 import json
+import os
 from pathlib import Path
+import stat
 import sys
+import tempfile
 import threading
 import unittest
 
@@ -814,7 +818,7 @@ class TerminalTipTests(unittest.TestCase):
             if words[0] == "sudo":                 # a command that needs root: the program is the next word
                 words = words[1:]
             program = words[0]
-            if program in ("git", "gh"):
+            if program in ("git", "gh", "systemctl", "copyq", "seahorse"):    # tools of the system, not of this repo
                 continue
             self.assertTrue((ROOT / "bin" / program).is_file(), f"{key}: {program} is not a program of this system")
             if program == "noc":
@@ -885,6 +889,165 @@ class PrivacyTests(unittest.TestCase):
         panel.HERMES = "/nonexistent/hermes"
         self.addCleanup(setattr, panel, "HERMES", original)
         self.assertIsNone(panel.hermes_mode())
+
+
+def stub_program(directory, name, body):
+    """An executable shell script `name` in `directory`; returns its path."""
+    path = Path(directory) / name
+    path.write_text("#!/bin/sh\n" + body + "\n")
+    path.chmod(path.stat().st_mode | stat.S_IXUSR)
+    return str(path)
+
+
+class RemoteLoginTests(unittest.TestCase):
+    def test_state_from_what_systemctl_prints(self):
+        self.assertEqual(panel.remote_access_from(["active", "inactive"], ["enabled", "disabled"]), "on")
+        self.assertEqual(panel.remote_access_from(["active"], ["disabled"]), "on")                       # running, not at boot
+        self.assertEqual(panel.remote_access_from(["inactive", "inactive"], ["disabled", "enabled"]), "on")   # starts at boot
+        self.assertEqual(panel.remote_access_from(["inactive"], ["enabled-runtime"]), "on")
+        self.assertEqual(panel.remote_access_from(["inactive", "inactive"], ["disabled", "disabled"]), "off")
+        self.assertEqual(panel.remote_access_from(["inactive"], ["indirect"]), "off")
+        self.assertIsNone(panel.remote_access_from(["inactive", "inactive"], []))                         # no unit file at all
+        self.assertIsNone(panel.remote_access_from([], []))
+
+    def test_state_asks_systemctl_about_both_units_and_survives_it_missing(self):
+        original = panel.SYSTEMCTL
+        self.addCleanup(setattr, panel, "SYSTEMCTL", original)
+        panel.SYSTEMCTL = "/nonexistent/systemctl"
+        self.assertIsNone(panel.remote_access_state())
+        with tempfile.TemporaryDirectory() as d:
+            log = Path(d) / "log"
+            panel.SYSTEMCTL = stub_program(d, "systemctl", f'''echo "$*" >> "{log}"
+case "$1" in is-active) echo inactive; echo active ;; is-enabled) echo disabled; echo enabled ;; esac''')
+            self.assertEqual(panel.remote_access_state(), "on")
+            self.assertEqual(log.read_text().splitlines(),
+                             ["is-active ssh.socket ssh.service", "is-enabled ssh.socket ssh.service"])
+
+    def test_the_page_text_follows_the_state(self):
+        on, off, none = (panel.remote_access_privacy(s) for s in ("on", "off", None))
+        self.assertEqual((on["button"], on["level"], on["can_switch"]), ("Turn off remote login", "warn", True))
+        self.assertEqual((off["button"], off["level"], off["can_switch"]), ("Turn on remote login", "ok", True))
+        self.assertEqual((none["button"], none["can_switch"]), ("", False))
+        self.assertIn("sign in", on["text"])
+        self.assertIn("password", on["text"])
+
+    def test_the_command_is_the_fixed_privileged_verb_with_one_of_two_words(self):
+        self.assertEqual(panel.remote_access_command("off", "on"), [panel.PKEXEC, panel.HELPER, "remote-access", "off"])
+        self.assertEqual(panel.remote_access_command("on", "off"), [panel.PKEXEC, panel.HELPER, "remote-access", "on"])
+        self.assertIsNone(panel.remote_access_command("on", "on"))        # already there
+        self.assertIsNone(panel.remote_access_command("on", None))        # no server to switch
+        for bad in ("", "ON", "on;id", "enable", "--now"):
+            self.assertIsNone(panel.remote_access_command(bad, "off"), bad)
+
+
+class ClipboardHistoryTests(unittest.TestCase):
+    def setUp(self):
+        self.dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.dir.cleanup)
+        for name in ("COPYQ", "COPYQ_SOCKET"):
+            self.addCleanup(setattr, panel, name, getattr(panel, name))
+        self.calls = Path(self.dir.name) / "calls"
+        panel.COPYQ_SOCKET = str(Path(self.dir.name) / ".copyq_s")
+
+    def copyq(self, output):
+        panel.COPYQ = stub_program(self.dir.name, "copyq", f'''echo "$QT_QPA_PLATFORM|$*" >> "{self.calls}"
+echo {output}''')
+
+    def test_not_installed(self):
+        panel.COPYQ = "/nonexistent/copyq"
+        state = panel.clipboard_state()
+        self.assertEqual(state, {"installed": False, "running": False, "count": None})
+        self.assertFalse(panel.clipboard_privacy(state)["can_clear"])
+        self.assertEqual(panel.clear_clipboard_history()[0], False)
+
+    def test_it_is_only_asked_while_it_runs_because_asking_would_start_it(self):
+        self.copyq(7)
+        self.assertEqual(panel.clipboard_state(), {"installed": True, "running": False, "count": None})
+        self.assertFalse(self.calls.exists())
+        Path(panel.COPYQ_SOCKET).write_text("")
+        self.assertEqual(panel.clipboard_state(), {"installed": True, "running": True, "count": 7})
+
+    def test_it_runs_as_the_x11_client_with_a_fixed_script(self):
+        self.copyq(3)
+        Path(panel.COPYQ_SOCKET).write_text("")
+        panel.clipboard_state()
+        platform, args = self.calls.read_text().strip().split("|", 1)
+        self.assertEqual(platform, "xcb")
+        self.assertEqual(args, "eval " + panel.COPYQ_COUNT)
+        for script in (panel.COPYQ_COUNT, panel.COPYQ_CLEAR):          # only the default history tab, nothing interpolated
+            self.assertIn("tab('&clipboard')", script)
+            self.assertNotIn("{", script)
+            self.assertNotIn("tab()", script)
+
+    def test_clearing_succeeds_only_when_the_tab_ends_up_empty(self):
+        self.copyq(0)
+        self.assertEqual(panel.clear_clipboard_history(), (True, "0"))
+        self.assertEqual(self.calls.read_text().strip(), "xcb|eval " + panel.COPYQ_CLEAR)
+        self.copyq(2)
+        self.assertFalse(panel.clear_clipboard_history()[0])
+        panel.COPYQ = stub_program(self.dir.name, "copyq", "echo boom >&2; exit 1")
+        self.assertEqual(panel.clear_clipboard_history(), (False, "boom"))
+
+    def test_the_page_text(self):
+        head = lambda **state: panel.clipboard_privacy({"installed": True, "running": True, **state})   # noqa: E731
+        self.assertEqual(head(count=5)["headline"], "5 copies saved")
+        self.assertEqual(head(count=1)["headline"], "1 copy saved")
+        self.assertEqual(head(count=0)["headline"], "Nothing saved")
+        self.assertFalse(head(count=0)["can_clear"])
+        self.assertTrue(head(count=5)["can_clear"])
+        # CopyQ not running: what it saved earlier is still on disk, so clearing stays possible
+        stopped = panel.clipboard_privacy({"installed": True, "running": False, "count": None})
+        self.assertEqual((stopped["headline"], stopped["can_clear"]), ("CopyQ is not running", True))
+        self.assertIn("stays after a restart", head(count=5)["text"])
+
+
+class SavedPasswordTests(unittest.TestCase):
+    def read(self, data):
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "login.keyring"
+            if data is not None:
+                path.write_bytes(data)
+            return panel.keyring_state(str(path))
+
+    def test_state_from_the_file_header(self):
+        self.assertEqual(self.read(b"[keyring]\ndisplay-name=Login\nlock-on-idle=false\n"), "unprotected")
+        self.assertEqual(self.read(panel.KEYRING_ENCRYPTED_MAGIC + b"\x00" * 200), "protected")
+        self.assertEqual(self.read(None), "none")
+        self.assertIsNone(self.read(b"something else entirely"))
+        self.assertIsNone(self.read(b""))
+
+    def test_an_unreadable_path_is_not_an_error(self):
+        with tempfile.TemporaryDirectory() as d:
+            self.assertIsNone(panel.keyring_state(d))            # a directory where the file should be
+
+    def test_the_magic_is_the_one_the_install_script_checks(self):
+        spec = importlib.util.spec_from_file_location("seed_password_store", ROOT / "scripts/seed-password-store.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        self.assertEqual(panel.KEYRING_ENCRYPTED_MAGIC, module.ENCRYPTED_MAGIC)
+
+    def test_the_page_says_what_it_is(self):
+        plain = panel.keyring_privacy("unprotected", can_open=True)
+        self.assertEqual(plain["level"], "warn")
+        self.assertIn("not locked", plain["headline"])
+        self.assertIn("Passwords and Keys", plain["text"])
+        self.assertIn("Chromium and VS Code", plain["text"])      # their secrets are not in the keyring, so a keyring password would not cover them
+        self.assertNotIn("Passwords and Keys", panel.keyring_privacy("unprotected", can_open=False)["text"])
+        locked = panel.keyring_privacy("protected")
+        self.assertEqual(locked["level"], "ok")
+        self.assertNotIn("not locked", locked["headline"])
+        self.assertEqual(panel.keyring_privacy("none")["level"], "info")
+        self.assertEqual(panel.keyring_privacy(None)["text"], "")
+
+    def test_the_snapshot_survives_a_machine_where_nothing_works(self):
+        for name, value in (("HERMES", "/nonexistent/hermes"), ("SYSTEMCTL", "/nonexistent/systemctl"),
+                            ("COPYQ", "/nonexistent/copyq"), ("SEAHORSE", "/nonexistent/seahorse"),
+                            ("KEYRING_FILE", "/nonexistent/login.keyring")):
+            self.addCleanup(setattr, panel, name, getattr(panel, name))
+            setattr(panel, name, value)
+        self.assertEqual(panel.privacy_snapshot(), {"hermes": None, "remote": None,
+                                                    "clipboard": {"installed": False, "running": False, "count": None},
+                                                    "keyring": "none", "can_open_keyring": False})
 
 
 class SetupChecklistTests(unittest.TestCase):

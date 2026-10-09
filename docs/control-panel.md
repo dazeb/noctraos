@@ -28,7 +28,7 @@ Keyboard: Ctrl+1 to Ctrl+9 switch pages, Ctrl+R or F5 check again, Ctrl+W or Ctr
 | AI models | Installed models with size and the default; suggestions chosen from this machine's RAM and video memory | Download with a progress bar and Cancel, Remove (confirms), Make default, a custom name |
 | Hardware | The GPU found, whether the stack is ready, RAM and disk; a notice when the disk is bigger than the system uses | Set up the GPU, or use all of an enlarged disk, each only after a summary of what will change and a yes; or "No, I'll set up the GPU myself" |
 | Health | `noc doctor` as rows, problems first | Re-check, Copy report, Fix where one exists |
-| Privacy | Whether Hermes uses the Nous free tier (a cloud service) or stays local | Switch (cloud needs a confirmation), open the Search and Weather settings |
+| Privacy | Whether Hermes uses the Nous free tier (a cloud service) or stays local; whether remote login (the SSH server) is on; how many copies CopyQ has saved on disk; whether the saved-password store is locked by a password | Switch Hermes (cloud needs a confirmation), turn remote login off or on (one password prompt, on needs a confirmation), clear the clipboard history (confirms), open Passwords and Keys, open the Search and Weather settings |
 | About | Version, base system, links | Copy diagnostics |
 
 Every page has a "not ready yet" state (no network, Ollama still starting, no GPU, Hermes not
@@ -78,7 +78,7 @@ noctraos-control (wrapper, pins /usr/bin/python3)
           ├ noc status | updates | doctor --json | models list|presets --json | update --json | skip list --json
           ├ noc-gpu detect|status --json
           ├ noctraos-hermes mode | local --no-launch | cloud
-          └ pkexec noc-privileged  update <apt,flatpak> | module <name> | gpu-install <vendor>
+          └ pkexec noc-privileged  update <apt,flatpak> | module <name> | gpu-install <vendor> | disk-grow | remote-access <on|off>
 ```
 
 ### The root side

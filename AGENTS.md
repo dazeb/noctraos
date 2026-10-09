@@ -91,7 +91,7 @@ bin/
                             installed vs newest release, version history, user-level updates; `noc apps`, the panel's Apps page
   noc-selfupdate            updates the NoctraOS layer itself (signed manifest + bundle, staged rollout, migrations, rollback);
                             installed to /usr/local/libexec/noctraos by module 07; check/status/notify/migrate user-side, apply/rollback as root
-  noc-privileged            root side of the panel, run through pkexec: allowlisted `update apt,flatpak,noctraos`, `update-channel`, `update-rollback`, `module <name>`, `gpu-install <vendor>`, `disk-grow`
+  noc-privileged            root side of the panel, run through pkexec: allowlisted `update apt,flatpak,noctraos`, `update-channel`, `update-rollback`, `module <name>`, `gpu-install <vendor>`, `disk-grow`, `remote-access <on|off>`
                             (installed to /usr/local/libexec/noctraos; policy in configs/polkit/)
   noctraos-hermes           Hermes Desktop launcher/installer: launch | local [--no-launch] | cloud | mode | install | ready | status.
                             Sets HERMES_GUEST_ONBOARDING=1 (free tier), seeds the Ollama fallback
@@ -352,7 +352,7 @@ bash -n boot.sh install.sh install/*.sh install/optional/*.sh bin/noc bin/noc-gp
 docker run --rm -v "$PWD:/mnt" koalaman/shellcheck:stable --severity=warning \
   boot.sh install.sh install/*.sh install/optional/*.sh bin/noc bin/noc-gpu bin/noc-privileged bin/noctraos-control bin/noctraos-agent \
   bin/noctraos-copyq bin/noctraos-hermes configs/nautilus-scripts/*     # same list as CI
-python3 -m unittest discover -s tests                # 501 tests: theme, GPU detection, noc JSON modes, root helper, Control Panel
+python3 -m unittest discover -s tests                # 522 tests: theme, GPU detection, noc JSON modes, root helper, Control Panel
 python3 scripts/render-theme.py --check              # committed theme outputs match palette.json
 
 # wallpaper iteration (venv at ~/workspace/scratch/zorin-img-venv: pillow+numpy)
@@ -583,6 +583,16 @@ tail -f /root/noctraos-build.log
 - **Privacy page rules**: the Nous free tier is a cloud service and the page must never say otherwise;
   switching to cloud needs an explicit confirmation; a user's own Hermes provider (`mode: other`) is
   never touched; `noctraos-hermes local --no-launch` switches without opening the app.
+  The page also states three things the installer arranges without asking (settings, not setup chores: no skip button, no
+  Overview nag). **Remote login**: `openssh-server` comes from module 01; on Ubuntu 24.04 sshd starts from `ssh.socket`, so the
+  state is "on" when either the socket or the service is active or enabled, and `noc-privileged remote-access off` disables
+  both (disabling only `ssh.service` leaves the socket listening); `on` re-enables the socket (else the service) and
+  confirms first. **Clipboard history**: CopyQ keeps it on disk; the page counts and clears only the default `&clipboard` tab
+  through fixed `copyq eval` scripts run as the X11 client, and asks CopyQ only while it runs (asking would start it).
+  **Saved passwords**: `scripts/seed-password-store.py` makes the login keyring an unencrypted file, so the page reads the
+  file header (`[keyring]` plain, `GnomeKeyring` encrypted) and only states the trade-off and offers Passwords and Keys; it never
+  changes the keyring. Chromium and VS Code use `--password-store=basic`, so a keyring password would not cover them, and the
+  text says so. Untested on a real desktop so far: the `copyq eval` clear script and the `ssh.socket` switch.
 - **The Control Panel is a GUI for `noc`, nothing more.** `control/main.py` calls `noc ... --json`
   on a thread (`background()`), never blocks GTK, and every page needs a "not ready yet" state
   (Ollama down, no network) rather than an exception. Put anything that can be tested without

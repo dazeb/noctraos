@@ -217,7 +217,8 @@ TERMINAL = {
     'updates': ['noc update', 'noc update --only mise,models', 'noc channel', 'noc channel nightly'],
     'apps': ['noc apps', 'noc-upstream update --only <app>'],
     'models': ['noc llm setup', 'noc llm fit', 'noc models list', 'noc models pull <model>', 'noc models default <model>', 'noc models rm <model>'],
-    'privacy': ['noctraos-hermes local', 'noctraos-hermes cloud', 'noctraos-search --settings', 'noctraos-weather --setup'],
+    'privacy': ['noctraos-hermes local', 'noctraos-hermes cloud', 'noctraos-search --settings', 'noctraos-weather --setup',
+                'systemctl status ssh', 'sudo systemctl disable --now ssh.socket ssh.service', 'copyq show', 'seahorse'],
     'health': ['noc doctor'],
 }
 
@@ -942,6 +943,153 @@ def switch_command(target, current):
     if current in (None, 'other') or target == current:
         return None
     return {'local': HERMES_LOCAL, 'cloud': HERMES_CLOUD}.get(target)
+
+
+# Three more things the installer arranges without asking, stated plainly on the Privacy page: the SSH server is installed
+# (and started), CopyQ keeps the clipboard history on disk, and the saved-password store is not locked by a password. They are
+# settings, not setup chores: no "do it myself" button and no Overview nag.
+
+SYSTEMCTL = '/usr/bin/systemctl'
+SSH_UNITS = ('ssh.socket', 'ssh.service')    # Ubuntu 24.04 starts sshd from the socket; older releases use the service
+
+
+def remote_access_from(active, enabled):
+    """'on' | 'off' | None (no SSH server) from the words `systemctl is-active` and `is-enabled` print for the SSH units.
+    A missing unit prints nothing to is-enabled, so an empty answer for both means there is no server."""
+    if 'active' in active or any(word.startswith('enabled') or word == 'alias' for word in enabled):
+        return 'on'
+    return 'off' if enabled else None
+
+
+def remote_access_state():
+    """'on' | 'off' | None: whether the SSH server is running or starts at boot (no root needed to ask)."""
+    def words(verb):
+        try:
+            return subprocess.run([SYSTEMCTL, verb, *SSH_UNITS], capture_output=True, text=True, timeout=10).stdout.split()
+        except (OSError, subprocess.SubprocessError):
+            return []
+    return remote_access_from(words('is-active'), words('is-enabled'))
+
+
+def remote_access_privacy(state):
+    """What the Privacy page says about SSH for each state."""
+    if state is None:
+        return {'headline': 'No remote login on this computer', 'level': 'info', 'can_switch': False, 'button': '',
+                'text': 'No SSH server was found, so nobody can sign in to this computer over the network.'}
+    if state == 'on':
+        return {'headline': 'Remote login is on', 'level': 'warn', 'can_switch': True, 'button': 'Turn off remote login',
+                'text': 'Other computers that can reach this one over the network can sign in to it (SSH) with your account '
+                        'name and password. If you do not sign in to this computer from elsewhere, turn it off.'}
+    return {'headline': 'Remote login is off', 'level': 'ok', 'can_switch': True, 'button': 'Turn on remote login',
+            'text': 'Nobody can sign in to this computer over the network. Turn it on to reach it from another computer with SSH.'}
+
+
+def remote_access_command(target, current):
+    """argv through the root helper that turns remote login 'on' or 'off'; None when it is already so, there is no
+    server, or the target is not one of the two."""
+    if current is None or target not in ('on', 'off') or target == current:
+        return None
+    return [PKEXEC, HELPER, 'remote-access', target]
+
+
+COPYQ = '/usr/bin/copyq'
+COPYQ_SOCKET = os.path.join(os.environ.get('XDG_CONFIG_HOME') or os.path.expanduser('~/.config'), 'copyq', '.copyq_s')
+# Fixed scripts: nothing from the person or from the clipboard is ever put into them. Only the default history tab is
+# cleared, never a tab the person made.
+COPYQ_COUNT = "tab('&clipboard'); print(size());"
+COPYQ_CLEAR = "tab('&clipboard'); while (size() > 0) remove(0); print(size());"
+
+
+def copyq_run(script, timeout):
+    """Run a CopyQ script; the server must be the X11 one (see bin/noctraos-copyq), also when this call starts it."""
+    return subprocess.run([COPYQ, 'eval', script], capture_output=True, text=True, timeout=timeout,
+                          env={**os.environ, 'QT_QPA_PLATFORM': 'xcb'})
+
+
+def clipboard_state():
+    """{'installed', 'running', 'count'} for CopyQ's history. It is only asked while CopyQ runs: asking would start it."""
+    installed = os.access(COPYQ, os.X_OK)
+    running = installed and os.path.exists(COPYQ_SOCKET)
+    count = None
+    if running:
+        try:
+            out = copyq_run(COPYQ_COUNT, 5).stdout.strip()
+            count = int(out) if out.isdigit() else None
+        except (OSError, subprocess.SubprocessError):
+            pass
+    return {'installed': installed, 'running': running, 'count': count}
+
+
+def clipboard_privacy(state):
+    """What the Privacy page says about the clipboard history."""
+    state = state or {}
+    if not state.get('installed'):
+        return {'headline': 'Clipboard history (CopyQ) is not installed', 'can_clear': False,
+                'text': 'Nothing is keeping a history of what you copy.'}
+    count = state.get('count')
+    if count is None:
+        headline = 'CopyQ is not running' if not state.get('running') else 'Clipboard history (CopyQ)'
+    else:
+        headline = 'Nothing saved' if count == 0 else f'{count} {"copy" if count == 1 else "copies"} saved'
+    return {'headline': headline, 'can_clear': count != 0,
+            'text': 'CopyQ keeps what you copy on this computer, and it stays after a restart. That can include passwords '
+                    'you copied. Super+Space searches it.'}
+
+
+def clear_clipboard_history():
+    """Delete everything in CopyQ's default history tab. Returns (ok, last line)."""
+    try:
+        out = copyq_run(COPYQ_CLEAR, 30)
+    except (OSError, subprocess.SubprocessError) as error:
+        return False, str(error)
+    text = (out.stdout + out.stderr).strip().splitlines()
+    return out.returncode == 0 and out.stdout.strip() == '0', (text[-1] if text else '')
+
+
+KEYRING_FILE = os.path.expanduser('~/.local/share/keyrings/login.keyring')
+# The first bytes of gnome-keyring's encrypted file; scripts/seed-password-store.py has the same constant (a test keeps the two equal).
+KEYRING_ENCRYPTED_MAGIC = b'GnomeKeyring\n\r\x00\n\x00'
+SEAHORSE = '/usr/bin/seahorse'
+
+
+def keyring_state(path=None):
+    """'protected' (encrypted, needs a password) | 'unprotected' (plain file, the NoctraOS setup) | 'none' (no login keyring yet)
+    | None (unreadable or a format this panel does not know)."""
+    try:
+        with open(path or KEYRING_FILE, 'rb') as handle:
+            head = handle.read(len(KEYRING_ENCRYPTED_MAGIC))
+    except FileNotFoundError:
+        return 'none'
+    except OSError:
+        return None
+    if head.startswith(KEYRING_ENCRYPTED_MAGIC):
+        return 'protected'
+    return 'unprotected' if head.startswith(b'[keyring]') else None
+
+
+def keyring_privacy(state, can_open=False):
+    """What the Privacy page says about the saved-password store. `can_open`: Passwords and Keys is installed."""
+    if state == 'protected':
+        return {'headline': 'Saved passwords are locked with a password', 'level': 'ok',
+                'text': 'Apps that use the system keyring need that password to read what they saved.'}
+    if state == 'unprotected':
+        text = ('NoctraOS leaves the system keyring unlocked so apps such as Hermes open without asking for a keyring '
+                'password. Anyone who can read your home folder can read what they saved there. Chromium and VS Code keep '
+                'theirs outside the keyring.')
+        if can_open:
+            text += (' You can lock it by setting a password for the Login keyring in Passwords and Keys. With automatic '
+                     'sign-in, apps will then ask for that password.')
+        return {'headline': 'Saved passwords are not locked by a password', 'level': 'warn', 'text': text}
+    if state == 'none':
+        return {'headline': 'No saved passwords yet', 'level': 'info',
+                'text': 'The store is created the first time an app saves a password.'}
+    return {'headline': 'Could not tell how saved passwords are stored', 'level': 'info', 'text': ''}
+
+
+def privacy_snapshot():
+    """Everything the Privacy page shows, read on a thread (the CopyQ count can take a moment)."""
+    return {'hermes': hermes_mode(), 'remote': remote_access_state(), 'clipboard': clipboard_state(),
+            'keyring': keyring_state(), 'can_open_keyring': os.access(SEAHORSE, os.X_OK)}
 
 
 # ---- Setup checklist -------------------------------------------------------------------------

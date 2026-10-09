@@ -21,7 +21,7 @@ import gi
 gi.require_version("Gtk", "3.0"); gi.require_version("Gdk", "3.0")
 from gi.repository import Gdk, GLib, Gtk
 import panel
-for name in ("NOC", "GPU_BIN", "HERMES", "HELPER", "PKEXEC"):
+for name in ("NOC", "GPU_BIN", "HERMES", "HELPER", "PKEXEC", "SYSTEMCTL", "COPYQ", "SEAHORSE", "KEYRING_FILE"):
     setattr(panel, name, "/nonexistent/" + name)
 panel.FIXES = {k: ["/nonexistent/fix"] for k in panel.FIXES}
 panel.OLLAMA_URL = "http://127.0.0.1:9"
@@ -113,6 +113,20 @@ updates._layer_loaded({**layer, "channel": "stable", "can_rollback": False, "fai
 assert updates.channel_radios["stable"].get_active() and not updates.rollback.get_visible() and not updates.layer_problem.get_visible()
 updates._layer_loaded(None)
 assert updates.layer.get_visible() and not updates.channel_radios["stable"].get_visible() and not updates.rollback.get_visible()
+# Privacy: remote login, clipboard history and saved passwords each show their state, and a button only where it can act.
+privacy = window.pages["privacy"]
+assert not privacy.remote_button.get_visible() and not privacy.clip_button.get_visible() and not privacy.key_button.get_visible()
+seen_state = {"hermes": None, "remote": "on", "clipboard": {"installed": True, "running": True, "count": 4},
+              "keyring": "unprotected", "can_open_keyring": True}
+privacy._loaded(seen_state)
+assert privacy.remote_button.get_visible() and privacy.remote_button.get_label() == "Turn off remote login"
+assert privacy.clip_button.get_visible() and privacy.clip_head.get_text() == "4 copies saved"
+assert privacy.key_button.get_visible() and "not locked" in privacy.key_head.get_text()
+privacy._loaded({**seen_state, "remote": "off", "clipboard": {"installed": True, "running": True, "count": 0}, "keyring": "protected"})
+assert privacy.remote_button.get_label() == "Turn on remote login"
+assert not privacy.clip_button.get_visible() and not privacy.key_button.get_visible()
+privacy._loaded({**seen_state, "remote": None, "clipboard": {"installed": False}, "keyring": None, "can_open_keyring": False})
+assert not privacy.remote_button.get_visible() and not privacy.clip_button.get_visible() and not privacy.key_button.get_visible()
 for page_id in ("updates", "apps", "models", "hardware", "health", "privacy", "accounts"):
     page = window.pages[page_id]
     tips = []
