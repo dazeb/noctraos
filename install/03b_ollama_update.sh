@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Module 03b: bring Ollama up to the newest upstream release.
-# Not part of a normal install (module 03 installs Ollama); run it with `install.sh --only 03b_ollama_update.sh`, or from the
+# Not part of a normal install (`noc llm setup` installs Ollama, optional/local_llm.sh); run it with `install.sh --only 03b_ollama_update.sh`, or from the
 # Control Panel's Apps page through noc-privileged. Idempotent: it does nothing when Ollama is already on the latest release.
 # The newest release is read from GitHub Releases (bin/noc-upstream), and the vendor's installer is pinned to exactly that
 # version (OLLAMA_VERSION), so "latest" is decided here, not by whatever the installer's default happens to be.
@@ -8,7 +8,7 @@
 set -Eeuo pipefail
 source "$REPO_ROOT/install/lib.sh"
 
-have ollama || die "Ollama is not installed (module 03 installs it)"
+have ollama || die "Ollama is not installed (noc llm setup installs it)"
 have jq || die "jq is missing"
 
 row="$(python3 "$REPO_ROOT/bin/noc-upstream" list --json --refresh | jq -c '.apps[] | select(.id == "ollama")')" \

@@ -23,8 +23,10 @@ in, and the desktop is dark with a little amber along the way.
 
 - **One shortcut: Super + Space.** Find apps, files, clipboard history, and
   the web. Browser history is available if you opt in.
-- **AI on your computer.** Ollama runs local models; VS Code and Continue are
-  set up to use them.
+- **AI on your computer, if you want it.** Local models run through Ollama, set
+  up with one optional command and LLMFIT to find one that fits your hardware.
+  No model is downloaded until you pick one. VS Code and Continue are set up
+  to use them.
 - **A Control Panel.** Updates, your apps, Git and GitHub setup, AI models,
   your graphics card, a health check, and your privacy choices in one window,
   with no terminal needed.

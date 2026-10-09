@@ -1,5 +1,5 @@
 # Continue.dev — wired to the local Ollama daemon by noctraos.
-# Endpoint: http://localhost:11434 (installed by install/03_ai_core.sh)
+# Endpoint: http://localhost:11434 (set up by `noc llm setup`, optional)
 name: noctraos Local Assistant
 version: 1.0.0
 schema: v1

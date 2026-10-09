@@ -25,18 +25,14 @@ export REPO_ROOT TARGET_USER TARGET_UID TARGET_HOME
 source "$REPO_ROOT/install/lib.sh"
 
 # ---- flags ---------------------------------------------------------------------
-SKIP_AI=0
 SKIP_GUI=0
-SKIP_GPU=0
 ONLY=""
 while [ $# -gt 0 ]; do
   case "$1" in
-    --skip-ai)  SKIP_AI=1 ;;
     --skip-gui) SKIP_GUI=1 ;;
-    --skip-gpu) SKIP_GPU=1 ;;
     --only)     [ $# -ge 2 ] || die "--only needs a module file name, e.g. --only 04d_appmanager.sh"
                 ONLY="$2"; shift ;;
-    *) die "Unknown option: $1 (supported: --skip-ai --skip-gui --skip-gpu --only <module>)" ;;
+    *) die "Unknown option: $1 (supported: --skip-gui --only <module>)" ;;
   esac
   shift
 done
@@ -52,8 +48,8 @@ run_module() {
   bash "$REPO_ROOT/install/$1"
 }
 
-# Re-run a single module (e.g. to retry an optional download) with the full
-# environment set up above, then stop.
+# Re-run a single module (e.g. to retry a flaky download, or the optional local AI step: optional/local_llm.sh)
+# with the full environment set up above, then stop.
 if [ -n "$ONLY" ]; then
   [ -f "$REPO_ROOT/install/$ONLY" ] || die "no such module: install/$ONLY"
   run_module "$ONLY"
@@ -68,21 +64,7 @@ run_module 01b_vm_guest.sh \
   || warn "VM guest tools did not install — continuing. Retry: bash ~/.local/share/noctraos/install.sh --only 01b_vm_guest.sh"
 run_module 02_mise.sh
 
-# GPU drivers + CUDA/ROCm come before the AI core so Ollama sees a working GPU.
-# A failure here (no network to NVIDIA/AMD repos, unsupported kernel…) must not
-# block the rest of onboarding — it can be repeated later with `noc gpu install`.
-if [ "$SKIP_GPU" -eq 1 ]; then
-  log "SKIP 02b_gpu_drivers (--skip-gpu)"
-else
-  run_module 02b_gpu_drivers.sh \
-    || warn "GPU setup did not complete — continuing. Retry later with: noc gpu install"
-fi
-
-if [ "$SKIP_AI" -eq 1 ]; then
-  log "SKIP 03_ai_core (--skip-ai)"
-else
-  run_module 03_ai_core.sh
-fi
+# Local AI (GPU stack, Ollama, LLMFIT) is optional and runs later: `noc llm setup`. No model is downloaded by this installer.
 
 if [ "$SKIP_GUI" -eq 1 ]; then
   log "SKIP 04/04b/04c/04d/05/06/08/09/10/11 (--skip-gui)"
@@ -110,8 +92,5 @@ if [ "$SKIP_GUI" -eq 0 ]; then
 fi
 
 log "✔ Install complete. Full log: $LOG_FILE"
-if [ -f /var/run/reboot-required.pkgs ] && grep -x 'noctraos-gpu' /var/run/reboot-required.pkgs >/dev/null; then
-  warn "REBOOT REQUIRED: the GPU driver was installed and loads on next boot. Local models run on the CPU until then."
-fi
-log "Try it: right-click a file in Files → Scripts → 'Ask AI to Explain'."
+log "Local AI is optional and not set up yet: noc llm setup (then noc llm fit to find a model that fits)."
 log "Health check anytime with: noc doctor"
