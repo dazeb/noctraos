@@ -20,6 +20,23 @@ bash <(curl -sSfL https://raw.githubusercontent.com/dazeb/noctraos/main/proxmox-
 Every question can be answered through environment variables instead (`NOCTRAOS_MODE`,
 `NOCTRAOS_RAM`, `NOCTRAOS_CORES`, `NOCTRAOS_STORAGE`, ...; see the top of the script).
 
+### Running in a virtual machine
+
+A VM needs its hypervisor's guest tools, or the host cannot shut it down cleanly, show its IP address, share the
+clipboard or follow a window resize. The provisioner installs them by itself (module `01b_vm_guest.sh`, through
+`systemd-detect-virt`); bare metal is left alone.
+
+| Host | Installed |
+|---|---|
+| Proxmox, KVM, QEMU, libvirt | `qemu-guest-agent`, `spice-vdagent`. Proxmox also needs the VM option *QEMU Guest Agent* on; `proxmox-install.sh` sets it |
+| VMware | `open-vm-tools`, `open-vm-tools-desktop` |
+| VirtualBox | `virtualbox-guest-utils`, `virtualbox-guest-x11` |
+| Hyper-V | `linux-tools-virtual`, `linux-cloud-tools-virtual` |
+| Parallels | no package: install Parallels Tools from the Parallels Desktop menu |
+
+The downloadable VM disks (QCOW2, VMDK) carry the tools for all of these. `noc doctor` has a *VM guest tools* row inside a VM, and
+the Control Panel's Health page can fix a missing one with a click. By hand: `bash ~/.local/share/noctraos/install.sh --only 01b_vm_guest.sh`.
+
 ## Provision an existing machine
 
 Use a supported base system and check the [requirements](#requirements) first.

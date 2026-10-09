@@ -255,6 +255,7 @@ FIXES = {
     'hermes:install': [HERMES, 'install'],
     # Through the allowlisted root helper: one polkit prompt, never a terminal or a bare sudo.
     'module:04d_appmanager.sh': [PKEXEC, HELPER, 'module', '04d_appmanager.sh'],
+    'module:01b_vm_guest.sh': [PKEXEC, HELPER, 'module', '01b_vm_guest.sh'],
 }
 
 

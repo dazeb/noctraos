@@ -459,6 +459,17 @@ chk() {
   esac
 }
 
+# vm_guest_primary <hypervisor>: the package whose presence says the guest tools are in (install/01b_vm_guest.sh installs the
+# full set; tests/test_vm_guest.py checks this is the first package of each of its lists). Empty: nothing to check.
+vm_guest_primary() {
+  case "$1" in
+    kvm|qemu|bochs) echo qemu-guest-agent ;;
+    vmware)         echo open-vm-tools ;;
+    oracle)         echo virtualbox-guest-utils ;;
+    microsoft)      echo linux-tools-virtual ;;
+  esac
+}
+
 cmd_doctor() {
   [ "${1:-}" = "--json" ] && JSON=1
   if [ "$JSON" != 1 ]; then
@@ -564,6 +575,21 @@ cmd_doctor() {
     chk ok gpu "GPU" "NVIDIA $(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -n 1)"
   else
     chk info gpu "GPU" "noc-gpu not installed and no NVIDIA driver detected — Ollama will run on CPU"
+  fi
+
+  # Inside a virtual machine the hypervisor's guest agent is what lets the host shut the VM down cleanly, read its address,
+  # share the clipboard and follow window resizes. Bare metal has no such row.
+  local virt vmpkg
+  virt="$(systemd-detect-virt --vm 2>/dev/null || true)"
+  vmpkg="$(vm_guest_primary "$virt")"
+  if [ "$virt" = parallels ]; then
+    chk info vm-guest "VM guest tools" "Parallels VM: install Parallels Tools from the Parallels Desktop menu"
+  elif [ -n "$vmpkg" ]; then
+    if dpkg-query -W -f='${Status}' "$vmpkg" 2>/dev/null | grep -Fx 'install ok installed' >/dev/null; then
+      chk ok vm-guest "VM guest tools" "$vmpkg ($virt)"
+    else
+      chk warn vm-guest "VM guest tools" "$vmpkg missing — the host cannot shut this VM down cleanly or see its address (run: bash ~/.local/share/noctraos/install.sh --only 01b_vm_guest.sh)" "module:01b_vm_guest.sh"
+    fi
   fi
 
   [ -f /var/run/reboot-required ] && chk warn reboot "Reboot" "needed to finish an update"
