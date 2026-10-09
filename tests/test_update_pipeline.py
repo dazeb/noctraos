@@ -29,6 +29,16 @@ IS_GIT = (ROOT / ".git").exists()
 MIGRATION_RE = re.compile(r"^[0-9]{4}_[a-z0-9][a-z0-9_-]*\.sh$")
 
 
+def have_yq4():
+    """mikefarah's yq (Go, v4) turns the CI file into JSON with -o=json; the apt package named yq is a jq wrapper that rejects it."""
+    if not shutil.which("yq") or not shutil.which("jq"):
+        return False
+    return "mikefarah" in subprocess.run(["yq", "--version"], capture_output=True, text=True).stdout
+
+
+HAVE_YQ4 = have_yq4()
+
+
 @unittest.skipUnless(IS_GIT and shutil.which("git"), "needs a git checkout of the repository")
 class RealBundleTests(Sandbox):
     """The publisher's repo is a clone of this one, so the bundle is what an update would really carry."""
@@ -363,14 +373,14 @@ class CiConfigTests(unittest.TestCase):
         out = subprocess.run(["yq", "-o=json", ".", str(ROOT / ".gitlab-ci.yml")], capture_output=True, text=True, check=True).stdout
         return json.loads(out)
 
-    @unittest.skipUnless(shutil.which("yq") and shutil.which("jq"), "needs yq and jq")
+    @unittest.skipUnless(HAVE_YQ4, "needs mikefarah yq v4 and jq")
     def test_update_jobs_exist_in_a_stage_after_the_release(self):
         ci = self.jobs()
         self.assertEqual(ci["stages"][-1], "update")
         for name in ("update-nightly", "update-stable-10", "update-stable-50", "update-stable-100"):
             self.assertEqual(ci[name]["stage"] if "stage" in ci[name] else ci[ci[name]["extends"]]["stage"], "update", name)
 
-    @unittest.skipUnless(shutil.which("yq") and shutil.which("jq"), "needs yq and jq")
+    @unittest.skipUnless(HAVE_YQ4, "needs mikefarah yq v4 and jq")
     def test_only_the_release_runner_and_only_protected_tags_reach_the_signing_key(self):
         ci = self.jobs()
         base = ci[".update"]
@@ -382,7 +392,7 @@ class CiConfigTests(unittest.TestCase):
         self.assertTrue(ci[".update-stable"]["allow_failure"])
         self.assertEqual(ci[".update-stable"]["extends"], ".update")
 
-    @unittest.skipUnless(shutil.which("yq") and shutil.which("jq"), "needs yq and jq")
+    @unittest.skipUnless(HAVE_YQ4, "needs mikefarah yq v4 and jq")
     def test_jobs_call_the_checked_front_not_the_publisher_directly(self):
         ci = self.jobs()
         for name, want in (("update-nightly", "nightly"), ("update-stable-10", "promote 10"), ("update-stable-50", "widen 50"),
