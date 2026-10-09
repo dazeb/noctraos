@@ -99,9 +99,13 @@ def _accounts_card(accounts, skipped=None):
 
 
 def _ollama_card(ollama):
-    if not ollama.get('running'):
+    state = local_ai_state(ollama)
+    if state == 'absent':
+        return Card('ollama', 'Local AI', 'Not set up',
+                    'Optional. Set it up from AI models to run models on this computer.', 'info', 'models')
+    if state != 'running':
         return Card('ollama', 'Local AI', 'Not running',
-                    'Local AI is optional. Ollama is not set up yet, or is not running.',
+                    'Ollama is installed but not answering. It may still be starting; open Health if it stays like this.',
                     'warn', 'models')
     n = ollama.get('models', 0)
     detail = f'Default model: {ollama.get("default_model")}'
@@ -413,6 +417,66 @@ def noc_run(*args, timeout=120):
         return False, str(error)
     text = (out.stdout + out.stderr).strip().splitlines()
     return out.returncode == 0, (text[-1] if text else '')
+
+
+# ---- Local AI: the optional engine ----------------------------------------------------------------
+#
+# The first-run install leaves local AI out (install/optional/local_llm.sh, `noc llm setup`). The AI models page offers it
+# here when the engine is absent: one root step through the helper, with a summary and a yes first, never on its own. It
+# is an option, not a setup chore: nothing nags and there is no "skip" (the Overview only points at the page).
+
+LOCAL_AI_SETUP = [PKEXEC, HELPER, 'module', 'optional/local_llm.sh']
+# The Ollama engine is a download of about 1.4 GB (the Apps page says the same); insist on a little under three times
+# that free for unpacking. A GPU driver adds its own need (disk_needed_gb). No model is downloaded by the step.
+LOCAL_AI_NEEDS = (1.4, 4)
+REBOOT_MARK = 'REBOOT REQUIRED'      # the line the module prints when a GPU driver needs a restart
+LOCAL_AI_ABOUT = ('Local AI runs AI models on this computer, with no account and nothing sent anywhere. '
+                  'It is optional: everything else works without it.')
+
+
+def local_ai_state(ollama):
+    """'running' | 'stopped' (installed, not answering) | 'absent' (never set up), from `noc status`' ollama block.
+    None when there is no block (noc could not be read)."""
+    if not isinstance(ollama, dict):
+        return None
+    if ollama.get('running'):
+        return 'running'
+    return 'stopped' if ollama.get('installed') else 'absent'
+
+
+def local_ai_summary(detect, ram_gb=None):
+    """What setting up local AI does, in plain words, for the consent dialog. Nothing happens until the person says yes."""
+    lines = [f'This installs Ollama, the program that runs AI models on this computer (about {LOCAL_AI_NEEDS[0]:g} GB to '
+             'download), and LLMFIT, a small tool that lists the models that fit it.']
+    gpu = gpu_install_lines(detect)
+    if gpu:
+        lines.append('Your graphics card is set up for it too.')
+        lines.extend(gpu)
+    elif isinstance(detect, dict) and not detect.get('gpus'):
+        lines.append('No NVIDIA or AMD graphics card was found, so models will run on the processor.')
+    if isinstance(ram_gb, (int, float)) and 0 < ram_gb < 8:
+        lines.append(f'This computer has {ram_gb} GB of memory. Local models want at least 8 GB, so expect only small '
+                     'ones to run well.')
+    lines.append('No model is downloaded yet: you pick one afterwards. This takes several minutes and needs the internet. '
+                 'Nothing changes until you press Set up.')
+    return lines
+
+
+def local_ai_blocker(detect, free_bytes):
+    """Why the setup must not start now, or ''."""
+    need = LOCAL_AI_NEEDS[1] + disk_needed_gb(detect)
+    if free_bytes is not None and free_bytes < need * 1024 ** 3:
+        return f'Not enough free disk space: about {need:g} GB is needed, {fmt_bytes(free_bytes)} is free.'
+    return ''
+
+
+def local_ai_result(code, reboot=False):
+    """What the page says when the setup step has finished."""
+    if code == 0:
+        return ('Local AI is ready. Pick a model below to download.'
+                + (' Restart the computer to finish the graphics driver; until then models run on the processor.'
+                   if reboot else ''))
+    return exit_message(code) or 'The setup did not finish. Show details has the reason; Health lists what is missing.'
 
 
 # ---- Updates ---------------------------------------------------------------------------------
@@ -776,8 +840,8 @@ def _amd_kind(detect):
     return ((detect or {}).get('plan') or {}).get('amd')
 
 
-def install_summary(detect):
-    """What `noc-gpu install` would do, in plain words, for the consent dialog. Never automatic."""
+def gpu_install_lines(detect):
+    """What `noc-gpu install` would set up for this machine's GPUs, one plain sentence each ([] when there is nothing)."""
     plan = (detect or {}).get('plan') or {}
     lines = []
     if 'nvidia' in install_vendors(detect):
@@ -793,8 +857,12 @@ def install_summary(detect):
                      'Local models keep running on the CPU until then.')
     if amd in ('rocm', 'override'):
         lines.append('You will need to log out and back in afterwards for the new GPU access to apply.')
-    lines.append('This takes several minutes. Nothing changes until you press Install.')
     return lines
+
+
+def install_summary(detect):
+    """What `noc-gpu install` would do, in plain words, for the consent dialog. Never automatic."""
+    return gpu_install_lines(detect) + ['This takes several minutes. Nothing changes until you press Install.']
 
 
 def disk_needed_gb(detect):
@@ -1168,7 +1236,9 @@ def setup_steps(status, extras=None):
     elif ollama.get('running'):
         steps.append(Step('models', 'Local AI model', 'Ollama runs but has no model yet. Pick one to download.', 'todo', 'models', button='Choose'))
     else:
-        steps.append(Step('models', 'Local AI model', 'Local AI is optional and not set up yet.', 'waiting', 'models', button='Open'))
+        text = ('Optional. Set up local AI to run models on this computer.' if local_ai_state(ollama) == 'absent'
+                else 'Ollama is installed but not running.')
+        steps.append(Step('models', 'Local AI model', text, 'waiting', 'models', button='Open'))
 
     hermes = status.get('hermes') or {}
     if not hermes.get('installed'):

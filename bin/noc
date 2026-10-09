@@ -785,12 +785,13 @@ cmd_channel() {
 }
 
 cmd_status() {
-  local os="" ollama=false oversion="" nmodels=0 tags gpu hmode="" hready=false
+  local os="" ollama=false oinstalled=false oversion="" nmodels=0 tags gpu hmode="" hready=false
   local idx="${XDG_CACHE_HOME:-$HOME/.cache}/noctraos-search/index.sqlite" idx_age=null
   [ -r /etc/os-release ] && os="$(. /etc/os-release; echo "${PRETTY_NAME:-$ID}")"
 
+  have ollama && oinstalled=true   # local AI is optional: the panel offers to set it up only when the engine is absent
   if oversion="$(curl -fsS --max-time 5 "$OLLAMA_URL/api/version" 2>/dev/null | jq -r .version 2>/dev/null)" && [ -n "$oversion" ]; then
-    ollama=true
+    ollama=true oinstalled=true
     tags="$(curl -fsS --max-time 5 "$OLLAMA_URL/api/tags" 2>/dev/null || true)"
     nmodels="$(printf '%s' "$tags" | jq '.models | length' 2>/dev/null || echo 0)"
   fi
@@ -826,14 +827,14 @@ cmd_status() {
     --arg version "$VERSION" --arg os "$os" \
     --argjson apt "$(apt_pending)" --argjson flatpak "$(flatpak_pending)" \
     --argjson reboot "$([ -f /var/run/reboot-required ] && echo true || echo false)" \
-    --argjson ollama "$ollama" --arg oversion "$oversion" --argjson nmodels "${nmodels:-0}" \
+    --argjson ollama "$ollama" --argjson oinstalled "$oinstalled" --arg oversion "$oversion" --argjson nmodels "${nmodels:-0}" \
     --arg model "$(effective_model)" --argjson gpu "$gpu" \
     --argjson free "$(df -B1 --output=avail / | awk 'NR==2 {print $1}')" \
     --argjson total "$(df -B1 --output=size / | awk 'NR==2 {print $1}')" \
     --argjson ram "$(ram_gb)" --arg hmode "$hmode" --argjson hready "$hready" --argjson idx "$idx_age" --argjson apps "$apps" --argjson accounts "$accounts" --argjson skipped "$skipped" --argjson dsk "$dsk" \
     '{version:$version, os:$os,
       updates:{apt:$apt, flatpak:$flatpak, reboot_required:$reboot},
-      ollama:{running:$ollama, version:(if $oversion=="" then null else $oversion end), models:$nmodels, default_model:$model},
+      ollama:{installed:$oinstalled, running:$ollama, version:(if $oversion=="" then null else $oversion end), models:$nmodels, default_model:$model},
       gpu:$gpu,
       disk:({root_free_bytes:$free, root_total_bytes:$total}
             + (if $dsk == null then {} else {expandable_bytes:($dsk.expandable_bytes // 0), can_grow:($dsk.can_grow // false),

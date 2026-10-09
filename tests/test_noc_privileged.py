@@ -52,6 +52,13 @@ class ValidateTests(unittest.TestCase):
             self.assertTrue(self.ok(snap + "validate_module 04d_appmanager.sh"))
             (Path(d) / "install/03b_ollama_update.sh").write_text("#!/bin/sh\n")
             self.assertTrue(self.ok(snap + "validate_module 03b_ollama_update.sh"))
+            # the optional local AI step lives in a subfolder of install/: allowed by its exact name, and only that
+            (Path(d) / "install/optional").mkdir()
+            (Path(d) / "install/optional/local_llm.sh").write_text("#!/bin/sh\n")
+            self.assertTrue(self.ok(snap + "validate_module optional/local_llm.sh"))
+            (Path(d) / "install/optional/other.sh").write_text("#!/bin/sh\n")
+            for bad in ("optional/other.sh", "optional/", "optional", "optional/../00_preflight.sh", "optional/local_llm.sh;id"):
+                self.assertFalse(self.ok(snap + f"validate_module '{bad}'"), bad)
             # present in the snapshot but not on the allowlist
             self.assertFalse(self.ok(snap + "validate_module 00_preflight.sh"))
             # on the allowlist but missing from the snapshot

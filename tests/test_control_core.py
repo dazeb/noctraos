@@ -129,10 +129,16 @@ class CardTests(unittest.TestCase):
         self.assertEqual(card.level, "warn")
         self.assertIn("Restart", card.detail)
 
-    def test_ollama_down_is_a_state(self):
-        down = {**STATUS, "ollama": {"running": False, "models": 0, "default_model": "x"}}
+    def test_ollama_installed_but_silent_is_a_warning(self):
+        down = {**STATUS, "ollama": {"installed": True, "running": False, "models": 0, "default_model": "x"}}
         card = by_id(down)["ollama"]
-        self.assertEqual((card.value, card.level), ("Not running", "warn"))
+        self.assertEqual((card.value, card.level, card.page), ("Not running", "warn", "models"))
+
+    def test_local_ai_that_was_never_set_up_is_information_not_a_warning(self):
+        absent = {**STATUS, "ollama": {"installed": False, "running": False, "models": 0, "default_model": "x"}}
+        card = by_id(absent)["ollama"]
+        self.assertEqual((card.value, card.level, card.page), ("Not set up", "info", "models"))
+        self.assertIn("Optional", card.detail)
 
     def test_gpu(self):
         self.assertEqual(by_id(STATUS)["gpu"].value, "GeForce RTX 3080 Ti")
@@ -730,6 +736,70 @@ class HardwareTests(unittest.TestCase):
         self.assertEqual(panel.hardware_state(None, None)["level"], "info")
 
 
+class LocalAiTests(unittest.TestCase):
+    """Local AI is optional: the AI models page offers to set it up, through the allowlisted module, after a summary and a yes."""
+
+    def test_state_tells_never_set_up_from_installed_but_silent(self):
+        self.assertEqual(panel.local_ai_state({"installed": True, "running": True}), "running")
+        self.assertEqual(panel.local_ai_state({"running": True}), "running")                  # an answering API is enough
+        self.assertEqual(panel.local_ai_state({"installed": True, "running": False}), "stopped")
+        self.assertEqual(panel.local_ai_state({"installed": False, "running": False}), "absent")
+        self.assertEqual(panel.local_ai_state({}), "absent")
+        for unreadable in (None, "x", []):
+            self.assertIsNone(panel.local_ai_state(unreadable))
+
+    def test_the_setup_runs_through_the_helper_and_a_listed_module(self):
+        import re
+        self.assertEqual(panel.LOCAL_AI_SETUP, [panel.PKEXEC, panel.HELPER, "module", "optional/local_llm.sh"])
+        self.assertNotIn("sudo", panel.LOCAL_AI_SETUP)
+        helper = (ROOT / "bin/noc-privileged").read_text()
+        self.assertIn(panel.LOCAL_AI_SETUP[-1], re.search(r"^MODULES=\((.*)\)", helper, re.M).group(1).split())
+        self.assertTrue((ROOT / "install" / panel.LOCAL_AI_SETUP[-1]).is_file())
+
+    def test_the_summary_says_what_is_installed_and_that_no_model_is_downloaded(self):
+        text = " ".join(panel.local_ai_summary(det("modern", gpus=[NV])))
+        self.assertIn("Ollama", text)
+        self.assertIn("LLMFIT", text)
+        self.assertIn("about 1.4 GB", text)
+        self.assertIn("NVIDIA", text)                       # the driver step is part of it, and named
+        self.assertIn("restart is needed", text)
+        self.assertIn("No model is downloaded yet", text)
+        self.assertIn("Nothing changes until you press Set up", text)
+
+    def test_without_a_gpu_the_summary_says_the_processor_does_the_work(self):
+        self.assertIn("processor", " ".join(panel.local_ai_summary({"gpus": [], "plan": {}})))
+        self.assertNotIn("processor", " ".join(panel.local_ai_summary(None)))      # unknown is not "none"
+        self.assertNotIn("driver", " ".join(panel.local_ai_summary({"gpus": [], "plan": {}})))    # no GPU step to describe
+
+    def test_little_memory_is_said_out_loud_and_enough_is_not(self):
+        self.assertIn("4 GB of memory", " ".join(panel.local_ai_summary(None, 4)))
+        for ram in (8, 32, None, 0):
+            self.assertNotIn("of memory", " ".join(panel.local_ai_summary(None, ram)), ram)
+
+    def test_disk_blocker_counts_the_engine_and_the_gpu_driver(self):
+        gb = 1024 ** 3
+        self.assertEqual(panel.local_ai_blocker(det(), 10 * gb), "")
+        self.assertIn("Not enough free disk space", panel.local_ai_blocker(det(), 2 * gb))
+        self.assertIn("about 4 GB", panel.local_ai_blocker(det(), 2 * gb))
+        self.assertIn("about 14 GB", panel.local_ai_blocker(det("modern", gpus=[NV]), 12 * gb))   # engine 4 + NVIDIA 10
+        self.assertEqual(panel.local_ai_blocker(det("modern", gpus=[NV]), 14 * gb), "")
+        self.assertEqual(panel.local_ai_blocker(det(), None), "")        # unknown free space does not stop it
+
+    def test_result_text(self):
+        self.assertIn("Pick a model", panel.local_ai_result(0))
+        self.assertNotIn("Restart", panel.local_ai_result(0))
+        self.assertIn("Restart the computer", panel.local_ai_result(0, reboot=True))
+        self.assertIn("cancelled", panel.local_ai_result(126))
+        self.assertIn("did not finish", panel.local_ai_result(1))
+
+    def test_the_module_prints_the_line_the_page_looks_for(self):
+        self.assertIn(panel.REBOOT_MARK, (ROOT / "install/optional/local_llm.sh").read_text())
+
+    def test_about_text_does_not_promise_what_hermes_does(self):
+        # Hermes' free tier is a cloud service (AGENTS.md): this page is about Ollama models only.
+        self.assertNotIn("Hermes", panel.LOCAL_AI_ABOUT)
+
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -1089,6 +1159,10 @@ class SetupChecklistTests(unittest.TestCase):
     def test_hermes_and_models_wait_instead_of_nagging(self):
         steps = self.steps(hermes={"installed": False, "mode": None}, ollama={"running": False})
         self.assertEqual((steps["hermes"].state, steps["models"].state), ("waiting", "waiting"))
+        self.assertIn("Optional", steps["models"].text)                     # never set up: an option, not a chore
+        silent = self.steps(ollama={"installed": True, "running": False})["models"]
+        self.assertEqual(silent.state, "waiting")
+        self.assertIn("installed but not running", silent.text)
         none = self.steps(ollama={"running": True, "models": 0, "default_model": "m"})
         self.assertEqual(none["models"].state, "todo")
 

@@ -991,10 +991,15 @@ class ModelsPage(Page):
         row.pack_start(self.cancel, False, False, 0)
         self.progress_box.add(row)
         self.pack_start(self.progress_box, False, False, 0)
+        self.run = RunLog()                 # the one-time local AI setup, when the engine is not installed
+        self.pack_start(self.run, False, False, 0)
         self.holder = self.scroller()
         self.pulling = None   # name being downloaded, None when idle
         self.stop = False
         self.loaded = False
+        self.running = False  # the local AI setup is running
+        self.status = None    # `noc status`, read only while Ollama does not answer
+        self.setup_button = None
         self.buttons = []
 
     def on_show(self):
@@ -1002,22 +1007,26 @@ class ModelsPage(Page):
             self.refresh()
 
     def refresh(self):
+        if self.running:
+            return
         self.loaded = True
         self.spinner.start()
 
         def work():
             listing = panel.noc_json('models', 'list', '--json')
-            return listing, panel.noc_json('models', 'presets', '--json')
+            presets = panel.noc_json('models', 'presets', '--json')
+            # Why Ollama is not answering (never set up, or installed and silent) takes the whole status.
+            return listing, presets, (None if (listing or {}).get('ollama') else panel.noc_json('status'))
         background(work, self._loaded)
 
     def _loaded(self, result):
         self.spinner.stop()
-        listing, presets = result
+        listing, presets, self.status = result
         self.buttons = []
+        self.setup_button = None
         body = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10, margin_end=8)
         if listing is None or not listing.get('ollama'):
-            body.add(label('Ollama is not running yet. It starts by itself after the first boot; '
-                           'press Refresh in a minute.', 'muted'))
+            self._not_running(body)
             self.swap(self.holder, body)
             return
         installed = panel.installed_rows(listing)
@@ -1036,6 +1045,73 @@ class ModelsPage(Page):
         body.add(self._custom_row())
         self.swap(self.holder, body)
         self._set_busy(self.pulling is not None)
+
+    def _not_running(self, body):
+        """Local AI is optional: say whether it was never set up (and offer to) or is installed but silent."""
+        state = panel.local_ai_state((self.status or {}).get('ollama'))
+        if state == 'absent':
+            body.add(label('Local AI is not set up', 'row-title'))
+            body.add(label(panel.LOCAL_AI_ABOUT, 'card-detail', chars=80))
+            self.setup_button = button('Set up local AI…', 'suggested', on_click=lambda *_: self._confirm_setup())
+            self.setup_button.set_halign(Gtk.Align.START)
+            body.add(self.setup_button)
+        elif state == 'stopped':
+            body.add(label('Ollama is installed but not answering. It may still be starting: press Refresh in a minute. '
+                           'If it stays like this, open Health.', 'muted', chars=80))
+        else:
+            body.add(label('Could not check local AI. Press Refresh to try again.', 'muted'))
+
+    # -- set up local AI: an explicit summary and a yes, never on its own -----------------------
+    def _confirm_setup(self):
+        if self.running or self.pulling:
+            return
+        status = self.status or {}
+        detect, ram = status.get('gpu'), status.get('ram_gb')
+        blocker = panel.local_ai_blocker(detect, (status.get('disk') or {}).get('root_free_bytes'))
+        dialog = Gtk.MessageDialog(transient_for=self.window, modal=True, message_type=Gtk.MessageType.QUESTION,
+                                   buttons=Gtk.ButtonsType.NONE, text='Set up local AI?')
+        dialog.format_secondary_text('\n\n'.join(panel.local_ai_summary(detect, ram)) + (f'\n\n{blocker}' if blocker else ''))
+        dialog.add_button('Cancel', Gtk.ResponseType.CANCEL)
+        if not blocker:
+            dialog.add_button('Set up', Gtk.ResponseType.OK)
+        answer = dialog.run()
+        dialog.destroy()
+        if answer == Gtk.ResponseType.OK:
+            self._setup()
+
+    def _setup(self):
+        self.running = True
+        if self.setup_button:
+            self.setup_button.set_sensitive(False)
+        self.say(self.note, '')
+        self.run.begin('Setting up local AI…')
+
+        def work():
+            reboot = False
+            for event in panel.run_events(panel.LOCAL_AI_SETUP):
+                if event['event'] == 'exit':
+                    return event['code'], reboot
+                line = event.get('line') or ''
+                reboot = reboot or panel.REBOOT_MARK in line
+                GLib.idle_add(self._tick, line)
+            return 1, reboot
+        background(work, self._setup_done)
+
+    def _tick(self, line):
+        if line:
+            self.run.append(line)
+        self.run.set_status('Setting up local AI…', None)
+        return False
+
+    def _setup_done(self, result):
+        code, reboot = result
+        self.running = False
+        if code == 0:
+            self.run.hide()
+        else:
+            self.run.set_status('The setup did not finish.', 0)    # the log stays open: it holds the reason
+        self.say(self.note, panel.local_ai_result(code, reboot))
+        self.refresh()
 
     def _installed_row(self, item):
         box = Gtk.Box(spacing=10, margin_top=4)
@@ -1109,7 +1185,7 @@ class ModelsPage(Page):
         background(lambda: panel.noc_run('models', 'rm', item['name']), done)
 
     def pull(self, name):
-        if self.pulling:
+        if self.pulling or self.running:
             return
         self.pulling, self.stop = name, False
         self.say(self.note, '')

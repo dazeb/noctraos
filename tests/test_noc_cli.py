@@ -364,6 +364,19 @@ class DoctorStatusTests(unittest.TestCase):
         self.assertFalse(data["ollama"]["running"])
         self.assertEqual(data["ollama"]["models"], 0)
 
+    def test_status_json_says_whether_ollama_is_installed(self):
+        # An answering API implies the engine is there, even when its binary is not on this PATH.
+        self.assertTrue(json.loads(Env(self).noc("status", "--json").stdout)["ollama"]["installed"])
+        silent = Env(self, ollama=False)
+        silent.stub("ollama", "true")                       # installed, but its API does not answer
+        data = json.loads(silent.noc("status", "--json").stdout)["ollama"]
+        self.assertEqual((data["installed"], data["running"]), (True, False))
+
+    @unittest.skipIf(shutil.which("ollama"), "the test needs a machine without Ollama")
+    def test_status_json_never_set_up_is_not_installed(self):
+        data = json.loads(Env(self, ollama=False).noc("status", "--json").stdout)["ollama"]
+        self.assertEqual((data["installed"], data["running"]), (False, False))
+
 
 class LocalLlmTests(unittest.TestCase):
     """`noc llm`: the optional local AI step. Nothing here downloads a model; the installer is a stand-in."""

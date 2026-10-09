@@ -4,7 +4,7 @@
 #   noc-privileged update <apt|flatpak|noctraos>[,<...>]   noc update --json for the system-level steps
 #   noc-privileged update-channel <stable|nightly>  choose which NoctraOS update channel this machine follows
 #   noc-privileged update-rollback                put the previous NoctraOS layer back (code only; migrations stay)
-#   noc-privileged module <module-file>           re-run one install module (allowlist below)
+#   noc-privileged module <module-file>           run one install module (allowlist below; optional/local_llm.sh sets up local AI)
 #   noc-privileged gpu-install <nvidia|amd|all>   noc-gpu install for one vendor (drivers + CUDA/ROCm/Vulkan)
 #   noc-privileged disk-grow                      noc-disk grow: use the unused space of the system disk (no arguments)
 #   noc-privileged remote-access <on|off>         turn the SSH server (remote login) on or off, now and at boot
@@ -18,7 +18,7 @@ set -uo pipefail
 SNAPSHOT=/usr/local/share/noctraos/repo
 NOC=/usr/local/bin/noc
 # Modules the panel may re-run. Add a name here only if it is idempotent and safe to run unattended.
-MODULES=(04d_appmanager.sh 03b_ollama_update.sh 01b_vm_guest.sh)
+MODULES=(04d_appmanager.sh 03b_ollama_update.sh 01b_vm_guest.sh optional/local_llm.sh)
 UPDATE_STEPS=(apt flatpak noctraos)
 SELFUPDATE=/usr/local/libexec/noctraos/noc-selfupdate
 UPDATE_CHANNELS=(stable nightly)

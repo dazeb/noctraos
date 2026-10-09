@@ -352,7 +352,7 @@ bash -n boot.sh install.sh install/*.sh install/optional/*.sh bin/noc bin/noc-gp
 docker run --rm -v "$PWD:/mnt" koalaman/shellcheck:stable --severity=warning \
   boot.sh install.sh install/*.sh install/optional/*.sh bin/noc bin/noc-gpu bin/noc-privileged bin/noctraos-control bin/noctraos-agent \
   bin/noctraos-copyq bin/noctraos-hermes configs/nautilus-scripts/*     # same list as CI
-python3 -m unittest discover -s tests                # 522 tests: theme, GPU detection, noc JSON modes, root helper, Control Panel
+python3 -m unittest discover -s tests                # 546 tests: theme, GPU detection, noc JSON modes, root helper, Control Panel
 python3 scripts/render-theme.py --check              # committed theme outputs match palette.json
 
 # wallpaper iteration (venv at ~/workspace/scratch/zorin-img-venv: pillow+numpy)
@@ -593,6 +593,12 @@ tail -f /root/noctraos-build.log
   file header (`[keyring]` plain, `GnomeKeyring` encrypted) and only states the trade-off and offers Passwords and Keys; it never
   changes the keyring. Chromium and VS Code use `--password-store=basic`, so a keyring password would not cover them, and the
   text says so. Untested on a real desktop so far: the `copyq eval` clear script and the `ssh.socket` switch.
+- **Local AI is set up from the AI models page, never on its own.** When `noc status --json` says `ollama.installed` is false the page offers
+  "Set up local AI…": a summary (Ollama about 1.4 GB, the GPU driver lines from `noc-gpu`, LLMFIT, "no model is downloaded"), a free-disk check
+  (`panel.LOCAL_AI_NEEDS` plus the GPU's need) and a yes, then `pkexec noc-privileged module optional/local_llm.sh` (the exact name is in
+  `MODULES`; it runs from the root-owned snapshot like every module). It is an option, not a setup chore: the Overview card and checklist step
+  only point at the page (`waiting`, never `todo`), so there is no skip button. A failed run keeps its log open on the page. Untested on a real
+  desktop so far: the pkexec run itself (the GTK flow is driven in `tests/test_control_smoke.py` with a stand-in for it).
 - **The Control Panel is a GUI for `noc`, nothing more.** `control/main.py` calls `noc ... --json`
   on a thread (`background()`), never blocks GTK, and every page needs a "not ready yet" state
   (Ollama down, no network) rather than an exception. Put anything that can be tested without
