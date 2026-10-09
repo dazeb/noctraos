@@ -105,5 +105,7 @@ Built on **Zorin OS 18 / Ubuntu 24.04 LTS**, with thanks to their communities,
 and inspired by [Omarchy](https://omarchy.org) and [Omakub](https://omakub.org).
 NoctraOS is independent and isn't affiliated with or endorsed by those projects.
 
-No license has been selected yet; all rights reserved until then. Agent names
-and logos belong to their respective projects.
+NoctraOS is released under the [MIT License](LICENSE). Third-party components
+keep their own licenses: Zorin OS and Ubuntu packages, the bundled fonts
+(SIL OFL, see `assets/`) and the vendored agent skills in `.agents/`. Agent
+names and logos belong to their respective projects.
