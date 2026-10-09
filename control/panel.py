@@ -463,6 +463,10 @@ def update_rows(updates):
         if a.get('relogin') or a.get('reboot'):
             detail += '. You will need to ' + ('restart' if a.get('reboot') else 'sign out and back in') + ' afterwards.'
         row('noctraos', detail, True, True)
+    elif nu.get('status') == 'held':
+        row('noctraos', 'An update was put back on this computer. It is not offered again; the next one will be.', False, False)
+    elif nu.get('status') == 'expired':
+        row('noctraos', 'The update information is out of date. Try again when you are online.', False, False)
     elif nu.get('status') in ('current', 'staged'):
         row('noctraos', 'Up to date.' if nu['status'] == 'current' else 'Up to date. A newer update is being rolled out in stages and will reach you soon.', False, False)
     else:
@@ -1033,7 +1037,7 @@ def layer_summary(status):
     elif failed:
         problem = f'A step of the last update did not finish ({", ".join(failed)}). It is tried again at the next update.'
     elif status.get('held'):
-        problem = f'Update {status["held"]} did not work on this computer and was put back. The next update will be tried.'
+        problem = f'Update {status["held"]} was put back on this computer, so it is not offered again. The next update will be.'
     else:
         problem = ''
     return {'headline': headline, 'problem': problem, 'channel': status.get('channel'),

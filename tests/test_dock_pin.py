@@ -68,6 +68,12 @@ class FreshInstallTests(unittest.TestCase):
         self.assertTrue((ROOT / "configs/applications" / ID).is_file())
         self.assertTrue((ROOT / "assets/icons/noctraos-control.svg").is_file())
 
+    def test_the_running_window_groups_under_the_pinned_icon(self):
+        """GNOME matches a window to its launcher by app id; GTK takes it from the program name, so main.py must set it to the
+        launcher's file name (found on a real desktop: without it the panel got a second, generic icon next to the pinned one)."""
+        main = (ROOT / "control/main.py").read_text()
+        self.assertIn(f"GLib.set_prgname('{ID.removesuffix('.desktop')}')", main)
+
     def test_the_launcher_names_the_panel(self):
         launcher = (ROOT / "configs/applications" / ID).read_text()
         self.assertIn("Name=NoctraOS Control Panel", launcher)
