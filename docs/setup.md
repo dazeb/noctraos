@@ -34,6 +34,15 @@ clipboard or follow a window resize. The provisioner installs them by itself (mo
 | Hyper-V | `linux-tools-virtual`, `linux-cloud-tools-virtual` |
 | Parallels | no package: install Parallels Tools from the Parallels Desktop menu |
 
+The ISO has `qemu-guest-agent` built in, so a Proxmox or KVM VM answers its host from the first boot, before anyone logs in. The
+provisioner runs this step first of all, before any check that could stop it, and it never stops the install if it fails.
+Proxmox shows the address only when the VM option is on (VM > Options > *QEMU Guest Agent*: Enabled) and the VM was shut down and started
+again after you set it; `noc doctor` says so when the agent is installed but the host has not opened its channel.
+
+Optional and reversible: `NOCTRAOS_VM_GUEST=skip` does nothing for one run; `NOCTRAOS_VM_GUEST=remove bash ~/.local/share/noctraos/install.sh --only 01b_vm_guest.sh`
+removes this hypervisor's packages and creates `~/.config/noctraos/no-vm-guest`, after which no run installs them and `noc doctor` stays quiet.
+Delete that file to turn them back on.
+
 The downloadable VM disks (QCOW2, VMDK) carry the tools for all of these. `noc doctor` has a *VM guest tools* row inside a VM, and
 the Control Panel's Health page can fix a missing one with a click. By hand: `bash ~/.local/share/noctraos/install.sh --only 01b_vm_guest.sh`.
 

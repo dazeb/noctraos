@@ -57,11 +57,13 @@ if [ -n "$ONLY" ]; then
   exit 0
 fi
 
-run_module 00_preflight.sh
-run_module 01_system.sh
-# Non-core: a VM without its guest agent still works, but the host cannot shut it down cleanly or read its address.
+# First, before even the preflight: a VM without its guest agent works, but the host (Proxmox, VMware, ...) cannot show its address or
+# shut it down cleanly, so it must not wait for a setup that may stop early (a small disk, no network). A bare-metal machine returns at once.
+# Non-core: whatever happens here, the install goes on.
 run_module 01b_vm_guest.sh \
   || warn "VM guest tools did not install — continuing. Retry: bash ~/.local/share/noctraos/install.sh --only 01b_vm_guest.sh"
+run_module 00_preflight.sh
+run_module 01_system.sh
 run_module 02_mise.sh
 
 # Local AI (GPU stack, Ollama, LLMFIT) is optional and runs later: `noc llm setup`. No model is downloaded by this installer.

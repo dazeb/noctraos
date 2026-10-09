@@ -11,6 +11,7 @@
 #                                          the user's first desktop login
 #        boot menus (BIOS isolinux + UEFI grub), live-boot splash, installed
 #        splash/GRUB theme and the dark installer session (iso/boot-theme.sh)
+#        qemu-guest-agent baked in (iso/bake-guest-tools.sh), so Proxmox sees the VM's IP from the first boot
 #        .disk/info rebranded to "NoctraOS"
 #   4. repacks the squashfs with the original compressor
 #   5. writes a new ISO with xorriso, replaying the original boot equipment
@@ -71,6 +72,8 @@ source "$(cd "$(dirname "$0")" && pwd)/strip-census.sh"
 source "$(cd "$(dirname "$0")" && pwd)/rebrand-labels.sh"
 # shellcheck source=iso/bake-shell.sh
 source "$(cd "$(dirname "$0")" && pwd)/bake-shell.sh"
+# shellcheck source=iso/bake-guest-tools.sh
+source "$(cd "$(dirname "$0")" && pwd)/bake-guest-tools.sh"
 
 need() { command -v "$1" >/dev/null 2>&1 || { echo "missing dependency: $1" >&2; exit 1; }; }
 need xorriso; need unsquashfs; need mksquashfs; need git; need openssl
@@ -242,6 +245,7 @@ boot_theme_squashfs "$SQ_ROOT"
 strip_census "$SQ_ROOT"
 rebrand_labels "$SQ_ROOT" "$RELEASE_VERSION"
 bake_shell "$SQ_ROOT" "$SQ_ROOT/opt/noctraos"
+bake_guest_tools "$SQ_ROOT"
 
 if [ "$UNATTENDED" = 1 ]; then
 step "4/7 adding unattended boot entries (BIOS isolinux + UEFI grub)"

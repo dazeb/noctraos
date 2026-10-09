@@ -33,7 +33,7 @@ install/
                             desktop_file_exists(). Modules MUST source it.
   00_preflight.sh           user/sudo/OS/network/25GB-disk/RAM checks
   01_system.sh              apt core + python build deps, Flathub, Nerd Font
-  01b_vm_guest.sh           VM guest tools: qemu-guest-agent + spice-vdagent (KVM/Proxmox), open-vm-tools (VMware), VirtualBox
+  01b_vm_guest.sh           VM guest tools, FIRST in install.sh (before the preflight): qemu-guest-agent + spice-vdagent (KVM/Proxmox), open-vm-tools (VMware), VirtualBox
                             guest utils, Hyper-V daemons; a no-op on bare metal; NOCTRAOS_VM_GUEST=all installs every set (images)
   02_mise.sh                mise binary, profile.d + bash.bashrc hooks, runtimes,
                             Herdr, Starship, lazygit, lazydocker
@@ -60,7 +60,7 @@ install/
                             (update-alternatives, update-initramfs, update-grub)
   11_hermes.sh              Hermes Desktop preinstalled (runtime + Electron app build),
                             free Nous tier primary, local Ollama fallback; runs LAST (25+ min, no sudo)
-                            (module order in install.sh: 00 01 01b 02 04 04_workstation 04c 04d 05 06 08 09 10 07 11 — the first run never downloads a model)
+                            (module order in install.sh: 01b 00 01 02 04 04_workstation 04c 04d 05 06 08 09 10 07 11 — the first run never downloads a model)
 bin/
   noc                       CLI: update [--json] [--only ..] | updates | doctor [--json] | status | models [list [--json]|default|presets|pull|rm] | llm [setup|fit]
                             | skip [list [--json]|add|rm] | bg [list|next|set] | gpu. Sourceable (tests call its functions); NOC_OLLAMA_URL overrides the Ollama URL
@@ -150,6 +150,8 @@ iso/publish-update.sh       rolling updates for installed systems: build/promote
 iso/vm-image.sh, r2-env.sh, boot-test-image.sh   shared by nightly and release: the VM provisioning, rclone env, exported-disk boot test
 iso/setup-release-runner.sh doctor|install|status|remove the GitLab runner (user service, tag noctraos-release, protected refs) that runs the above
 scripts/update-site-release.py, release-site-pr.sh, make-torrent.py   rewrite the site for a release, open+merge the PR, wait for the deploy
+iso/bake-guest-tools.sh     sourced by the build script: installs qemu-guest-agent into the squashfs (chroot apt, best effort), so a Proxmox/KVM VM
+                            answers its host from the first boot, before login; the provisioner's 01b covers every other hypervisor
 iso/bake-shell.sh           sourced by the build script: copies the Shell extensions, search app, schemas and the two setup
                             autostarts into the squashfs so the FIRST session has Super+Space and the Start panel
 iso/boot-theme.sh           sourced by the build script: themes the extracted ISO
@@ -272,6 +274,13 @@ iso/vm-sysprep.sh           run inside a fully provisioned VM before exporting i
   (3) `noc doctor` has a `vm-guest` row inside a VM, fixable from the panel through `noc-privileged module 01b_vm_guest.sh`; the package map
   lives twice (module and `vm_guest_primary` in `bin/noc`), `tests/test_vm_guest.py` keeps them in step. Untested on real VMware, VirtualBox and
   Hyper-V hosts (only the KVM path can be tried here): check `noc doctor` after the next image boot on each.
+  **Why a fresh ISO install once showed no IP in Proxmox (2026-10-09):** 01b used to run only after login, the sudo password, the clone, the
+  preflight and module 01, and the 0.4.0 ISO predates 01b (and its first-boot runner falls back to that old snapshot when `git` is missing).
+  So now: (4) 01b is FIRST in `install.sh`, before the preflight (a 25 GB disk check or no network used to end the run before it); (5) the ISO
+  bakes `qemu-guest-agent` in (`iso/bake-guest-tools.sh`, best effort, KVM/Proxmox is the common case) so it answers before anyone logs in;
+  (6) it is optional and reversible: `NOCTRAOS_VM_GUEST=skip|remove`, and `~/.config/noctraos/no-vm-guest` keeps a removal (doctor stays quiet);
+  (7) installed but no `/dev/virtio-ports/org.qemu.guest_agent.0` means the Proxmox VM option is off: the module and `noc doctor` say how to set it.
+  Not tested on a real Proxmox VM or an ISO build (needs the Zorin base ISO): the module, doctor and bake step are covered by stubbed tests only.
 - **Every setup chore is skippable and every action has a terminal tip** (user's rule, 2026-10-09: "mouse first, terminal a close second"). A
   chore the panel offers (Git identity, GitHub sign-in, GPU setup) has a "No, I'll set it up myself" button that runs `noc skip add <id>`
   (the one store, `~/.config/noctraos/skipped`; `noc status --json` carries it as `skipped`), after which nothing nags (Overview card, page
