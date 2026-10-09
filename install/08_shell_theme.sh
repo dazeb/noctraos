@@ -4,6 +4,11 @@
 set -Eeuo pipefail
 source "$REPO_ROOT/install/lib.sh"
 
+if ! desktop_is_gnome; then
+  warn "NOT APPLIED: GNOME shell and GTK theme (Plasma theme port pending)"
+  exit 0
+fi
+
 BASE_THEME="/usr/share/themes/ZorinBlue-Dark"
 BASE_GTK_THEME="/usr/share/themes/ZorinPurple-Dark"
 THEME_NAME="NoctraOS-Dark"

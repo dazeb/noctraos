@@ -70,3 +70,19 @@ install_launchers() {
   fi
   return 0
 }
+
+# desktop_name — the session desktop for messages ("KDE", "GNOME", "unknown").
+desktop_name() { printf '%s' "${XDG_CURRENT_DESKTOP:-${DESKTOP_SESSION:-unknown}}"; }
+
+# desktop_is_gnome — success only when GNOME Shell is available as the desktop:
+# the gnome-shell binary must exist AND (XDG_CURRENT_DESKTOP names GNOME, or the
+# binary is present). GNOME-only modules (06, 08, 09) use it to skip honestly
+# instead of reporting success on KDE Plasma, where nothing they write is read.
+desktop_is_gnome() {
+  have gnome-shell || return 1
+  case "${XDG_CURRENT_DESKTOP:-}" in
+    "") return 0 ;;        # unset (SSH, headless): gnome-shell on PATH decides
+    *GNOME*) return 0 ;;
+    *) return 1 ;;         # a set desktop without GNOME (KDE, XFCE) wins
+  esac
+}
