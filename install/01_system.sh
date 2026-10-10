@@ -27,6 +27,21 @@ for p in fuse3 libfuse2t64 libfuse2; do
   fi
 done
 
+# Flatpak portals: the portal backend for the running desktop provides file dialogs, screen
+# sharing and the open-with chooser. Every flavour gets both desktop backends (GNOME and Plasma)
+# plus the GTK fallback, so no flavour has to choose one by desktop. xdg-desktop-portal picks the
+# backend that matches the session, and the apps come from Flathub on every flavour.
+for p in xdg-desktop-portal xdg-desktop-portal-gtk xdg-desktop-portal-gnome xdg-desktop-portal-kde; do
+  if dpkg-query -W -f='${Status}' "$p" 2>/dev/null | grep -Fx 'install ok installed' >/dev/null; then
+    log "OK: $p already installed"
+  elif apt-cache show "$p" >/dev/null 2>&1; then
+    sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "$p" \
+      || warn "Flatpak portal failed to install: $p"
+  else
+    warn "Flatpak portal not available in this release (skipped): $p"
+  fi
+done
+
 # Optional packages whose names vary across Zorin/Ubuntu releases.
 for p in nautilus gnome-terminal nautilus-extension-gnome-terminal; do
   if apt-cache show "$p" >/dev/null 2>&1; then
