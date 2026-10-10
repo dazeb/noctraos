@@ -1,0 +1,6 @@
+# Flavour boundaries. A change to one flavour's code needs its owner's review, so a change
+# for one flavour cannot land unseen. Enforced only once branch protection requires code owner
+# review on main.
+/install/desktop/gnome/   @dazeb
+/install/desktop/plasma/  @dazeb
+/iso/flavours/            @dazeb
