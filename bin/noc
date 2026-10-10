@@ -224,6 +224,7 @@ cmd_models() {
           jq -n --arg d "$def" --argjson boot "$(ollama_boot_json)" '{ollama:false, autostart:$boot, default:$d, models:[]}'
         fi
       else
+        have ollama || { bad "local AI is not set up yet — run: noc llm setup"; return 1; }
         ollama list
       fi
       ;;
