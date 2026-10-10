@@ -36,6 +36,10 @@ The base and the desktop are implementation choices. The product stays the same.
 - Super+Space as the one shortcut, with the same results. The UI behind it can differ.
 - The app set and the Flatpak-first policy (`install/04c_app_policy.sh`), except the exceptions a flavour
   documents below.
+- Flatpak and AppImage prerequisites (`install/01_system.sh`): the same packages on every flavour. That
+  means FUSE 2 and FUSE 3 for AppImages, and all four desktop portal backends (GTK, GNOME and KDE, plus the
+  portal itself), so no flavour chooses a portal by desktop. Flatpak apps bring their own runtimes, so the
+  desktop does not change which apps run; it only changes the file dialogs and theme integration.
 - Palette, wallpapers and visual direction (`configs/theme/palette.json`, `docs/theme-design.md`),
   implemented the way each desktop does it.
 - Update rules: signed bundles, staged rollout and migrations.
