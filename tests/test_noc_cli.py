@@ -444,6 +444,13 @@ class LocalLlmTests(unittest.TestCase):
                 self.assertEqual(result.returncode, 1)
                 self.assertIn("noc llm setup", result.stdout)
 
+    def test_models_list_names_the_setup_step_when_nothing_is_installed(self):
+        e = Env(self, ollama=False)
+        result = e.noc("models", "list", PATH=str(e.bin) + ":/usr/bin:/bin")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("noc llm setup", result.stdout)
+        self.assertNotIn("command not found", result.stdout + result.stderr)
+
     def test_update_has_no_models_step_failure_without_local_ai(self):
         e = Env(self, ollama=False)
         result = e.noc("update", "--only", "models", PATH=str(e.bin) + ":/usr/bin:/bin")
