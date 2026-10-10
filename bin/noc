@@ -3,13 +3,17 @@
 #   noc update        apt + Flatpak + NoctraOS features + mise runtimes + Hermes/agents + AI models  [--json] [--only apt,flatpak,noctraos,mise,apps,models]
 #   noc accounts      Git name/e-mail and GitHub sign-in: status [--json] | git set --name N --email E | github login|logout|suggest
 #   noc skip          setup chores you chose to do yourself: list [--json] | add <git|github|gpu> | rm <id>
-#   noc channel       which NoctraOS update channel this machine follows: (no argument: show it) | stable | nightly
+#   noc channel       which NoctraOS update channel this machine follows: (no argument: show it) | stable | nightly | rollback
 #   noc apps          tracked upstream apps (Hermes, Ollama, AppManager, coding agents): installed vs latest release  [--json] [--refresh]
+#                     | update [app,app]  (bring them to the newest release; Ollama and AppManager ask for sudo)
+#   noc repair        run again what `noc doctor` found missing: appmanager | vm-guest | hermes
+#   noc privacy       what the installer arranged without asking: status [--json] | remote [on|off] | clipboard [clear] | hermes [status|local|cloud]
 #   noc doctor        health check of the whole stack  [--json]
 #   noc status        Overview data as JSON (versions, updates, Ollama, GPU, disk, Hermes)
 #   noc updates       what an update would do, as JSON (counts, apt download size, online)
 #   noc models        list [--json] | default [name] | presets [--json] | pull <model> | rm <model>
 #   noc llm           optional local AI: setup (GPU stack, Ollama, LLMFIT; no model) | fit (LLMFIT: find a model that fits)
+#                     | start | stop (the Ollama service now) | autostart [on|off] (start it with the computer; off unless you turn it on)
 #   noc gpu           detect | install | status  (NVIDIA CUDA / AMD ROCm for local LLMs)
 #   noc disk          status | grow  (use the space when the system disk was made bigger)
 set -uo pipefail
@@ -213,11 +217,11 @@ cmd_models() {
           while IFS= read -r name; do
             caps="$(model_capabilities "$name" | jq -c --arg n "$name" --argjson c "$caps" '$c + {($n): .}')"
           done < <(printf '%s' "$tags" | jq -r '.models[]?.name')
-          printf '%s' "$tags" | jq --arg d "$def" --argjson caps "$caps" \
-            '{ollama:true, default:$d, models:[.models[]? | {name, size, modified:.modified_at,
+          printf '%s' "$tags" | jq --arg d "$def" --argjson caps "$caps" --argjson boot "$(ollama_boot_json)" \
+            '{ollama:true, autostart:$boot, default:$d, models:[.models[]? | {name, size, modified:.modified_at,
               is_default:(.name == $d or .name == ($d + ":latest")), capabilities:($caps[.name] // [])}]}'
         else
-          jq -n --arg d "$def" '{ollama:false, default:$d, models:[]}'
+          jq -n --arg d "$def" --argjson boot "$(ollama_boot_json)" '{ollama:false, autostart:$boot, default:$d, models:[]}'
         fi
       else
         ollama list
@@ -249,6 +253,7 @@ cmd_models() {
     rm|remove|delete)
       local m="${2:-}"
       [ -z "$m" ] && { echo "usage: noc models rm <model>"; return 1; }
+      have ollama || { bad "local AI is not set up yet — run: noc llm setup"; return 1; }
       ollama rm "$m"
       ;;
     *)
@@ -257,34 +262,122 @@ cmd_models() {
   esac
 }
 
+# ---- installer modules from a terminal ----------------------------------------------------------
+# What the Control Panel runs through noc-privileged (pkexec), a person at a terminal runs here: one module of the installer,
+# from the root-owned snapshot that module 07 keeps (never from the person's clone), as the person; the module asks for sudo
+# itself. `noc llm setup`, `noc repair <name>` and `noc apps update <ollama|appmanager>` all end up here. The modules allowed
+# are noc-privileged's MODULES; PanelParityTests (tests/test_noc_cli.py) keeps the two in step.
+run_module() {
+  local module="$1" installer=/usr/local/share/noctraos/repo/install.sh
+  test_hooks && installer="${NOC_INSTALLER:-$installer}"
+  # Root is refused, except for the test suite, which runs as root in CI (NOC_TEST_HOOKS).
+  if [ "$(id -u)" -eq 0 ] && [ -z "${NOC_TEST_HOOKS:-}" ]; then
+    bad "run this as your own user, not as root (it asks for your password when it needs it)"; return 1
+  fi
+  if [ ! -f "$installer" ]; then bad "the installer is not in place yet (re-run the NoctraOS installer)"; return 1; fi
+  bash "$installer" --only "$module"
+}
+
 # ---- optional local AI ----------------------------------------------------------------------
-# `noc llm setup` runs the optional step (install/optional/local_llm.sh: GPU stack, Ollama, LLMFIT) from the root-owned
-# snapshot that module 07 keeps, never from the person's clone. No model is downloaded there: `noc llm fit` shows which
-# models fit this computer (LLMFIT), and `noc models pull <name>` downloads the one the person picks.
+# `noc llm setup` runs the optional step (install/optional/local_llm.sh: GPU stack, Ollama, LLMFIT). No model is downloaded
+# there: `noc llm fit` shows which models fit this computer (LLMFIT), and `noc models pull <name>` downloads the one the
+# person picks.
 cmd_llm() {
-  local action="${1:-}" installer=/usr/local/share/noctraos/repo/install.sh
+  local action="${1:-}"
   [ $# -gt 0 ] && shift
-  test_hooks && installer="${NOC_LLM_INSTALLER:-$installer}"
   case "$action" in
-    setup)
-      # Root is refused, except for the test suite, which runs as root in CI (NOC_TEST_HOOKS).
-      if [ "$(id -u)" -eq 0 ] && [ -z "${NOC_TEST_HOOKS:-}" ]; then
-        bad "run this as your own user, not as root (it asks for your password when it needs it)"; return 1
-      fi
-      if [ ! -f "$installer" ]; then bad "the installer is not in place yet (re-run the NoctraOS installer)"; return 1; fi
-      bash "$installer" --only optional/local_llm.sh
-      ;;
+    setup) run_module optional/local_llm.sh ;;
     fit)
       local bin
       bin="$(command -v llmfit || echo "$HOME/.local/bin/llmfit")"
       if [ ! -x "$bin" ]; then bad "LLMFIT is not installed yet — run: noc llm setup"; return 1; fi
       exec "$bin" "$@"
       ;;
+    start|stop) llm_service "$action" ;;
+    autostart) llm_autostart "$@" ;;
     *)
-      echo "usage: noc llm [setup | fit [llmfit arguments]]"
+      echo "usage: noc llm [setup | fit [llmfit arguments] | start | stop | autostart [on|off]]"
       return 1
       ;;
   esac
+}
+
+# ---- the Ollama service: it runs when you ask, and starts with the computer only if you say so ------------------------
+# Ollama's own installer turns the service on at boot; the NoctraOS setup turns that off again (install/lib.sh) and a later
+# update keeps whatever you chose. Root work is noc-privileged's `ollama-service` and `ollama-autostart`, the same code the
+# Control Panel reaches through pkexec.
+
+ollama_up() { curl -fsS --max-time 3 "$OLLAMA_URL/api/version" >/dev/null 2>&1; }
+
+# on | off | absent: whether the service starts with the computer; no real answer from systemctl ("not-found" from newer
+# systemd, nothing from older) means no Ollama service.
+ollama_boot_state() {
+  local word
+  word="$(systemctl is-enabled ollama.service 2>/dev/null)" || true
+  case "$word" in
+    enabled*|alias) echo on ;;
+    ""|not-found) echo absent ;;
+    *) echo off ;;
+  esac
+}
+
+# true | false | null, for the JSON the panel reads.
+ollama_boot_json() {
+  case "$(ollama_boot_state)" in on) echo true ;; off) echo false ;; *) echo null ;; esac
+}
+
+# noc llm start|stop: run or stop the Ollama service now. A stopped Ollama is not broken; it frees the memory a loaded model uses.
+llm_service() {
+  local action="$1" sudo=sudo
+  [ "$(id -u)" -eq 0 ] && sudo=""
+  have ollama || { bad "local AI is not set up yet — run: noc llm setup"; return 1; }
+  if [ "$action" = start ] && ollama_up; then info "Ollama is already running"; return 0; fi
+  if [ "$action" = stop ] && ! ollama_up && ! systemctl is-active --quiet ollama.service 2>/dev/null; then
+    info "Ollama is already stopped"; return 0
+  fi
+  $sudo "$PRIVILEGED" ollama-service "$action" || return 1
+  if [ "$action" = stop ]; then info "Ollama is stopped"; return 0; fi
+  for _ in $(seq 1 "${NOC_OLLAMA_WAIT:-15}"); do
+    ollama_up && { info "Ollama is running"; return 0; }
+    sleep 1
+  done
+  bad "Ollama was started but does not answer yet (look: journalctl -u ollama -n 50)"; return 1
+}
+
+# noc llm autostart [on|off]: show, or change, whether Ollama starts with this computer. It never starts or stops it now.
+llm_autostart() {
+  local target="${1:-}" now sudo=sudo
+  now="$(ollama_boot_state)"
+  [ "$now" = absent ] && { bad "there is no Ollama service on this computer (noc llm setup installs it)"; return 1; }
+  case "$target" in
+    "") echo "Ollama starts with this computer: $now" ;;
+    on|off)
+      if [ "$now" = "$target" ]; then info "Ollama already starts with this computer: $now"; return 0; fi
+      [ "$(id -u)" -eq 0 ] && sudo=""
+      $sudo "$PRIVILEGED" ollama-autostart "$target" && info "Ollama starts with this computer: $target" ;;
+    *) echo "usage: noc llm autostart [on|off]"; return 1 ;;
+  esac
+}
+
+# noc repair <appmanager|vm-guest|hermes>: run again the part of the installer that `noc doctor` found missing (the Health
+# page's Fix button does the same).
+repair_module() {
+  case "${1:-}" in
+    appmanager) echo 04d_appmanager.sh ;;
+    vm-guest)   echo 01b_vm_guest.sh ;;
+    *) return 1 ;;
+  esac
+}
+
+cmd_repair() {
+  local name="${1:-}" module
+  if [ "$name" = hermes ]; then
+    have noctraos-hermes || { bad "noctraos-hermes is not installed on this system"; return 1; }
+    noctraos-hermes install
+    return
+  fi
+  if ! module="$(repair_module "$name")"; then echo "usage: noc repair [appmanager | vm-guest | hermes]"; return 1; fi
+  run_module "$module"
 }
 
 # ---- update --------------------------------------------------------------------------------
@@ -527,6 +620,9 @@ cmd_doctor() {
     local model_count
     model_count="$(curl -fsS "$OLLAMA_URL/api/tags" | jq '.models | length' 2>/dev/null || echo 0)"
     chk ok ollama-models "Ollama models" "$model_count local model(s)"
+  elif have ollama && [ "$(ollama_boot_state)" = off ]; then
+    # It does not start with the computer unless you ask for that, so being off is how a quiet machine looks.
+    chk info ollama "Ollama" "stopped (start it when you need it: noc llm start)"
   elif have ollama; then
     chk fail ollama "Ollama" "not responding on $OLLAMA_URL (try: systemctl status ollama)"
   else
@@ -542,8 +638,9 @@ cmd_doctor() {
     py_v="$(mise exec -- python --version 2>/dev/null || true)"
     go_v="$(mise exec -- go version 2>/dev/null | awk '{print $3}' || true)"
     [ -n "$node_v" ] && chk ok node "Node.js" "$node_v (mise)"   || chk fail node "Node.js" "not resolving via mise"
-    [ -n "$py_v" ]   && chk ok python "Python" "$py_v (mise)"    || chk fail python "Python" "not resolving via mise"
-    [ -n "$go_v" ]   && chk ok go "Go" "$go_v (mise)"            || chk fail go "Go" "not resolving via mise"
+    # Python and Go are not part of the install (nothing in NoctraOS uses them; people add the ones they want with mise).
+    [ -n "$py_v" ]   && chk ok python "Python" "$py_v"           || chk info python "Python" "not installed (optional: mise use -g python)"
+    [ -n "$go_v" ]   && chk ok go "Go" "$go_v"                   || chk info go "Go" "not installed (optional: mise use -g go)"
     herdr_v="$(mise where herdr >/dev/null 2>&1 && mise exec herdr -- herdr --version 2>/dev/null | head -n 1 || true)"
     [ -n "$herdr_v" ] && chk ok herdr "Herdr" "$herdr_v" || chk warn herdr "Herdr" "missing from mise"
     starship_v="$(mise where starship >/dev/null 2>&1 && mise exec starship -- starship --version 2>/dev/null | head -n 1 || true)"
@@ -575,7 +672,7 @@ cmd_doctor() {
     if printf '%s\n' "$hs" | grep '^runtime: ok' >/dev/null && printf '%s\n' "$hs" | grep '^app:     ok' >/dev/null; then
       chk ok hermes "Hermes Desktop" "installed ($(printf '%s\n' "$hs" | sed -n 's/^primary: //p'))"
     else
-      chk warn hermes "Hermes Desktop" "not fully installed (run: noctraos-hermes install)" "hermes:install"
+      chk warn hermes "Hermes Desktop" "not fully installed (run: noc repair hermes)" "hermes:install"
     fi
   else
     chk warn hermes "Hermes Desktop" "launcher missing (re-run the installer)"
@@ -592,7 +689,7 @@ cmd_doctor() {
   if [ -x /usr/local/bin/app-manager ]; then
     chk ok appmanager "AppManager" "$(cat /opt/appmanager/VERSION 2>/dev/null || echo installed)"
   else
-    chk warn appmanager "AppManager" "missing (run: bash ~/.local/share/noctraos/install.sh --only 04d_appmanager.sh)" "module:04d_appmanager.sh"
+    chk warn appmanager "AppManager" "missing (run: noc repair appmanager)" "module:04d_appmanager.sh"
   fi
   if dpkg-query -W libfuse2t64 >/dev/null 2>&1 || dpkg-query -W libfuse2 >/dev/null 2>&1; then
     chk ok fuse "FUSE 2" "installed (AppImages can mount)"
@@ -636,7 +733,7 @@ cmd_doctor() {
         chk ok vm-guest "VM guest tools" "$vmpkg ($virt)"
       fi
     else
-      chk warn vm-guest "VM guest tools" "$vmpkg missing — the host cannot shut this VM down cleanly or see its address (run: bash ~/.local/share/noctraos/install.sh --only 01b_vm_guest.sh)" "module:01b_vm_guest.sh"
+      chk warn vm-guest "VM guest tools" "$vmpkg missing — the host cannot shut this VM down cleanly or see its address (run: noc repair vm-guest)" "module:01b_vm_guest.sh"
     fi
   fi
 
@@ -769,28 +866,217 @@ cmd_skip() {
 # noc apps [--json] [--refresh]: the tracked upstream apps. The panel reads the same JSON.
 cmd_apps() {
   if [ ! -x "$UPSTREAM" ]; then bad "the upstream tracker is not installed on this system yet"; return 1; fi
-  "$UPSTREAM" list "$@"
+  case "${1:-}" in
+    update) shift; apps_update "$@" ;;
+    *) "$UPSTREAM" list "$@" ;;
+  esac
+}
+
+# noc apps update [<app>[,<app>]]: bring tracked apps to their newest release (the Apps page's Update buttons). Hermes and the
+# coding agents update as the person through noc-upstream; the root-owned ones (Ollama, AppManager) through their installer
+# module, which asks for sudo. Apps that are already current are left alone.
+apps_update() {
+  local only="${1:-}" rows id module user_ids failed=0
+  if ! rows="$("$UPSTREAM" list --json --refresh 2>/dev/null)" || ! printf '%s' "$rows" | jq -e '.apps' >/dev/null 2>&1; then
+    bad "could not read the app versions (no connection?)"; return 1
+  fi
+  for id in ${only//,/ }; do
+    printf '%s' "$rows" | jq -e --arg id "$id" '.apps | map(.id) | index($id) != null' >/dev/null \
+      || { bad "unknown app: $id (see: noc apps)"; return 2; }
+  done
+  while read -r id module; do
+    [ -n "$id" ] || continue
+    info "updating $id"
+    run_module "$module" || { bad "$id could not be updated"; failed=1; }
+  done < <(printf '%s' "$rows" | jq -r --arg only "$only" '($only | split(",")) as $want | .apps[] | . as $app
+      | select(.updater == "root" and .status == "outdated" and ($only == "" or ($want | index($app.id) != null)))
+      | "\(.id) \(.module)"')
+  user_ids="$(printf '%s' "$rows" | jq -r --arg only "$only" '($only | split(",")) as $want | [.apps[] | . as $app
+      | select(.updater == "user" and ($only == "" or ($want | index($app.id) != null))) | .id] | join(",")')"
+  if [ -n "$user_ids" ]; then
+    "$UPSTREAM" update ${only:+--only "$user_ids"} || failed=1
+  fi
+  return "$failed"
 }
 
 # noc channel [stable|nightly]: show, or (as root, through sudo) choose which update channel the NoctraOS layer follows. `stable`
 # is tested updates rolled out in stages; `nightly` is the newest changes first, for testers. A machine that moves from nightly to
-# stable gets nothing until stable catches up (updates never go backwards). The Control Panel does the same through noc-privileged.
+# stable gets nothing until stable catches up (updates never go backwards). `rollback` puts the previous NoctraOS layer back (code
+# only; migrations stay). The Control Panel does the same through noc-privileged.
 cmd_channel() {
   if [ ! -x "$SELFUPDATE" ]; then bad "this install has no NoctraOS updater yet; run the one-line installer once (README) to add it"; return 1; fi
   case "${1:-}" in
     "") "$SELFUPDATE" status | awk -F': ' '$1 == "channel" || $1 == "serial" || $1 == "version" {printf "%s: %s\n", $1, $2}' ;;
     stable|nightly) local sudo=sudo; [ "$(id -u)" -eq 0 ] && sudo=""; $sudo "$SELFUPDATE" set-channel "$1" ;;
-    *) bad "usage: noc channel [stable|nightly]"; return 1 ;;
+    rollback) local sudo=sudo; [ "$(id -u)" -eq 0 ] && sudo=""; $sudo "$SELFUPDATE" rollback ;;
+    *) bad "usage: noc channel [stable|nightly|rollback]"; return 1 ;;
+  esac
+}
+
+# ---- privacy: what the installer arranged without asking --------------------------------------------------
+# Remote login (the SSH server), the clipboard history CopyQ keeps on disk, how the login keyring is stored, and where Hermes
+# sends what you type. `noc privacy status --json` is what the Control Panel's Privacy page reads, and each action is one of
+# its buttons. Root work is noc-privileged's `remote-access`, the same code the panel reaches through pkexec.
+PRIVILEGED=/usr/local/libexec/noctraos/noc-privileged
+test_hooks && PRIVILEGED="${NOC_PRIVILEGED:-$PRIVILEGED}"
+COPYQ_SOCKET="${XDG_CONFIG_HOME:-$HOME/.config}/copyq/.copyq_s"
+# Fixed scripts: nothing from the person or from the clipboard is ever put into them, and only the default history tab is
+# touched, never a tab the person made.
+COPYQ_COUNT="tab('&clipboard'); print(size());"
+COPYQ_CLEAR="tab('&clipboard'); while (size() > 0) remove(0); print(size());"
+KEYRING_FILE="${NOC_KEYRING_FILE:-${XDG_DATA_HOME:-$HOME/.local/share}/keyrings/login.keyring}"
+# The first bytes of gnome-keyring's encrypted file ("GnomeKeyring\n\r\0\n\0", scripts/seed-password-store.py has the same) and
+# of a plain one ("[keyring]"), as hex.
+KEYRING_ENCRYPTED_HEX=476e6f6d654b657972696e670a0d000a00
+KEYRING_PLAIN_HEX=5b6b657972696e675d
+
+# on | off | absent: whether the SSH server runs or starts at boot. Ubuntu 24.04 starts sshd from ssh.socket, older releases
+# from ssh.service, so both are asked; a missing unit prints nothing (older systemd) or "not-found" (newer) to is-enabled, so
+# no real answer at all means no server.
+remote_state() {
+  local word seen=""
+  for word in $(systemctl is-active ssh.socket ssh.service 2>/dev/null); do
+    [ "$word" = active ] && { echo on; return; }
+  done
+  for word in $(systemctl is-enabled ssh.socket ssh.service 2>/dev/null); do
+    [ "$word" = not-found ] && continue   # newer systemd says so for a unit that does not exist; older prints nothing
+    seen=1
+    case "$word" in enabled*|alias) echo on; return ;; esac
+  done
+  [ -n "$seen" ] && echo off || echo absent
+}
+
+# CopyQ runs as the X11 client (bin/noctraos-copyq), also when this call is what starts it.
+copyq_run() { QT_QPA_PLATFORM=xcb timeout "$2" copyq eval "$1"; }
+
+# {installed, running, count}: CopyQ is only asked while it runs, because asking would start it.
+clipboard_json() {
+  local installed=false running=false count=null n
+  have copyq && installed=true
+  if [ "$installed" = true ] && [ -e "$COPYQ_SOCKET" ]; then
+    running=true
+    n="$(copyq_run "$COPYQ_COUNT" 5 2>/dev/null)" && [[ "$n" =~ ^[0-9]+$ ]] && count="$n"
+  fi
+  jq -nc --argjson i "$installed" --argjson r "$running" --argjson c "$count" '{installed:$i, running:$r, count:$c}'
+}
+
+# protected (encrypted: needs a password) | unprotected (a plain file: the NoctraOS setup) | none (no login keyring yet) | unknown
+keyring_state() {
+  local head
+  [ -e "$KEYRING_FILE" ] || { echo none; return; }
+  [ -f "$KEYRING_FILE" ] && [ -r "$KEYRING_FILE" ] || { echo unknown; return; }
+  head="$(head -c 17 "$KEYRING_FILE" | od -An -tx1 | tr -d ' \n')"
+  case "$head" in
+    "$KEYRING_ENCRYPTED_HEX"*) echo protected ;;
+    "$KEYRING_PLAIN_HEX"*) echo unprotected ;;
+    *) echo unknown ;;
+  esac
+}
+
+hermes_mode() {
+  local mode=""
+  have noctraos-hermes && mode="$(noctraos-hermes mode 2>/dev/null || true)"
+  case "$mode" in cloud|local|other) echo "$mode" ;; *) echo none ;; esac
+}
+
+privacy_status() {
+  local remote clip keyring hermes
+  remote="$(remote_state)"; clip="$(clipboard_json)"; keyring="$(keyring_state)"; hermes="$(hermes_mode)"
+  if [ "${1:-}" = "--json" ]; then
+    jq -n --arg remote "$remote" --argjson clip "$clip" --arg keyring "$keyring" --arg hermes "$hermes" \
+      '{hermes:(if $hermes == "none" then null else $hermes end),
+        remote:(if $remote == "absent" then null else $remote end),
+        clipboard:$clip,
+        keyring:(if $keyring == "unknown" then null else $keyring end)}'
+    return
+  fi
+  local text
+  case "$hermes" in
+    cloud) text="Nous free tier (cloud): what you type leaves this computer" ;;
+    local) text="local only" ;;
+    other) text="your own provider" ;;
+    *) text="not installed" ;;
+  esac
+  printf '  %-16s %s\n' "Hermes" "$text"
+  case "$remote" in
+    on) text="on (other computers can sign in over SSH)" ;;
+    off) text="off" ;;
+    *) text="no SSH server installed" ;;
+  esac
+  printf '  %-16s %s\n' "Remote login" "$text"
+  text="$(printf '%s' "$clip" | jq -r 'if .installed | not then "CopyQ is not installed"
+        elif .count == null then "CopyQ is not running"
+        else "\(.count) saved by CopyQ" end')"
+  printf '  %-16s %s\n' "Clipboard" "$text"
+  case "$keyring" in
+    protected) text="locked with a password" ;;
+    unprotected) text="not locked by a password" ;;
+    none) text="no login keyring yet" ;;
+    *) text="could not tell" ;;
+  esac
+  printf '  %-16s %s\n' "Saved passwords" "$text"
+}
+
+# noc privacy remote [on|off]: show, or switch the SSH server (as root, through sudo, by noc-privileged).
+privacy_remote() {
+  local target="${1:-}" now sudo=sudo
+  now="$(remote_state)"
+  case "$target" in
+    "") case "$now" in absent) echo "no SSH server is installed" ;; *) echo "remote login is $now" ;; esac ;;
+    on|off)
+      [ "$now" = absent ] && { bad "openssh-server is not installed"; return 1; }
+      if [ "$now" = "$target" ]; then info "remote login is already $target"; return 0; fi
+      [ "$(id -u)" -eq 0 ] && sudo=""
+      $sudo "$PRIVILEGED" remote-access "$target" && info "remote login is now $target" ;;
+    *) echo "usage: noc privacy remote [on|off]"; return 1 ;;
+  esac
+}
+
+# noc privacy clipboard [clear]: how many copies CopyQ keeps, or empty its default history tab.
+privacy_clipboard() {
+  local n
+  have copyq || { bad "CopyQ is not installed"; return 1; }
+  case "${1:-}" in
+    "") clipboard_json | jq -r 'if .count == null then "CopyQ is not running" else "\(.count) saved" end' ;;
+    clear)
+      n="$(copyq_run "$COPYQ_CLEAR" 30 2>&1)" && [ "$n" = 0 ] || { bad "could not clear the clipboard history${n:+: $n}"; return 1; }
+      info "clipboard history cleared" ;;
+    *) echo "usage: noc privacy clipboard [clear]"; return 1 ;;
+  esac
+}
+
+# noc privacy hermes [status|local|cloud]: where Hermes sends what you type. `local` keeps it on this computer (Ollama);
+# `cloud` goes back to the Nous free tier (never touches a provider you set yourself). A change applies the next time Hermes starts.
+privacy_hermes() {
+  have noctraos-hermes || { bad "Hermes is not installed on this system"; return 1; }
+  case "${1:-status}" in
+    status) hermes_mode ;;
+    local) noctraos-hermes local --no-launch ;;
+    cloud) noctraos-hermes cloud ;;
+    *) echo "usage: noc privacy hermes [status|local|cloud]"; return 1 ;;
+  esac
+}
+
+cmd_privacy() {
+  local action="${1:-status}"
+  [ $# -gt 0 ] && shift
+  case "$action" in
+    status) privacy_status "$@" ;;
+    remote) privacy_remote "$@" ;;
+    clipboard) privacy_clipboard "$@" ;;
+    hermes) privacy_hermes "$@" ;;
+    *) echo "usage: noc privacy [status [--json] | remote [on|off] | clipboard [clear] | hermes [status|local|cloud]]"; return 1 ;;
   esac
 }
 
 cmd_status() {
-  local os="" ollama=false oversion="" nmodels=0 tags gpu hmode="" hready=false
+  local os="" ollama=false oinstalled=false oversion="" nmodels=0 tags gpu hmode="" hready=false
   local idx="${XDG_CACHE_HOME:-$HOME/.cache}/noctraos-search/index.sqlite" idx_age=null
   [ -r /etc/os-release ] && os="$(. /etc/os-release; echo "${PRETTY_NAME:-$ID}")"
 
+  have ollama && oinstalled=true   # local AI is optional: the panel offers to set it up only when the engine is absent
   if oversion="$(curl -fsS --max-time 5 "$OLLAMA_URL/api/version" 2>/dev/null | jq -r .version 2>/dev/null)" && [ -n "$oversion" ]; then
-    ollama=true
+    ollama=true oinstalled=true
     tags="$(curl -fsS --max-time 5 "$OLLAMA_URL/api/tags" 2>/dev/null || true)"
     nmodels="$(printf '%s' "$tags" | jq '.models | length' 2>/dev/null || echo 0)"
   fi
@@ -826,14 +1112,14 @@ cmd_status() {
     --arg version "$VERSION" --arg os "$os" \
     --argjson apt "$(apt_pending)" --argjson flatpak "$(flatpak_pending)" \
     --argjson reboot "$([ -f /var/run/reboot-required ] && echo true || echo false)" \
-    --argjson ollama "$ollama" --arg oversion "$oversion" --argjson nmodels "${nmodels:-0}" \
+    --argjson ollama "$ollama" --argjson oinstalled "$oinstalled" --argjson oboot "$(ollama_boot_json)" --arg oversion "$oversion" --argjson nmodels "${nmodels:-0}" \
     --arg model "$(effective_model)" --argjson gpu "$gpu" \
     --argjson free "$(df -B1 --output=avail / | awk 'NR==2 {print $1}')" \
     --argjson total "$(df -B1 --output=size / | awk 'NR==2 {print $1}')" \
     --argjson ram "$(ram_gb)" --arg hmode "$hmode" --argjson hready "$hready" --argjson idx "$idx_age" --argjson apps "$apps" --argjson accounts "$accounts" --argjson skipped "$skipped" --argjson dsk "$dsk" \
     '{version:$version, os:$os,
       updates:{apt:$apt, flatpak:$flatpak, reboot_required:$reboot},
-      ollama:{running:$ollama, version:(if $oversion=="" then null else $oversion end), models:$nmodels, default_model:$model},
+      ollama:{installed:$oinstalled, running:$ollama, autostart:$oboot, version:(if $oversion=="" then null else $oversion end), models:$nmodels, default_model:$model},
       gpu:$gpu,
       disk:({root_free_bytes:$free, root_total_bytes:$total}
             + (if $dsk == null then {} else {expandable_bytes:($dsk.expandable_bytes // 0), can_grow:($dsk.can_grow // false),
@@ -857,6 +1143,8 @@ main() {
     skip)   shift; cmd_skip "$@" ;;
     models) shift; cmd_models "$@" ;;
     llm)    shift; cmd_llm "$@" ;;
+    repair) shift; cmd_repair "$@" ;;
+    privacy) shift; cmd_privacy "$@" ;;
     bg)     shift; cmd_bg "$@" ;;
     disk)   shift; if [ -x "$DISKTOOL" ]; then exec "$DISKTOOL" "$@"; else bad "noc-disk not installed (re-run the installer)"; exit 1; fi ;;
     gpu)    shift; have noc-gpu && exec noc-gpu "$@" \
@@ -873,7 +1161,10 @@ main() {
       echo "  noc channel     NoctraOS update channel: stable (default) or nightly (testers)"
       echo "  noc skip        setup chores you do yourself (list | add <id> | rm <id>)"
       echo "  noc models      manage local AI models (list | default | presets | pull | rm)"
-      echo "  noc llm         optional local AI: setup (engine, no model) | fit (find a model that fits)"
+      echo "  noc llm         optional local AI: setup (engine, no model) | fit (find a model that fits) | start | stop | autostart [on|off]"
+      echo "  noc apps        Hermes, Ollama, AppManager and the coding agents: versions, update"
+      echo "  noc repair      run again what noc doctor found missing (appmanager | vm-guest | hermes)"
+      echo "  noc privacy     remote login, clipboard history, saved passwords, Hermes (status | remote | clipboard | hermes)"
       echo "  noc bg          cycle or set the wallpaper (list | next | set)"
       echo "  noc gpu         GPU setup for local LLMs (detect | install | status)"
       echo "  noc disk        use the extra space when the disk was made bigger (status | grow)"

@@ -37,6 +37,13 @@ make it powerful instead.
    by mouse and through Super+Space itself. Everything else should feel familiar.
 5. **A distribution, not a script.** The deliverable is a bootable ISO that
    installs and boots into the finished experience.
+6. **We set up the system, then you take control.** NoctraOS prepares the
+   workstation and then gets out of the way. Anything that costs memory, sends
+   data off the computer or belongs to the person is a choice they make, and
+   every choice can be undone from the Control Panel or with `noc`. Updates are
+   optional, reversible and must never break the system; the goal is a
+   frictionless experience. [What we do](what-we-do.md) is the plain-language
+   version of this line for users.
 
 ## Headline feature: Super+Space
 
@@ -127,6 +134,13 @@ some stock icons) are tracked in the coverage table in `theme-design.md`.
   holds secrets is left alone and can still prompt (see `AGENTS.md`).
 - **Flatpak and AppImage first.** apt is for CLI tools, system tools and
   host-integration apps; the app set and the removals are in `install/04c_app_policy.sh`.
+- **Install only what NoctraOS itself needs.** Node.js is the one language (the coding-agent launchers and Hermes Desktop use it);
+  Python, Go and Ruby are not installed, and no local model is downloaded. The apps are a deliberate selection (Flatpak and AppImage first)
+  and stay. People add their own languages with mise.
+- **Ollama starts with the computer only if the person turns that on.** The
+  vendor's installer enables the service at boot; the setup switches it off
+  again and an update of Ollama puts back whatever the person chose (AI models
+  page, or `noc llm autostart on|off`). Machines that already had it on keep it.
 - **Be honest about where AI runs.** The local Ollama model stays on the computer;
   Hermes' free tier is a cloud service and is described as one everywhere.
 - **Target desktop layout** is in [desktop-layout.md](desktop-layout.md).
@@ -136,3 +150,8 @@ some stock icons) are tracked in the coverage table in `theme-design.md`.
 - A tiling window manager or keyboard-only workflow (that is Omarchy's lane).
 - Imitating another OS's appearance.
 - Supporting non-Ubuntu bases.
+- Setting up the person's own AI tools and accounts. The coding agents (Codex,
+  Claude Code, Gemini CLI and the rest) get a launcher; signing in, keys and
+  configuration are the user's. Git and GitHub sign-in are the one exception,
+  because nothing can be saved to GitHub without it: it is optional and
+  skippable.

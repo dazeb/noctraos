@@ -9,6 +9,7 @@ import json
 import os
 import re
 import subprocess
+import time
 import urllib.request
 from dataclasses import dataclass
 
@@ -99,9 +100,17 @@ def _accounts_card(accounts, skipped=None):
 
 
 def _ollama_card(ollama):
-    if not ollama.get('running'):
+    state = local_ai_state(ollama)
+    if state == 'absent':
+        return Card('ollama', 'Local AI', 'Not set up',
+                    'Optional. Set it up from AI models to run models on this computer.', 'info', 'models')
+    if state == 'stopped' and ollama.get('autostart') is False:
+        return Card('ollama', 'Local AI', 'Off',
+                    'Ollama is not running, and does not start with this computer. Start it from AI models when you want it.',
+                    'info', 'models')
+    if state != 'running':
         return Card('ollama', 'Local AI', 'Not running',
-                    'Local AI is optional. Ollama is not set up yet, or is not running.',
+                    'Ollama is installed but not answering. It may still be starting; open Health if it stays like this.',
                     'warn', 'models')
     n = ollama.get('models', 0)
     detail = f'Default model: {ollama.get("default_model")}'
@@ -214,11 +223,12 @@ TERMINAL = {
     'github': ['gh auth login --web', 'gh auth setup-git'],
     'gpu': ['noc gpu status', 'noc gpu install'],
     'disk': ['noc disk status', 'sudo noc disk grow'],
-    'updates': ['noc update', 'noc update --only mise,models', 'noc channel', 'noc channel nightly'],
-    'apps': ['noc apps', 'noc-upstream update --only <app>'],
-    'models': ['noc llm setup', 'noc llm fit', 'noc models list', 'noc models pull <model>', 'noc models default <model>', 'noc models rm <model>'],
-    'privacy': ['noctraos-hermes local', 'noctraos-hermes cloud', 'noctraos-search --settings', 'noctraos-weather --setup'],
-    'health': ['noc doctor'],
+    'updates': ['noc update', 'noc update --only mise,models', 'noc channel', 'noc channel nightly', 'noc channel rollback'],
+    'apps': ['noc apps', 'noc apps update', 'noc apps update <app>'],
+    'models': ['noc llm setup', 'noc llm fit', 'noc llm start', 'noc llm stop', 'noc llm autostart on', 'noc models list', 'noc models pull <model>', 'noc models default <model>', 'noc models rm <model>'],
+    'privacy': ['noc privacy status', 'noc privacy remote off', 'noc privacy clipboard clear', 'noc privacy hermes local',
+                'noc privacy hermes cloud', 'noctraos-search --settings', 'noctraos-weather --setup'],
+    'health': ['noc doctor', 'noc repair <name>'],
 }
 
 
@@ -261,7 +271,7 @@ SEVERITY = {'fail': 0, 'warn': 1, 'info': 2, 'ok': 3}
 PKEXEC = '/usr/bin/pkexec'
 HELPER = '/usr/local/libexec/noctraos/noc-privileged'
 FIXES = {
-    'hermes:install': [HERMES, 'install'],
+    'hermes:install': [NOC, 'repair', 'hermes'],
     # Through the allowlisted root helper: one polkit prompt, never a terminal or a bare sudo.
     'module:04d_appmanager.sh': [PKEXEC, HELPER, 'module', '04d_appmanager.sh'],
     'module:01b_vm_guest.sh': [PKEXEC, HELPER, 'module', '01b_vm_guest.sh'],
@@ -412,6 +422,124 @@ def noc_run(*args, timeout=120):
         return False, str(error)
     text = (out.stdout + out.stderr).strip().splitlines()
     return out.returncode == 0, (text[-1] if text else '')
+
+
+# ---- Local AI: the optional engine ----------------------------------------------------------------
+#
+# The first-run install leaves local AI out (install/optional/local_llm.sh, `noc llm setup`). The AI models page offers it
+# here when the engine is absent: one root step through the helper, with a summary and a yes first, never on its own. It
+# is an option, not a setup chore: nothing nags and there is no "skip" (the Overview only points at the page).
+
+LOCAL_AI_SETUP = [PKEXEC, HELPER, 'module', 'optional/local_llm.sh']
+# The Ollama engine is a download of about 1.4 GB (the Apps page says the same); insist on a little under three times
+# that free for unpacking. A GPU driver adds its own need (disk_needed_gb). No model is downloaded by the step.
+LOCAL_AI_NEEDS = (1.4, 4)
+REBOOT_MARK = 'REBOOT REQUIRED'      # the line the module prints when a GPU driver needs a restart
+LOCAL_AI_ABOUT = ('Local AI runs AI models on this computer, with no account and nothing sent anywhere. '
+                  'It is optional: everything else works without it.')
+
+
+def local_ai_state(ollama):
+    """'running' | 'stopped' (installed, not answering) | 'absent' (never set up), from `noc status`' ollama block.
+    None when there is no block (noc could not be read)."""
+    if not isinstance(ollama, dict):
+        return None
+    if ollama.get('running'):
+        return 'running'
+    return 'stopped' if ollama.get('installed') else 'absent'
+
+
+def local_ai_summary(detect, ram_gb=None):
+    """What setting up local AI does, in plain words, for the consent dialog. Nothing happens until the person says yes."""
+    lines = [f'This installs Ollama, the program that runs AI models on this computer (about {LOCAL_AI_NEEDS[0]:g} GB to '
+             'download), and LLMFIT, a small tool that lists the models that fit it.']
+    gpu = gpu_install_lines(detect)
+    if gpu:
+        lines.append('Your graphics card is set up for it too.')
+        lines.extend(gpu)
+    elif isinstance(detect, dict) and not detect.get('gpus'):
+        lines.append('No NVIDIA or AMD graphics card was found, so models will run on the processor.')
+    if isinstance(ram_gb, (int, float)) and 0 < ram_gb < 8:
+        lines.append(f'This computer has {ram_gb} GB of memory. Local models want at least 8 GB, so expect only small '
+                     'ones to run well.')
+    lines.append('No model is downloaded yet: you pick one afterwards. This takes several minutes and needs the internet. '
+                 'Nothing changes until you press Set up.')
+    return lines
+
+
+def local_ai_blocker(detect, free_bytes):
+    """Why the setup must not start now, or ''."""
+    need = LOCAL_AI_NEEDS[1] + disk_needed_gb(detect)
+    if free_bytes is not None and free_bytes < need * 1024 ** 3:
+        return f'Not enough free disk space: about {need:g} GB is needed, {fmt_bytes(free_bytes)} is free.'
+    return ''
+
+
+def local_ai_result(code, reboot=False):
+    """What the page says when the setup step has finished."""
+    if code == 0:
+        return ('Local AI is ready. Pick a model below to download.'
+                + (' Restart the computer to finish the graphics driver; until then models run on the processor.'
+                   if reboot else ''))
+    return exit_message(code) or 'The setup did not finish. Show details has the reason; Health lists what is missing.'
+
+
+# Ollama is a service that runs when the person asks and starts with the computer only if they say so (the setup turns the
+# vendor's boot setting off). The AI models page shows one row for it; `noc llm start|stop|autostart` are the same actions.
+
+def ollama_service_text(ollama):
+    """The AI models page's engine row from the ollama block of `noc status` (or the same keys of `noc models list --json`):
+    {'headline', 'text', 'service': 'start'|'stop'|None, 'boot': 'on'|'off'|None}. None while it is not installed or unread.
+    'service' is the action its button does; 'boot' is the state the boot button would switch to (None when unknown)."""
+    state = local_ai_state(ollama)
+    if state not in ('running', 'stopped'):
+        return None
+    boot = ollama.get('autostart')
+    start_with = ('' if not isinstance(boot, bool) else
+                  'It starts with this computer.' if boot else 'It does not start with this computer unless you ask it to.')
+    if state == 'running':
+        return {'headline': 'Ollama is running', 'service': 'stop', 'boot': _boot_target(boot),
+                'text': ' '.join(t for t in ('Stop it to free the memory a model is using.', start_with) if t)}
+    if boot is True:
+        text = ('It is set to start with this computer but does not answer yet. It may still be starting: press Refresh in a '
+                'minute. If it stays like this, open Health.')
+    else:
+        text = ' '.join(t for t in ('Start it when you want to use local AI.', start_with) if t)
+    return {'headline': 'Ollama is off' if boot is False else 'Ollama is not running', 'service': 'start',
+            'boot': _boot_target(boot), 'text': text}
+
+
+def _boot_target(boot):
+    return None if not isinstance(boot, bool) else ('off' if boot else 'on')
+
+
+def ollama_service_command(action, running):
+    """argv through the root helper that starts or stops Ollama; None when it is already so or the action is unknown."""
+    if action not in ('start', 'stop') or (action == 'start') == bool(running):
+        return None
+    return [PKEXEC, HELPER, 'ollama-service', action]
+
+
+def ollama_autostart_command(target, current):
+    """argv through the root helper that makes Ollama start with the computer ('on') or not ('off'); None when it is
+    already so, is not known, or the target is not one of the two."""
+    if target not in ('on', 'off') or not isinstance(current, bool) or (target == 'on') == current:
+        return None
+    return [PKEXEC, HELPER, 'ollama-autostart', target]
+
+
+def wait_for_ollama(seconds=15, base_url=None):
+    """True once Ollama answers, polling for up to `seconds`: a service that was just started needs a moment."""
+    deadline = time.monotonic() + seconds
+    while True:
+        try:
+            with urllib.request.urlopen(f'{base_url or OLLAMA_URL}/api/version', timeout=3):
+                return True
+        except (OSError, ValueError):
+            pass
+        if time.monotonic() >= deadline:
+            return False
+        time.sleep(1)
 
 
 # ---- Updates ---------------------------------------------------------------------------------
@@ -775,8 +903,8 @@ def _amd_kind(detect):
     return ((detect or {}).get('plan') or {}).get('amd')
 
 
-def install_summary(detect):
-    """What `noc-gpu install` would do, in plain words, for the consent dialog. Never automatic."""
+def gpu_install_lines(detect):
+    """What `noc-gpu install` would set up for this machine's GPUs, one plain sentence each ([] when there is nothing)."""
     plan = (detect or {}).get('plan') or {}
     lines = []
     if 'nvidia' in install_vendors(detect):
@@ -792,8 +920,12 @@ def install_summary(detect):
                      'Local models keep running on the CPU until then.')
     if amd in ('rocm', 'override'):
         lines.append('You will need to log out and back in afterwards for the new GPU access to apply.')
-    lines.append('This takes several minutes. Nothing changes until you press Install.')
     return lines
+
+
+def install_summary(detect):
+    """What `noc-gpu install` would do, in plain words, for the consent dialog. Never automatic."""
+    return gpu_install_lines(detect) + ['This takes several minutes. Nothing changes until you press Install.']
 
 
 def disk_needed_gb(detect):
@@ -905,19 +1037,10 @@ def gpu_install_argv(detect):
 
 # ---- Privacy ---------------------------------------------------------------------------------
 
-HERMES_LOCAL = [HERMES, 'local', '--no-launch']
-HERMES_CLOUD = [HERMES, 'cloud']
+HERMES_LOCAL = [NOC, 'privacy', 'hermes', 'local']
+HERMES_CLOUD = [NOC, 'privacy', 'hermes', 'cloud']
 SEARCH_SETTINGS = ['/usr/local/bin/noctraos-search', '--settings']
 WEATHER_SETUP = ['/usr/local/bin/noctraos-weather', '--setup']
-
-
-def hermes_mode():
-    """cloud | local | other, or None when Hermes is not installed."""
-    try:
-        out = subprocess.run([HERMES, 'mode'], capture_output=True, text=True, timeout=10).stdout.strip()
-    except (OSError, subprocess.SubprocessError):
-        return None
-    return out if out in ('cloud', 'local', 'other') else None
 
 
 def hermes_privacy(mode):
@@ -942,6 +1065,84 @@ def switch_command(target, current):
     if current in (None, 'other') or target == current:
         return None
     return {'local': HERMES_LOCAL, 'cloud': HERMES_CLOUD}.get(target)
+
+
+# Three more things the installer arranges without asking, stated plainly on the Privacy page: the SSH server is installed
+# (and started), CopyQ keeps the clipboard history on disk, and the saved-password store is not locked by a password. They are
+# settings, not setup chores: no "do it myself" button and no Overview nag. The state is read by `noc privacy status --json`
+# and the clearing is `noc privacy clipboard clear`: the panel only words them. Root work is noc-privileged, like the rest.
+
+def remote_access_privacy(state):
+    """What the Privacy page says about SSH for each state."""
+    if state is None:
+        return {'headline': 'No remote login on this computer', 'level': 'info', 'can_switch': False, 'button': '',
+                'text': 'No SSH server was found, so nobody can sign in to this computer over the network.'}
+    if state == 'on':
+        return {'headline': 'Remote login is on', 'level': 'warn', 'can_switch': True, 'button': 'Turn off remote login',
+                'text': 'Other computers that can reach this one over the network can sign in to it (SSH) with your account '
+                        'name and password. If you do not sign in to this computer from elsewhere, turn it off.'}
+    return {'headline': 'Remote login is off', 'level': 'ok', 'can_switch': True, 'button': 'Turn on remote login',
+            'text': 'Nobody can sign in to this computer over the network. Turn it on to reach it from another computer with SSH.'}
+
+
+def remote_access_command(target, current):
+    """argv through the root helper that turns remote login 'on' or 'off'; None when it is already so, there is no
+    server, or the target is not one of the two."""
+    if current is None or target not in ('on', 'off') or target == current:
+        return None
+    return [PKEXEC, HELPER, 'remote-access', target]
+
+
+def clipboard_privacy(state):
+    """What the Privacy page says about the clipboard history."""
+    state = state or {}
+    if not state.get('installed'):
+        return {'headline': 'Clipboard history (CopyQ) is not installed', 'can_clear': False,
+                'text': 'Nothing is keeping a history of what you copy.'}
+    count = state.get('count')
+    if count is None:
+        headline = 'CopyQ is not running' if not state.get('running') else 'Clipboard history (CopyQ)'
+    else:
+        headline = 'Nothing saved' if count == 0 else f'{count} {"copy" if count == 1 else "copies"} saved'
+    return {'headline': headline, 'can_clear': count != 0,
+            'text': 'CopyQ keeps what you copy on this computer, and it stays after a restart. That can include passwords '
+                    'you copied. Super+Space searches it.'}
+
+
+def clear_clipboard_history():
+    """Empty CopyQ's default history tab. Returns (ok, last line of output)."""
+    return noc_run('privacy', 'clipboard', 'clear', timeout=60)
+
+
+SEAHORSE = '/usr/bin/seahorse'
+
+
+def keyring_privacy(state, can_open=False):
+    """What the Privacy page says about the saved-password store. `can_open`: Passwords and Keys is installed."""
+    if state == 'protected':
+        return {'headline': 'Saved passwords are locked with a password', 'level': 'ok',
+                'text': 'Apps that use the system keyring need that password to read what they saved.'}
+    if state == 'unprotected':
+        text = ('NoctraOS leaves the system keyring unlocked so apps such as Hermes open without asking for a keyring '
+                'password. Anyone who can read your home folder can read what they saved there. Chromium and VS Code keep '
+                'theirs outside the keyring.')
+        if can_open:
+            text += (' You can lock it by setting a password for the Login keyring in Passwords and Keys. With automatic '
+                     'sign-in, apps will then ask for that password.')
+        return {'headline': 'Saved passwords are not locked by a password', 'level': 'warn', 'text': text}
+    if state == 'none':
+        return {'headline': 'No saved passwords yet', 'level': 'info',
+                'text': 'The store is created the first time an app saves a password.'}
+    return {'headline': 'Could not tell how saved passwords are stored', 'level': 'info', 'text': ''}
+
+
+def privacy_snapshot():
+    """Everything the Privacy page shows: `noc privacy status --json` (the CopyQ count can take a moment, so call this on a
+    thread) plus whether Passwords and Keys is installed. When noc cannot answer, every section reads as not found."""
+    state = noc_json('privacy', 'status', '--json', timeout=30) or {}
+    return {'hermes': state.get('hermes'), 'remote': state.get('remote'),
+            'clipboard': state.get('clipboard') or {'installed': False, 'running': False, 'count': None},
+            'keyring': state.get('keyring'), 'can_open_keyring': os.access(SEAHORSE, os.X_OK)}
 
 
 # ---- Setup checklist -------------------------------------------------------------------------
@@ -1020,7 +1221,13 @@ def setup_steps(status, extras=None):
     elif ollama.get('running'):
         steps.append(Step('models', 'Local AI model', 'Ollama runs but has no model yet. Pick one to download.', 'todo', 'models', button='Choose'))
     else:
-        steps.append(Step('models', 'Local AI model', 'Local AI is optional and not set up yet.', 'waiting', 'models', button='Open'))
+        if local_ai_state(ollama) == 'absent':
+            text = 'Optional. Set up local AI to run models on this computer.'
+        elif ollama.get('autostart') is False:
+            text = 'Ollama is off. Start it when you want local AI.'
+        else:
+            text = 'Ollama is installed but not running.'
+        steps.append(Step('models', 'Local AI model', text, 'waiting', 'models', button='Open'))
 
     hermes = status.get('hermes') or {}
     if not hermes.get('installed'):

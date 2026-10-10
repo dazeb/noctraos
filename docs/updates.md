@@ -26,7 +26,7 @@ Some apps are not in apt or Flatpak: they are installed from the publisher's own
 | App | Newest release comes from | Installed version read from | Updated by |
 |---|---|---|---|
 | Hermes | GitHub Releases of `NousResearch/hermes-agent` | `hermes --version` | `noctraos-hermes update` (user) |
-| Ollama | GitHub Releases of `ollama/ollama` | `ollama --version` | `install/03b_ollama_update.sh` through the privileged helper (root; the Apps page asks first, it restarts the service) |
+| Ollama | GitHub Releases of `ollama/ollama` | `ollama --version` | `install/03b_ollama_update.sh` through the privileged helper (root; the Apps page asks first, it restarts the service and keeps whether it starts with the computer: the vendor installer turns that on, the module puts the person's choice back) |
 | AppManager | GitHub Releases of `kem-a/AppManager` | `/opt/appmanager/VERSION` | `install/04d_appmanager.sh` through the privileged helper (root) |
 | Codex, Claude Code, OpenCode, Grok, Gemini CLI, Qwen Code | npm registry `latest` | the global `node_modules` | `npm install -g <package>@<exact version>` (user); only when already installed |
 
@@ -125,7 +125,7 @@ manual and staged; `iso/renew-update-channels.sh` keeps the manifests alive.
 
 **On the machine.** The Updates page lists the NoctraOS step like any other, shows which update is installed and which channel
 it follows, lets a tester switch to **Nightly** (a confirmation: it can break things) or back to **Stable**, and offers **Go back to the
-previous update** when there is one. Terminal: `noc channel [stable|nightly]`, `noc update --only noctraos`.
+previous update** when there is one. Terminal: `noc channel [stable|nightly|rollback]`, `noc update --only noctraos`.
 
 ## Channels and promotion
 

@@ -2,7 +2,9 @@
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import json
 from pathlib import Path
+import stat
 import sys
+import tempfile
 import threading
 import unittest
 
@@ -125,10 +127,16 @@ class CardTests(unittest.TestCase):
         self.assertEqual(card.level, "warn")
         self.assertIn("Restart", card.detail)
 
-    def test_ollama_down_is_a_state(self):
-        down = {**STATUS, "ollama": {"running": False, "models": 0, "default_model": "x"}}
+    def test_ollama_installed_but_silent_is_a_warning(self):
+        down = {**STATUS, "ollama": {"installed": True, "running": False, "models": 0, "default_model": "x"}}
         card = by_id(down)["ollama"]
-        self.assertEqual((card.value, card.level), ("Not running", "warn"))
+        self.assertEqual((card.value, card.level, card.page), ("Not running", "warn", "models"))
+
+    def test_local_ai_that_was_never_set_up_is_information_not_a_warning(self):
+        absent = {**STATUS, "ollama": {"installed": False, "running": False, "models": 0, "default_model": "x"}}
+        card = by_id(absent)["ollama"]
+        self.assertEqual((card.value, card.level, card.page), ("Not set up", "info", "models"))
+        self.assertIn("Optional", card.detail)
 
     def test_gpu(self):
         self.assertEqual(by_id(STATUS)["gpu"].value, "GeForce RTX 3080 Ti")
@@ -354,7 +362,7 @@ class HealthTests(unittest.TestCase):
         self.assertEqual(panel.health_headline([]), ("Everything checks out", "ok"))
 
     def test_fix_commands(self):
-        self.assertEqual(panel.fix_command("hermes:install"), [panel.HERMES, "install"])
+        self.assertEqual(panel.fix_command("hermes:install"), [panel.NOC, "repair", "hermes"])
         # root work only ever goes through the allowlisted helper, never a bare sudo
         self.assertEqual(panel.fix_command("module:04d_appmanager.sh"),
                          [panel.PKEXEC, panel.HELPER, "module", "04d_appmanager.sh"])
@@ -364,7 +372,7 @@ class HealthTests(unittest.TestCase):
             self.assertNotIn("sudo", argv)
 
     def test_run_hint_is_dropped_only_when_there_is_a_button(self):
-        hint = "missing (run: bash ~/.local/share/noctraos/install.sh --only 04d_appmanager.sh)"
+        hint = "missing (run: noc repair appmanager)"
         self.assertEqual(panel.clean_detail(hint, True), "missing")
         self.assertEqual(panel.clean_detail(hint, False), hint)
         self.assertEqual(panel.clean_detail(None, True), "")
@@ -726,7 +734,144 @@ class HardwareTests(unittest.TestCase):
         self.assertEqual(panel.hardware_state(None, None)["level"], "info")
 
 
+class LocalAiTests(unittest.TestCase):
+    """Local AI is optional: the AI models page offers to set it up, through the allowlisted module, after a summary and a yes."""
+
+    def test_state_tells_never_set_up_from_installed_but_silent(self):
+        self.assertEqual(panel.local_ai_state({"installed": True, "running": True}), "running")
+        self.assertEqual(panel.local_ai_state({"running": True}), "running")                  # an answering API is enough
+        self.assertEqual(panel.local_ai_state({"installed": True, "running": False}), "stopped")
+        self.assertEqual(panel.local_ai_state({"installed": False, "running": False}), "absent")
+        self.assertEqual(panel.local_ai_state({}), "absent")
+        for unreadable in (None, "x", []):
+            self.assertIsNone(panel.local_ai_state(unreadable))
+
+    def test_the_setup_runs_through_the_helper_and_a_listed_module(self):
+        import re
+        self.assertEqual(panel.LOCAL_AI_SETUP, [panel.PKEXEC, panel.HELPER, "module", "optional/local_llm.sh"])
+        self.assertNotIn("sudo", panel.LOCAL_AI_SETUP)
+        helper = (ROOT / "bin/noc-privileged").read_text()
+        self.assertIn(panel.LOCAL_AI_SETUP[-1], re.search(r"^MODULES=\((.*)\)", helper, re.M).group(1).split())
+        self.assertTrue((ROOT / "install" / panel.LOCAL_AI_SETUP[-1]).is_file())
+
+    def test_the_summary_says_what_is_installed_and_that_no_model_is_downloaded(self):
+        text = " ".join(panel.local_ai_summary(det("modern", gpus=[NV])))
+        self.assertIn("Ollama", text)
+        self.assertIn("LLMFIT", text)
+        self.assertIn("about 1.4 GB", text)
+        self.assertIn("NVIDIA", text)                       # the driver step is part of it, and named
+        self.assertIn("restart is needed", text)
+        self.assertIn("No model is downloaded yet", text)
+        self.assertIn("Nothing changes until you press Set up", text)
+
+    def test_without_a_gpu_the_summary_says_the_processor_does_the_work(self):
+        self.assertIn("processor", " ".join(panel.local_ai_summary({"gpus": [], "plan": {}})))
+        self.assertNotIn("processor", " ".join(panel.local_ai_summary(None)))      # unknown is not "none"
+        self.assertNotIn("driver", " ".join(panel.local_ai_summary({"gpus": [], "plan": {}})))    # no GPU step to describe
+
+    def test_little_memory_is_said_out_loud_and_enough_is_not(self):
+        self.assertIn("4 GB of memory", " ".join(panel.local_ai_summary(None, 4)))
+        for ram in (8, 32, None, 0):
+            self.assertNotIn("of memory", " ".join(panel.local_ai_summary(None, ram)), ram)
+
+    def test_disk_blocker_counts_the_engine_and_the_gpu_driver(self):
+        gb = 1024 ** 3
+        self.assertEqual(panel.local_ai_blocker(det(), 10 * gb), "")
+        self.assertIn("Not enough free disk space", panel.local_ai_blocker(det(), 2 * gb))
+        self.assertIn("about 4 GB", panel.local_ai_blocker(det(), 2 * gb))
+        self.assertIn("about 14 GB", panel.local_ai_blocker(det("modern", gpus=[NV]), 12 * gb))   # engine 4 + NVIDIA 10
+        self.assertEqual(panel.local_ai_blocker(det("modern", gpus=[NV]), 14 * gb), "")
+        self.assertEqual(panel.local_ai_blocker(det(), None), "")        # unknown free space does not stop it
+
+    def test_result_text(self):
+        self.assertIn("Pick a model", panel.local_ai_result(0))
+        self.assertNotIn("Restart", panel.local_ai_result(0))
+        self.assertIn("Restart the computer", panel.local_ai_result(0, reboot=True))
+        self.assertIn("cancelled", panel.local_ai_result(126))
+        self.assertIn("did not finish", panel.local_ai_result(1))
+
+    def test_the_module_prints_the_line_the_page_looks_for(self):
+        self.assertIn(panel.REBOOT_MARK, (ROOT / "install/optional/local_llm.sh").read_text())
+
+    def test_about_text_does_not_promise_what_hermes_does(self):
+        # Hermes' free tier is a cloud service (AGENTS.md): this page is about Ollama models only.
+        self.assertNotIn("Hermes", panel.LOCAL_AI_ABOUT)
+
+
 ROOT = Path(__file__).resolve().parents[1]
+
+
+class OllamaServiceTests(unittest.TestCase):
+    """Ollama runs when asked and starts with the computer only if the person says so: the AI models page's engine row."""
+
+    def test_running_and_stopped_each_offer_the_other_action(self):
+        run = panel.ollama_service_text({"installed": True, "running": True, "autostart": False})
+        self.assertEqual((run["headline"], run["service"], run["boot"]), ("Ollama is running", "stop", "on"))
+        off = panel.ollama_service_text({"installed": True, "running": False, "autostart": False})
+        self.assertEqual((off["headline"], off["service"], off["boot"]), ("Ollama is off", "start", "on"))
+        self.assertIn("does not start with this computer", off["text"])
+
+    def test_it_says_when_it_starts_with_the_computer_and_offers_to_stop_that(self):
+        run = panel.ollama_service_text({"installed": True, "running": True, "autostart": True})
+        self.assertEqual(run["boot"], "off")
+        self.assertIn("starts with this computer", run["text"])
+        down = panel.ollama_service_text({"installed": True, "running": False, "autostart": True})
+        self.assertEqual((down["headline"], down["service"], down["boot"]), ("Ollama is not running", "start", "off"))
+        self.assertIn("Health", down["text"])                     # set to start and silent: that one is worth a look
+
+    def test_an_unknown_boot_setting_hides_the_boot_button_and_claims_nothing(self):
+        for unknown in (None, "yes", 1):
+            info = panel.ollama_service_text({"installed": True, "running": True, "autostart": unknown})
+            self.assertIsNone(info["boot"], unknown)
+            self.assertNotIn("this computer", info["text"])
+
+    def test_nothing_to_show_until_it_is_installed_and_read(self):
+        for state in (None, {}, {"installed": False, "running": False}, "x"):
+            self.assertIsNone(panel.ollama_service_text(state), state)
+
+    def test_commands_go_through_the_fixed_helper_verbs_and_only_when_they_change_something(self):
+        self.assertEqual(panel.ollama_service_command("start", False), [panel.PKEXEC, panel.HELPER, "ollama-service", "start"])
+        self.assertEqual(panel.ollama_service_command("stop", True), [panel.PKEXEC, panel.HELPER, "ollama-service", "stop"])
+        self.assertIsNone(panel.ollama_service_command("start", True))
+        self.assertIsNone(panel.ollama_service_command("stop", False))
+        self.assertIsNone(panel.ollama_service_command("restart", False))
+        self.assertEqual(panel.ollama_autostart_command("on", False), [panel.PKEXEC, panel.HELPER, "ollama-autostart", "on"])
+        self.assertEqual(panel.ollama_autostart_command("off", True), [panel.PKEXEC, panel.HELPER, "ollama-autostart", "off"])
+        for target, current in (("on", True), ("off", False), ("on", None), ("maybe", False), ("", True)):
+            self.assertIsNone(panel.ollama_autostart_command(target, current), (target, current))
+        for argv in (panel.ollama_service_command("start", False), panel.ollama_autostart_command("on", False)):
+            self.assertNotIn("sudo", argv)
+
+    def test_the_card_calls_an_off_ollama_by_that_name_and_a_silent_one_that_should_run_a_warning(self):
+        off = panel._ollama_card({"installed": True, "running": False, "autostart": False})
+        self.assertEqual((off.value, off.level), ("Off", "info"))
+        silent = panel._ollama_card({"installed": True, "running": False, "autostart": True})
+        self.assertEqual((silent.value, silent.level), ("Not running", "warn"))
+        unknown = panel._ollama_card({"installed": True, "running": False})
+        self.assertEqual(unknown.level, "warn")                    # an older noc: say nothing new about it
+
+    def test_the_overview_step_is_not_a_chore_for_an_ollama_that_is_off(self):
+        steps = panel.setup_steps({**STATUS, "ollama": {"installed": True, "running": False, "autostart": False}}, {})
+        step = [s for s in steps if s.id == "models"][0]
+        self.assertEqual(step.state, "waiting")
+        self.assertIn("Ollama is off", step.text)
+
+    def test_waiting_for_the_api(self):
+        class Up(BaseHTTPRequestHandler):
+            def do_GET(self):  # noqa: N802
+                self.send_response(200 if self.path == "/api/version" else 404)
+                self.send_header("Content-Length", "2")
+                self.end_headers()
+                self.wfile.write(b"{}")
+
+            def log_message(self, *a):
+                pass
+        server = HTTPServer(("127.0.0.1", 0), Up)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        self.assertTrue(panel.wait_for_ollama(2, f"http://127.0.0.1:{server.server_address[1]}"))
+        self.assertFalse(panel.wait_for_ollama(0, "http://127.0.0.1:9"))      # nothing listens: it gives up at once
 
 
 class SkipTests(unittest.TestCase):
@@ -814,7 +959,7 @@ class TerminalTipTests(unittest.TestCase):
             if words[0] == "sudo":                 # a command that needs root: the program is the next word
                 words = words[1:]
             program = words[0]
-            if program in ("git", "gh"):
+            if program in ("git", "gh"):    # tools of the system, not of this repo
                 continue
             self.assertTrue((ROOT / "bin" / program).is_file(), f"{key}: {program} is not a program of this system")
             if program == "noc":
@@ -863,15 +1008,12 @@ class PrivacyTests(unittest.TestCase):
         self.assertFalse(panel.hermes_privacy(None)["can_switch"])
 
     def test_switch_command(self):
-        self.assertEqual(panel.switch_command("local", "cloud"), [panel.HERMES, "local", "--no-launch"])
-        self.assertEqual(panel.switch_command("cloud", "local"), [panel.HERMES, "cloud"])
+        self.assertEqual(panel.switch_command("local", "cloud"), [panel.NOC, "privacy", "hermes", "local"])
+        self.assertEqual(panel.switch_command("cloud", "local"), [panel.NOC, "privacy", "hermes", "cloud"])
         self.assertIsNone(panel.switch_command("local", "local"))
         self.assertIsNone(panel.switch_command("cloud", "other"))     # never touch the user's own provider
         self.assertIsNone(panel.switch_command("local", None))
         self.assertIsNone(panel.switch_command("bogus", "cloud"))
-
-    def test_local_never_launches_the_app(self):
-        self.assertIn("--no-launch", panel.HERMES_LOCAL)
 
     def test_run_ok(self):
         self.assertEqual(panel.run_ok(["/bin/sh", "-c", "echo a; echo b; exit 1"]), (False, "b"))
@@ -880,11 +1022,97 @@ class PrivacyTests(unittest.TestCase):
         self.assertFalse(ok)
         self.assertTrue(message)
 
-    def test_hermes_mode_when_missing(self):
-        original = panel.HERMES
-        panel.HERMES = "/nonexistent/hermes"
-        self.addCleanup(setattr, panel, "HERMES", original)
-        self.assertIsNone(panel.hermes_mode())
+
+def stub_program(directory, name, body):
+    """An executable shell script `name` in `directory`; returns its path."""
+    path = Path(directory) / name
+    path.write_text("#!/bin/sh\n" + body + "\n")
+    path.chmod(path.stat().st_mode | stat.S_IXUSR)
+    return str(path)
+
+
+class RemoteLoginTests(unittest.TestCase):
+    """The state is `noc privacy status --json` (tests/test_noc_cli.py); the panel words it and runs the fixed root verb."""
+
+    def test_the_page_text_follows_the_state(self):
+        on, off, none = (panel.remote_access_privacy(s) for s in ("on", "off", None))
+        self.assertEqual((on["button"], on["level"], on["can_switch"]), ("Turn off remote login", "warn", True))
+        self.assertEqual((off["button"], off["level"], off["can_switch"]), ("Turn on remote login", "ok", True))
+        self.assertEqual((none["button"], none["can_switch"]), ("", False))
+        self.assertIn("sign in", on["text"])
+        self.assertIn("password", on["text"])
+
+    def test_the_command_is_the_fixed_privileged_verb_with_one_of_two_words(self):
+        self.assertEqual(panel.remote_access_command("off", "on"), [panel.PKEXEC, panel.HELPER, "remote-access", "off"])
+        self.assertEqual(panel.remote_access_command("on", "off"), [panel.PKEXEC, panel.HELPER, "remote-access", "on"])
+        self.assertIsNone(panel.remote_access_command("on", "on"))        # already there
+        self.assertIsNone(panel.remote_access_command("on", None))        # no server to switch
+        for bad in ("", "ON", "on;id", "enable", "--now"):
+            self.assertIsNone(panel.remote_access_command(bad, "off"), bad)
+
+
+class ClipboardHistoryTests(unittest.TestCase):
+    def test_the_page_text(self):
+        head = lambda **state: panel.clipboard_privacy({"installed": True, "running": True, **state})   # noqa: E731
+        self.assertEqual(head(count=5)["headline"], "5 copies saved")
+        self.assertEqual(head(count=1)["headline"], "1 copy saved")
+        self.assertEqual(head(count=0)["headline"], "Nothing saved")
+        self.assertFalse(head(count=0)["can_clear"])
+        self.assertTrue(head(count=5)["can_clear"])
+        # CopyQ not running: what it saved earlier is still on disk, so clearing stays possible
+        stopped = panel.clipboard_privacy({"installed": True, "running": False, "count": None})
+        self.assertEqual((stopped["headline"], stopped["can_clear"]), ("CopyQ is not running", True))
+        self.assertIn("stays after a restart", head(count=5)["text"])
+        gone = panel.clipboard_privacy({"installed": False})
+        self.assertFalse(gone["can_clear"])
+
+    def test_clearing_is_noc_privacy_clipboard_clear(self):
+        with tempfile.TemporaryDirectory() as d:
+            log = Path(d) / "log"
+            self.addCleanup(setattr, panel, "NOC", panel.NOC)
+            panel.NOC = stub_program(d, "noc", f'echo "$*" >> "{log}"; echo cleared')
+            self.assertEqual(panel.clear_clipboard_history(), (True, "cleared"))
+            self.assertEqual(log.read_text().strip(), "privacy clipboard clear")
+            panel.NOC = stub_program(d, "noc", "echo boom; exit 1")
+            self.assertEqual(panel.clear_clipboard_history(), (False, "boom"))
+
+
+class SavedPasswordTests(unittest.TestCase):
+    def test_the_page_says_what_it_is(self):
+        plain = panel.keyring_privacy("unprotected", can_open=True)
+        self.assertEqual(plain["level"], "warn")
+        self.assertIn("not locked", plain["headline"])
+        self.assertIn("Passwords and Keys", plain["text"])
+        self.assertIn("Chromium and VS Code", plain["text"])      # their secrets are not in the keyring, so a keyring password would not cover them
+        self.assertNotIn("Passwords and Keys", panel.keyring_privacy("unprotected", can_open=False)["text"])
+        locked = panel.keyring_privacy("protected")
+        self.assertEqual(locked["level"], "ok")
+        self.assertNotIn("not locked", locked["headline"])
+        self.assertEqual(panel.keyring_privacy("none")["level"], "info")
+        self.assertEqual(panel.keyring_privacy(None)["text"], "")
+
+
+class PrivacySnapshotTests(unittest.TestCase):
+    def setUp(self):
+        for name in ("NOC", "SEAHORSE"):
+            self.addCleanup(setattr, panel, name, getattr(panel, name))
+
+    def test_it_is_what_noc_privacy_status_prints(self):
+        with tempfile.TemporaryDirectory() as d:
+            log = Path(d) / "log"
+            state = {"hermes": "cloud", "remote": "on", "clipboard": {"installed": True, "running": True, "count": 4},
+                     "keyring": "unprotected"}
+            panel.NOC = stub_program(d, "noc", f'echo "$*" >> "{log}"; echo \'{json.dumps(state)}\'')
+            panel.SEAHORSE = stub_program(d, "seahorse", "true")
+            self.assertEqual(panel.privacy_snapshot(), {**state, "can_open_keyring": True})
+            self.assertEqual(log.read_text().strip(), "privacy status --json")
+
+    def test_it_survives_a_machine_where_nothing_works(self):
+        panel.NOC = "/nonexistent/noc"
+        panel.SEAHORSE = "/nonexistent/seahorse"
+        self.assertEqual(panel.privacy_snapshot(), {"hermes": None, "remote": None,
+                                                    "clipboard": {"installed": False, "running": False, "count": None},
+                                                    "keyring": None, "can_open_keyring": False})
 
 
 class SetupChecklistTests(unittest.TestCase):
@@ -926,6 +1154,10 @@ class SetupChecklistTests(unittest.TestCase):
     def test_hermes_and_models_wait_instead_of_nagging(self):
         steps = self.steps(hermes={"installed": False, "mode": None}, ollama={"running": False})
         self.assertEqual((steps["hermes"].state, steps["models"].state), ("waiting", "waiting"))
+        self.assertIn("Optional", steps["models"].text)                     # never set up: an option, not a chore
+        silent = self.steps(ollama={"installed": True, "running": False})["models"]
+        self.assertEqual(silent.state, "waiting")
+        self.assertIn("installed but not running", silent.text)
         none = self.steps(ollama={"running": True, "models": 0, "default_model": "m"})
         self.assertEqual(none["models"].state, "todo")
 

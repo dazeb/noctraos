@@ -25,10 +25,10 @@ Keyboard: Ctrl+1 to Ctrl+9 switch pages, Ctrl+R or F5 check again, Ctrl+W or Ctr
 | Accounts | The two first-time chores that stop a newcomer's first `git commit` and `git push`: the name and e-mail Git signs work with, and signing in to GitHub (a code to paste in the browser; no terminal, no password typed). Offers GitHub's private e-mail address | Save, Sign in, Use my GitHub details, Sign out, No I'll set it up myself (each chore) |
 | Apps | Hermes, Ollama, AppManager and the coding agents: installed version, newest upstream release, when it last changed, an Update button ([updates.md](updates.md#apps-that-come-straight-from-their-publishers-hermes-ollama-coding-agents)) | Check now, Update |
 | Updates | System packages (count and download size), Flatpak, NoctraOS features (signed rolling updates, [updates.md](updates.md)), programming languages (mise), AI models | Tick what to update, then Update. Needs no terminal; one password prompt for the system steps. Below the list: which NoctraOS update is installed, the update channel (Stable or Nightly) and Go back to the previous update |
-| AI models | Installed models with size and the default; suggestions chosen from this machine's RAM and video memory | Download with a progress bar and Cancel, Remove (confirms), Make default, a custom name |
+| AI models | Installed models with size and the default; suggestions chosen from this machine's RAM and video memory. Until local AI is set up (it is not part of the first install), the page says so. An Engine row says whether Ollama is running and whether it starts with the computer (it does not unless you turn that on) | Set up local AI… (summary and a yes, then the engine, the GPU driver if there is one, and LLMFIT; no model is downloaded), Start Ollama / Stop Ollama, Start with this computer (one password prompt), Download with a progress bar and Cancel, Remove (confirms), Make default, a custom name |
 | Hardware | The GPU found, whether the stack is ready, RAM and disk; a notice when the disk is bigger than the system uses | Set up the GPU, or use all of an enlarged disk, each only after a summary of what will change and a yes; or "No, I'll set up the GPU myself" |
 | Health | `noc doctor` as rows, problems first | Re-check, Copy report, Fix where one exists |
-| Privacy | Whether Hermes uses the Nous free tier (a cloud service) or stays local | Switch (cloud needs a confirmation), open the Search and Weather settings |
+| Privacy | Whether Hermes uses the Nous free tier (a cloud service) or stays local; whether remote login (the SSH server) is on; how many copies CopyQ has saved on disk; whether the saved-password store is locked by a password | Switch Hermes (cloud needs a confirmation), turn remote login off or on (one password prompt, on needs a confirmation), clear the clipboard history (confirms), open Passwords and Keys, open the Search and Weather settings |
 | About | Version, base system, links | Copy diagnostics |
 
 Every page has a "not ready yet" state (no network, Ollama still starting, no GPU, Hermes not
@@ -67,6 +67,30 @@ Adding a setup chore to the panel means: an id in `SKIPPABLE` (panel.py) and `SK
 skipped state on its page, a `TERMINAL` entry. Actions that are already opt-in (updates, apps, models, privacy) need only the
 Terminal button.
 
+## The terminal does everything the panel does
+
+The panel is a front end for `noc`, so a machine whose panel breaks (no display, a GTK problem) still has every option. Each
+panel action and the command that does the same:
+
+| Panel | `noc` |
+|---|---|
+| Updates: update | `noc update [--only apt,flatpak,noctraos,mise,apps,models]` |
+| Updates: channel, Go back | `noc channel [stable\|nightly]`, `noc channel rollback` |
+| Apps: Update | `noc apps update [app,app]` (Ollama and AppManager ask for sudo) |
+| AI models: Set up local AI, Download, Remove, Make default | `noc llm setup`, `noc models pull <model>`, `noc models rm <model>`, `noc models default <model>` |
+| AI models: Start Ollama, Stop Ollama, Start with this computer | `noc llm start`, `noc llm stop`, `noc llm autostart on\|off` |
+| Hardware: GPU setup, Use all the disk space | `noc gpu install`, `sudo noc disk grow` |
+| Health: Fix | `noc repair appmanager\|vm-guest\|hermes` (the doctor row says which) |
+| Privacy: Hermes, Remote login, Clipboard history | `noc privacy hermes local\|cloud`, `noc privacy remote on\|off`, `noc privacy clipboard clear` |
+| Accounts | `noc accounts git set`, `noc accounts github login\|logout` |
+| "No, I'll do it myself" | `noc skip add\|rm <id>` |
+
+`noc privacy status [--json]` is also what the Privacy page reads, so the page and the terminal cannot disagree. The panel's root
+steps go through `noc-privileged` (pkexec, no terminal) and `noc` reaches the same code through `sudo`.
+`tests/test_noc_cli.py` (`PanelParityTests`) fails when a root verb, an allowed module or a Health fix has no `noc` command, so a
+panel feature cannot be added without its terminal twin. Search settings and the weather city are windows of their own
+(`noctraos-search --settings`, `noctraos-weather --setup`).
+
 ## How it works
 
 ```
@@ -76,9 +100,9 @@ noctraos-control (wrapper, pins /usr/bin/python3)
     └ control/panel.py everything testable without GTK: cards, rows, plans, progress
           │
           ├ noc status | updates | doctor --json | models list|presets --json | update --json | skip list --json
+          ├ noc privacy status --json | clipboard clear | hermes local|cloud
           ├ noc-gpu detect|status --json
-          ├ noctraos-hermes mode | local --no-launch | cloud
-          └ pkexec noc-privileged  update <apt,flatpak> | module <name> | gpu-install <vendor>
+          └ pkexec noc-privileged  update <apt,flatpak> | module <name> | gpu-install <vendor> | disk-grow | remote-access <on|off> | ollama-service <start|stop> | ollama-autostart <on|off>
 ```
 
 ### The root side
@@ -95,7 +119,7 @@ user's editable clone. To allow another module, add it to `MODULES` in the helpe
 
 These outputs are a contract; `tests/test_noc_cli.py` and `tests/test_gpu_detect.py` pin them:
 `noc doctor --json`, `noc status`, `noc updates`, `noc models list|presets --json`,
-`noc update --json --only <steps>` (an event stream), `noc-gpu detect|status --json`.
+`noc update --json --only <steps>` (an event stream), `noc privacy status --json`, `noc-gpu detect|status --json`.
 
 ## Testing a change
 

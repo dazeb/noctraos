@@ -4,7 +4,8 @@
 
 For downloads and checksums, start at [noctraos.dev/download](https://noctraos.dev/download).
 This guide covers provisioning an existing machine, configuration, GPU setup,
-ISO builds, and day-to-day maintenance.
+ISO builds, and day-to-day maintenance. For what NoctraOS sets up and what it
+leaves to you, read [What we do](what-we-do.md).
 
 ## Install on Proxmox VE
 
@@ -70,6 +71,8 @@ noc update        # apt + Flatpak apps + mise runtimes + refresh the local model
 noc doctor        # health check: OS, Ollama + models, mise runtimes, VS Code, search, Hermes, AppManager, GPU, disk
 noc llm setup     # optional: local AI engine (Ollama), GPU stack and LLMFIT. Downloads no model
 noc llm fit       # LLMFIT: the models that fit this computer
+noc llm start     # start Ollama now (noc llm stop to stop it); it does not start with the computer by itself
+noc llm autostart on    # start Ollama with the computer (off to stop that; no argument shows the setting)
 noc models list   # local models
 noc models pull <model>   # e.g. noc models pull llama3.2:3b
 noc models rm <model>
@@ -78,6 +81,13 @@ noc bg list|next|set <name>   # the wallpaper set
 noc gpu detect    # what GPU you have and what would be installed
 noc gpu install   # (re)run GPU driver + CUDA/ROCm setup — safe to repeat
 noc gpu status --smoke   # verify driver, CUDA/ROCm, and run a real device probe
+noc apps          # Hermes, Ollama, AppManager and the coding agents: installed vs newest release
+noc apps update   # bring them to the newest release (Ollama and AppManager ask for your password)
+noc repair appmanager   # run again what noc doctor found missing (appmanager | vm-guest | hermes)
+noc channel       # which NoctraOS update channel; noc channel nightly | stable | rollback
+noc privacy status      # remote login, clipboard history, saved passwords, where Hermes sends what you type
+noc privacy remote off  # turn the SSH server off (on to turn it back on)
+noc privacy clipboard clear   # empty the clipboard history
 noctraos-control  # the Control Panel: system state, mouse-driven (more pages coming)
 ```
 

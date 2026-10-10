@@ -17,18 +17,17 @@ log "GPU compute stack (NVIDIA → driver + CUDA, AMD → ROCm)..."
 bash "$REPO_ROOT/bin/noc-gpu" install \
   || warn "GPU setup did not complete — continuing. Retry later with: noc gpu install"
 
+# The vendor installer turns the service on at boot. That is the person's choice, not ours: a first install leaves it off,
+# and a re-run keeps whatever was chosen (ollama_boot_choice in lib.sh).
+boot_choice="$(ollama_boot_choice)"
 if have ollama; then
   log "OK: Ollama already installed ($(ollama --version 2>/dev/null | head -n 1))"
 else
   log "Installing Ollama (official installer)..."
   curl -fsSL https://ollama.com/install.sh | sh
 fi
+ollama_boot_restore "$boot_choice"
 
-if systemctl is-enabled --quiet ollama 2>/dev/null; then
-  log "OK: ollama.service enabled"
-else
-  sudo systemctl enable ollama
-fi
 if systemctl is-active --quiet ollama 2>/dev/null; then
   log "OK: ollama.service already running"
 else
@@ -63,4 +62,9 @@ if [ -f /var/run/reboot-required.pkgs ] && grep -x 'noctraos-gpu' /var/run/reboo
   warn "REBOOT REQUIRED: the GPU driver was installed and loads on next boot. Local models run on the CPU until then."
 fi
 log "Local AI engine ready. No model is installed yet."
+if [ "$boot_choice" = on ]; then
+  log "Ollama starts with this computer (your choice). Change it: noc llm autostart off"
+else
+  log "Ollama is running now, and does not start with this computer unless you ask it to: noc llm autostart on (or AI models in the Control Panel)"
+fi
 log "Find one that fits this computer: noc llm fit — then pull it with: noc models pull <name>"

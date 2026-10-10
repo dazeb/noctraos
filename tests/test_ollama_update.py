@@ -43,12 +43,17 @@ class OllamaModuleTests(unittest.TestCase):
         bin_dir = self.tmp / "bin"
         bin_dir.mkdir()
         (self.tmp / "ollama-version").write_text("0.32.5\n")
+        (self.tmp / "boot").write_text("disabled\n")
         stubs = {
             "ollama": '#!/bin/sh\necho "ollama version is $(cat "$STATE")"\n',
             "sudo": '#!/bin/sh\nexec "$@"\n',
+            # a service whose boot setting lives in a file; `enable`/`disable` are logged
+            "systemctl": '#!/bin/sh\ncase "$1" in cat) exit 0 ;; is-enabled) [ "$(cat "$BOOT_STATE")" = enabled ] ;; '
+                         'enable) echo enabled > "$BOOT_STATE"; echo enable >> "$BOOT_LOG" ;; '
+                         'disable) echo disabled > "$BOOT_STATE"; echo disable >> "$BOOT_LOG" ;; esac\n',
             # the vendor installer arrives as a file: record the version it was pinned to and "install" it
             "curl": '#!/bin/sh\nout=""; while [ $# -gt 0 ]; do [ "$1" = -o ] && out="$2"; shift; done\n'
-                    'printf \'#!/bin/sh\\necho "$OLLAMA_VERSION" >> "$INSTALL_LOG"\\n[ -n "$INSTALL_BREAKS" ] || echo "$OLLAMA_VERSION" > "$STATE"\\n\' > "$out"\n',
+                    'printf \'#!/bin/sh\\necho "$OLLAMA_VERSION" >> "$INSTALL_LOG"\\n[ -n "$INSTALL_BREAKS" ] || echo "$OLLAMA_VERSION" > "$STATE"\\necho enabled > "$BOOT_STATE"\\n\' > "$out"\n',
         }
         for name, body in stubs.items():
             (bin_dir / name).write_text(body)
@@ -56,6 +61,7 @@ class OllamaModuleTests(unittest.TestCase):
         self.env = {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}", "REPO_ROOT": str(ROOT),
                     "TARGET_USER": "t", "TARGET_UID": "1000", "TARGET_HOME": str(self.tmp),
                     "STATE": str(self.tmp / "ollama-version"), "INSTALL_LOG": str(self.tmp / "install.log"),
+                    "BOOT_STATE": str(self.tmp / "boot"), "BOOT_LOG": str(self.tmp / "boot.log"),
                     "INSTALL_BREAKS": "", "NOC_UPSTREAM_GITHUB_API": f"http://127.0.0.1:{server.server_address[1]}",
                     "NOC_UPSTREAM_GITHUB_WEB": "http://127.0.0.1:9", "NOC_UPSTREAM_OLLAMA": str(bin_dir / "ollama"),
                     "NOC_UPSTREAM_CACHE": str(self.tmp / "cache.json"), "NOC_UPSTREAM_STATE": str(self.tmp / "state.json"),
@@ -75,6 +81,22 @@ class OllamaModuleTests(unittest.TestCase):
         self.assertEqual(self.installs(), ["0.40.1"])
         self.assertIn("0.32.5 -> 0.40.1", r.stdout)
         self.assertIn("Ollama is now 0.40.1", r.stdout)
+
+    def boot(self):
+        return (self.tmp / "boot").read_text().strip()
+
+    def test_the_vendor_installer_turning_the_service_on_at_boot_is_undone_when_the_person_had_it_off(self):
+        r = self.run_module()
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertEqual(self.boot(), "disabled")
+        self.assertEqual((self.tmp / "boot.log").read_text().split(), ["disable"])
+
+    def test_a_service_the_person_started_with_the_computer_stays_that_way(self):
+        (self.tmp / "boot").write_text("enabled\n")
+        r = self.run_module()
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertEqual(self.boot(), "enabled")
+        self.assertFalse((self.tmp / "boot.log").exists(), "nothing to change, nothing called")
 
     def test_a_current_ollama_is_left_alone(self):
         (self.tmp / "ollama-version").write_text("0.40.1\n")

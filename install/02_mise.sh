@@ -63,7 +63,7 @@ else
     "$TARGET_HOME/.config/mise/config.toml"
 fi
 
-log "Installing runtimes and terminal tools (Node LTS, Python 3.12, Go, Herdr, Starship, lazygit, lazydocker). First Python install compiles from source — this can take several minutes..."
+log "Installing Node LTS (the coding-agent launchers and the Hermes build need it) and the terminal tools Herdr, Starship, lazygit, lazydocker..."
 as_user mise install
 
 # Existing users may have a pre-Herdr config. Keep their overrides and ensure

@@ -25,15 +25,17 @@ in, and the desktop is dark with a little amber along the way.
   the web. Browser history is available if you opt in.
 - **AI on your computer, if you want it.** Local models run through Ollama, set
   up with one optional command and LLMFIT to find one that fits your hardware.
-  No model is downloaded until you pick one. VS Code and Continue are set up
-  to use them.
+  No model is downloaded until you pick one, and Ollama starts with your
+  computer only if you turn that on. VS Code and Continue are set up to use
+  them.
 - **A Control Panel.** Updates, your apps, Git and GitHub setup, AI models,
   your graphics card, a health check, and your privacy choices in one window,
   with no terminal needed.
 - **Assistants within reach.** Hermes Desktop, Codex, Claude Code, OpenCode,
-  Grok, Gemini CLI, and Qwen Code have a place in the Start panel. Hermes,
-  Ollama and the coding agents follow their publishers' newest releases, and
-  the Control Panel shows which version you have.
+  Grok, Gemini CLI, and Qwen Code have a place in the Start panel. Signing in
+  to the coding agents is yours to do. Hermes, Ollama and the agents follow
+  their publishers' newest releases, and the Control Panel shows which version
+  you have.
 - **The everyday tools, too.** A browser, office apps, media tools, a task
   manager, and support for Flatpaks and AppImages.
 
@@ -93,6 +95,7 @@ Questions, press, or a security report: **[admin@noctraos.dev](mailto:admin@noct
 | Looking for… | Start here |
 | --- | --- |
 | Setup, configuration, GPU support, maintenance, or troubleshooting | [Setup guide](docs/setup.md) |
+| What NoctraOS sets up, and what it leaves to you | [What we do](docs/what-we-do.md) |
 | The project's direction and principles | [Objectives](docs/objectives.md) |
 | The welcome, dock, Start panel, and search experience | [Onboarding](docs/onboarding.md) · [Desktop layout](docs/desktop-layout.md) |
 | The Control Panel: updates, apps, accounts, models, hardware, health, privacy | [Control Panel](docs/control-panel.md) |

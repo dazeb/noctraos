@@ -13,13 +13,8 @@ CORE_PKGS=(
   flatpak libglib2.0-bin dconf-cli zenity xdg-utils
   ca-certificates gnupg xterm openssh-server
 )
-# mise builds Python from source; these are its documented build dependencies.
-PYTHON_BUILD_PKGS=(
-  libssl-dev zlib1g-dev libbz2-dev libreadline-dev
-  libsqlite3-dev libffi-dev liblzma-dev
-)
-log "Installing core packages: ${CORE_PKGS[*]} ${PYTHON_BUILD_PKGS[*]}"
-sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "${CORE_PKGS[@]}" "${PYTHON_BUILD_PKGS[@]}"
+log "Installing core packages: ${CORE_PKGS[*]}"
+sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "${CORE_PKGS[@]}"
 
 # FUSE: most AppImages mount themselves through libfuse2 (named libfuse2t64 on
 # Ubuntu 24.04+, libfuse2 before the t64 transition); fuse3 provides fusermount3.

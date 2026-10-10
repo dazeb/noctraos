@@ -21,7 +21,7 @@ import gi
 gi.require_version("Gtk", "3.0"); gi.require_version("Gdk", "3.0")
 from gi.repository import Gdk, GLib, Gtk
 import panel
-for name in ("NOC", "GPU_BIN", "HERMES", "HELPER", "PKEXEC"):
+for name in ("NOC", "GPU_BIN", "HERMES", "HELPER", "PKEXEC", "SEAHORSE"):
     setattr(panel, name, "/nonexistent/" + name)
 panel.FIXES = {k: ["/nonexistent/fix"] for k in panel.FIXES}
 panel.OLLAMA_URL = "http://127.0.0.1:9"
@@ -113,6 +113,99 @@ updates._layer_loaded({**layer, "channel": "stable", "can_rollback": False, "fai
 assert updates.channel_radios["stable"].get_active() and not updates.rollback.get_visible() and not updates.layer_problem.get_visible()
 updates._layer_loaded(None)
 assert updates.layer.get_visible() and not updates.channel_radios["stable"].get_visible() and not updates.rollback.get_visible()
+# Privacy: remote login, clipboard history and saved passwords each show their state, and a button only where it can act.
+privacy = window.pages["privacy"]
+assert not privacy.remote_button.get_visible() and not privacy.clip_button.get_visible() and not privacy.key_button.get_visible()
+seen_state = {"hermes": None, "remote": "on", "clipboard": {"installed": True, "running": True, "count": 4},
+              "keyring": "unprotected", "can_open_keyring": True}
+privacy._loaded(seen_state)
+assert privacy.remote_button.get_visible() and privacy.remote_button.get_label() == "Turn off remote login"
+assert privacy.clip_button.get_visible() and privacy.clip_head.get_text() == "4 copies saved"
+assert privacy.key_button.get_visible() and "not locked" in privacy.key_head.get_text()
+privacy._loaded({**seen_state, "remote": "off", "clipboard": {"installed": True, "running": True, "count": 0}, "keyring": "protected"})
+assert privacy.remote_button.get_label() == "Turn on remote login"
+assert not privacy.clip_button.get_visible() and not privacy.key_button.get_visible()
+privacy._loaded({**seen_state, "remote": None, "clipboard": {"installed": False}, "keyring": None, "can_open_keyring": False})
+assert not privacy.remote_button.get_visible() and not privacy.clip_button.get_visible() and not privacy.key_button.get_visible()
+# AI models without a running Ollama: never set up gets the offer, installed-but-silent and unreadable do not.
+models = window.pages["models"]
+never = {"ollama": {"installed": False, "running": False}, "gpu": gpu, "ram_gb": 16, "disk": {"root_free_bytes": 50 * 2**30}}
+models._loaded((None, None, never))
+assert models.setup_button is not None and models.setup_button.get_label() == "Set up local AI…"
+assert "Local AI is not set up" in texts(models.holder, [])
+# The engine row. Stopped and not meant to start with the computer is the normal state after the setup: a plain Start, no alarm.
+models._loaded((None, None, {**never, "ollama": {"installed": True, "running": False, "autostart": False}}))
+shown = texts(models.holder, [])
+assert models.setup_button is None and "Ollama is off" in shown and "Start Ollama" in shown and "Start with this computer" in shown, shown
+models._loaded((None, None, {**never, "ollama": {"installed": True, "running": False, "autostart": True}}))
+shown = texts(models.holder, [])
+assert "Ollama is not running" in shown and "Do not start with this computer" in shown and "Start Ollama" in shown, shown
+models._loaded(({"ollama": True, "autostart": False, "default": "m", "models": []}, None, None))
+shown = texts(models.holder, [])
+assert "Ollama is running" in shown and "Stop Ollama" in shown and "Start with this computer" in shown, shown
+models._loaded(({"ollama": True, "autostart": None, "default": "m", "models": []}, None, None))
+shown = texts(models.holder, [])
+assert "Stop Ollama" in shown and "Start with this computer" not in shown and "Do not start with this computer" not in shown, shown
+# Pressing the buttons runs the fixed helper verbs and refreshes. A helper that is missing says so instead of raising.
+ran_engine = []
+panel.run_ok = lambda argv, timeout=120: (ran_engine.append(argv), (True, ""))[1]
+panel.wait_for_ollama = lambda *a, **k: True
+models._loaded((None, None, {**never, "ollama": {"installed": True, "running": False, "autostart": False}}))
+models._engine_service("start", False)
+pump(1.0)
+assert ran_engine == [[panel.PKEXEC, panel.HELPER, "ollama-service", "start"]], ran_engine
+assert "Ollama is running" in models.note.get_text(), models.note.get_text()
+models._engine_boot("on", False)
+pump(1.0)
+assert ran_engine[-1] == [panel.PKEXEC, panel.HELPER, "ollama-autostart", "on"], ran_engine
+assert "starts with this computer" in models.note.get_text(), models.note.get_text()
+models._engine_service("start", True)    # it is running already: nothing to do
+models._engine_boot("on", True)          # it starts with the computer already: nothing to do
+pump(0.5)
+assert len(ran_engine) == 2, ran_engine
+panel.run_ok = lambda argv, timeout=120: (False, "polkit said no")
+models._engine_service("stop", True)
+pump(1.0)
+assert "Could not stop Ollama: polkit said no" in models.note.get_text(), models.note.get_text()
+models._loaded((None, None, None))
+assert models.setup_button is None and any("Could not check" in t for t in texts(models.holder, []))
+# Pressing Set up: the summary dialog (answered yes here), then the helper's module through the allowlisted verb, then the result.
+models._loaded((None, None, never))
+asked, ran = [], []
+def fake_dialog(self):
+    asked.append(self.get_property("secondary-text"))
+    return Gtk.ResponseType.OK
+Gtk.MessageDialog.run = fake_dialog
+def fake_events(argv):
+    ran.append(argv)
+    yield {"event": "log", "line": "Installing Ollama (official installer)..."}
+    yield {"event": "log", "line": "REBOOT REQUIRED: the GPU driver was installed"}
+    yield {"event": "exit", "code": 0}
+panel.run_events = fake_events
+models.setup_button.clicked()
+pump(1.5)
+assert ran == [panel.LOCAL_AI_SETUP], ran
+assert len(asked) == 1 and "No model is downloaded yet" in asked[0] and "NVIDIA" in asked[0], asked
+assert not models.running and not models.run.get_visible(), "a finished setup hides its progress"
+assert "Restart the computer" in models.note.get_text(), models.note.get_text()
+# A failed setup keeps its log open and says so.
+def failing_events(argv):
+    yield {"event": "log", "line": "something broke"}
+    yield {"event": "exit", "code": 1}
+panel.run_events = failing_events
+models._loaded((None, None, never))
+models.setup_button.clicked()
+pump(1.5)
+assert models.run.get_visible() and "did not finish" in models.run.label.get_text() and "did not finish" in models.note.get_text()
+# Too little disk: the dialog only offers Cancel, so nothing runs.
+tight = {**never, "disk": {"root_free_bytes": 2 * 2**30}}
+models._loaded((None, None, tight))
+asked.clear(); ran.clear()
+buttons = []
+Gtk.MessageDialog.run = lambda self: (asked.append(self.get_property("secondary-text")), Gtk.ResponseType.CANCEL)[1]
+models.setup_button.clicked()
+pump(0.5)
+assert ran == [] and "Not enough free disk space" in asked[0], (ran, asked)
 for page_id in ("updates", "apps", "models", "hardware", "health", "privacy", "accounts"):
     page = window.pages[page_id]
     tips = []

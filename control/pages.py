@@ -991,10 +991,15 @@ class ModelsPage(Page):
         row.pack_start(self.cancel, False, False, 0)
         self.progress_box.add(row)
         self.pack_start(self.progress_box, False, False, 0)
+        self.run = RunLog()                 # the one-time local AI setup, when the engine is not installed
+        self.pack_start(self.run, False, False, 0)
         self.holder = self.scroller()
         self.pulling = None   # name being downloaded, None when idle
         self.stop = False
         self.loaded = False
+        self.running = False  # the local AI setup is running
+        self.status = None    # `noc status`, read only while Ollama does not answer
+        self.setup_button = None
         self.buttons = []
 
     def on_show(self):
@@ -1002,24 +1007,30 @@ class ModelsPage(Page):
             self.refresh()
 
     def refresh(self):
+        if self.running:
+            return
         self.loaded = True
         self.spinner.start()
 
         def work():
             listing = panel.noc_json('models', 'list', '--json')
-            return listing, panel.noc_json('models', 'presets', '--json')
+            presets = panel.noc_json('models', 'presets', '--json')
+            # Why Ollama is not answering (never set up, or installed and silent) takes the whole status.
+            return listing, presets, (None if (listing or {}).get('ollama') else panel.noc_json('status'))
         background(work, self._loaded)
 
     def _loaded(self, result):
         self.spinner.stop()
-        listing, presets = result
+        listing, presets, self.status = result
         self.buttons = []
+        self.setup_button = None
         body = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10, margin_end=8)
         if listing is None or not listing.get('ollama'):
-            body.add(label('Ollama is not running yet. It starts by itself after the first boot; '
-                           'press Refresh in a minute.', 'muted'))
+            self._not_running(body)
             self.swap(self.holder, body)
             return
+        body.add(label('Engine', 'section'))
+        body.add(self._engine_row({'installed': True, 'running': True, 'autostart': listing.get('autostart')}))
         installed = panel.installed_rows(listing)
         body.add(label('Installed', 'section'))
         if not installed:
@@ -1036,6 +1047,129 @@ class ModelsPage(Page):
         body.add(self._custom_row())
         self.swap(self.holder, body)
         self._set_busy(self.pulling is not None)
+
+    def _not_running(self, body):
+        """Local AI is optional: say whether it was never set up (and offer to) or is installed but silent."""
+        state = panel.local_ai_state((self.status or {}).get('ollama'))
+        if state == 'absent':
+            body.add(label('Local AI is not set up', 'row-title'))
+            body.add(label(panel.LOCAL_AI_ABOUT, 'card-detail', chars=80))
+            self.setup_button = button('Set up local AI…', 'suggested', on_click=lambda *_: self._confirm_setup())
+            self.setup_button.set_halign(Gtk.Align.START)
+            body.add(self.setup_button)
+        elif state == 'stopped':
+            body.add(label('Engine', 'section'))
+            body.add(self._engine_row((self.status or {}).get('ollama')))
+        else:
+            body.add(label('Could not check local AI. Press Refresh to try again.', 'muted'))
+
+    # -- the engine: runs when asked, starts with the computer only if you say so ----------------
+    def _engine_row(self, ollama):
+        info = panel.ollama_service_text(ollama)
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        if not info:
+            return box
+        running = info['service'] == 'stop'
+        box.add(label(info['headline'], 'row-title'))
+        box.add(label(info['text'], 'card-detail', chars=80))
+        row = Gtk.Box(spacing=8)
+        row.add(button('Stop Ollama' if running else 'Start Ollama', *(() if running else ('suggested',)),
+                       on_click=lambda *_: self._engine_service(info['service'], running)))
+        if info['boot']:
+            row.add(button('Start with this computer' if info['boot'] == 'on' else 'Do not start with this computer',
+                           on_click=lambda *_: self._engine_boot(info['boot'], ollama.get('autostart'))))
+        box.add(row)
+        return box
+
+    def _engine_service(self, action, running):
+        argv = panel.ollama_service_command(action, running)
+        if not argv:
+            return
+        self.say(self.note, 'Starting Ollama… you may be asked for your password.' if action == 'start'
+                 else 'Stopping Ollama… you may be asked for your password.')
+
+        def work():
+            ok, message = panel.run_ok(argv)
+            if ok and action == 'start' and not panel.wait_for_ollama():
+                return False, 'it was started but does not answer yet (Health has the details)'
+            return ok, message
+
+        def done(result):
+            ok, message = result
+            if ok:
+                self.say(self.note, 'Ollama is running.' if action == 'start' else 'Ollama is stopped.')
+            else:
+                self.say(self.note, f'Could not {action} Ollama: {message}')
+            self.refresh()
+        background(work, done)
+
+    def _engine_boot(self, target, current):
+        argv = panel.ollama_autostart_command(target, current)
+        if not argv:
+            return
+        self.say(self.note, 'Switching… you may be asked for your password.')
+
+        def done(result):
+            ok, message = result
+            if ok:
+                self.say(self.note, 'Done. Ollama starts with this computer.' if target == 'on'
+                         else 'Done. Ollama no longer starts with this computer. It keeps running until you stop it or restart.')
+            else:
+                self.say(self.note, f'Could not switch: {message}')
+            self.refresh()
+        background(lambda: panel.run_ok(argv), done)
+
+    # -- set up local AI: an explicit summary and a yes, never on its own -----------------------
+    def _confirm_setup(self):
+        if self.running or self.pulling:
+            return
+        status = self.status or {}
+        detect, ram = status.get('gpu'), status.get('ram_gb')
+        blocker = panel.local_ai_blocker(detect, (status.get('disk') or {}).get('root_free_bytes'))
+        dialog = Gtk.MessageDialog(transient_for=self.window, modal=True, message_type=Gtk.MessageType.QUESTION,
+                                   buttons=Gtk.ButtonsType.NONE, text='Set up local AI?')
+        dialog.format_secondary_text('\n\n'.join(panel.local_ai_summary(detect, ram)) + (f'\n\n{blocker}' if blocker else ''))
+        dialog.add_button('Cancel', Gtk.ResponseType.CANCEL)
+        if not blocker:
+            dialog.add_button('Set up', Gtk.ResponseType.OK)
+        answer = dialog.run()
+        dialog.destroy()
+        if answer == Gtk.ResponseType.OK:
+            self._setup()
+
+    def _setup(self):
+        self.running = True
+        if self.setup_button:
+            self.setup_button.set_sensitive(False)
+        self.say(self.note, '')
+        self.run.begin('Setting up local AI…')
+
+        def work():
+            reboot = False
+            for event in panel.run_events(panel.LOCAL_AI_SETUP):
+                if event['event'] == 'exit':
+                    return event['code'], reboot
+                line = event.get('line') or ''
+                reboot = reboot or panel.REBOOT_MARK in line
+                GLib.idle_add(self._tick, line)
+            return 1, reboot
+        background(work, self._setup_done)
+
+    def _tick(self, line):
+        if line:
+            self.run.append(line)
+        self.run.set_status('Setting up local AI…', None)
+        return False
+
+    def _setup_done(self, result):
+        code, reboot = result
+        self.running = False
+        if code == 0:
+            self.run.hide()
+        else:
+            self.run.set_status('The setup did not finish.', 0)    # the log stays open: it holds the reason
+        self.say(self.note, panel.local_ai_result(code, reboot))
+        self.refresh()
 
     def _installed_row(self, item):
         box = Gtk.Box(spacing=10, margin_top=4)
@@ -1109,7 +1243,7 @@ class ModelsPage(Page):
         background(lambda: panel.noc_run('models', 'rm', item['name']), done)
 
     def pull(self, name):
-        if self.pulling:
+        if self.pulling or self.running:
             return
         self.pulling, self.stop = name, False
         self.say(self.note, '')
@@ -1390,6 +1524,25 @@ class PrivacyPage(Page):
             radio.connect('toggled', lambda r, target=target: self._toggled(r, target))
             body.add(radio)
         body.add(label('A change applies the next time Hermes starts: close it and open it again.', 'muted'))
+        self.remote = None
+        body.add(label('Remote login', 'section'))
+        self.remote_head = label('', 'row-title')
+        self.remote_text = label('', 'card-detail', chars=80)
+        self.remote_button = self._action_button('', self._switch_remote)
+        for item in (self.remote_head, self.remote_text, self.remote_button):
+            body.add(item)
+        body.add(label('Clipboard history', 'section'))
+        self.clip_head = label('', 'row-title')
+        self.clip_text = label('', 'card-detail', chars=80)
+        self.clip_button = self._action_button('Clear clipboard history…', self._clear_clipboard)
+        for item in (self.clip_head, self.clip_text, self.clip_button):
+            body.add(item)
+        body.add(label('Saved passwords', 'section'))
+        self.key_head = label('', 'row-title')
+        self.key_text = label('', 'card-detail', chars=80)
+        self.key_button = self._action_button('Open Passwords and Keys', lambda: self._launch([panel.SEAHORSE]))
+        for item in (self.key_head, self.key_text, self.key_button):
+            body.add(item)
         body.add(label('Search', 'section'))
         body.add(label('Super+Space searches apps, files in your home folder, clipboard history, the web and '
                        'browser history. Each of those can be switched off, and the folders chosen.',
@@ -1401,6 +1554,14 @@ class PrivacyPage(Page):
         body.add(self._launch_button('Weather settings…', panel.WEATHER_SETUP))
         scroller.add(body)
         self.sync_controls(None)
+        self.sync_extras({})
+
+    def _action_button(self, text, action):
+        """A left-aligned button that stays hidden until the state it acts on is known."""
+        item = button(text, on_click=lambda *_: action())
+        item.set_halign(Gtk.Align.START)
+        item.set_no_show_all(True)
+        return item
 
     def _launch_button(self, text, argv):
         item = button(text, on_click=lambda *_: self._launch(argv))
@@ -1419,11 +1580,63 @@ class PrivacyPage(Page):
 
     def refresh(self):
         self.spinner.start()
-        background(panel.hermes_mode, self._loaded)
+        background(panel.privacy_snapshot, self._loaded)
 
-    def _loaded(self, mode):
+    def _loaded(self, snapshot):
         self.spinner.stop()
-        self.sync_controls(mode)
+        self.sync_controls(snapshot['hermes'])
+        self.sync_extras(snapshot)
+
+    def sync_extras(self, snapshot):
+        """Remote login, clipboard history and saved passwords; `{}` (nothing read yet) shows none of them."""
+        known = 'remote' in snapshot
+        self.remote = snapshot.get('remote')
+        remote = panel.remote_access_privacy(self.remote) if known else None
+        self.remote_head.set_text(remote['headline'] if remote else '')
+        self.remote_text.set_text(remote['text'] if remote else '')
+        self.remote_button.set_label(remote['button'] if remote else '')
+        self.remote_button.set_visible(bool(remote and remote['can_switch']))
+        clip = panel.clipboard_privacy(snapshot.get('clipboard')) if known else None
+        self.clip_head.set_text(clip['headline'] if clip else '')
+        self.clip_text.set_text(clip['text'] if clip else '')
+        self.clip_button.set_visible(bool(clip and clip['can_clear']))
+        can_open = bool(snapshot.get('can_open_keyring'))
+        key = panel.keyring_privacy(snapshot.get('keyring'), can_open) if known else None
+        self.key_head.set_text(key['headline'] if key else '')
+        self.key_text.set_text(key['text'] if key else '')
+        self.key_button.set_visible(bool(key and can_open and snapshot.get('keyring') == 'unprotected'))
+
+    def _switch_remote(self):
+        target = 'off' if self.remote == 'on' else 'on'
+        argv = panel.remote_access_command(target, self.remote)
+        if not argv:
+            return
+        if target == 'on' and not self._ask('Turn on remote login?',
+                                            'Other computers that can reach this one over the network will be able to sign in '
+                                            'with your account name and password. Use a strong password.',
+                                            'Keep it off', 'Turn it on'):
+            return
+        self.say(self.note, 'Switching… you will be asked for your password.')
+
+        def done(result):
+            ok, message = result
+            self.say(self.note, f'Done. Remote login is {target}.' if ok else f'Could not switch: {message}')
+            self.refresh()
+        background(lambda: panel.run_ok(argv), done)
+
+    def _clear_clipboard(self):
+        if not self._ask('Clear the clipboard history?',
+                         'Everything CopyQ has saved is deleted from this computer. This cannot be undone.',
+                         'Keep it', 'Clear it'):
+            return
+        self.say(self.note, 'Clearing…')
+
+        def done(result):
+            ok, message = result
+            self.say(self.note, 'Done. The clipboard history is empty.' if ok
+                     else f'Could not clear it: {message or "CopyQ did not answer."}')
+            self.refresh()
+        background(panel.clear_clipboard_history, done)
 
     def sync_controls(self, mode):
         self.mode = mode
@@ -1455,11 +1668,17 @@ class PrivacyPage(Page):
         background(lambda: panel.run_ok(argv), done)
 
     def _confirm_cloud(self):
+        return self._ask('Send what you type to Hermes to the cloud?',
+                         "The Nous free tier is Nous Research's cloud service. What you type to "
+                         'Hermes will leave this computer. You can switch back any time.',
+                         'Keep it local', 'Use the cloud')
+
+    def _ask(self, title, text, cancel, ok):
+        """A two-button question; True only for the second button."""
         dialog = Gtk.MessageDialog(transient_for=self.window, modal=True, message_type=Gtk.MessageType.QUESTION,
-                                   buttons=Gtk.ButtonsType.NONE, text='Send what you type to Hermes to the cloud?')
-        dialog.format_secondary_text("The Nous free tier is Nous Research's cloud service. What you type to "
-                                     'Hermes will leave this computer. You can switch back any time.')
-        dialog.add_buttons('Keep it local', Gtk.ResponseType.CANCEL, 'Use the cloud', Gtk.ResponseType.OK)
+                                   buttons=Gtk.ButtonsType.NONE, text=title)
+        dialog.format_secondary_text(text)
+        dialog.add_buttons(cancel, Gtk.ResponseType.CANCEL, ok, Gtk.ResponseType.OK)
         answer = dialog.run()
         dialog.destroy()
         return answer == Gtk.ResponseType.OK

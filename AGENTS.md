@@ -8,7 +8,7 @@ changing anything; the pitfalls section saves real debugging time.
 NoctraOS (`noctraos`) is an **AI development workstation OS**, on an Ubuntu base — Omarchy's idea without
 the tiling-WM learning curve. It is delivered as a bootable **ISO**; the
 Omakub-style provisioner (`install.sh`) is the engine baked into it. Contents:
-local Ollama stack, a six-agent start menu, mise-managed runtimes, a dark +
+optional local Ollama stack, a six-agent start menu, mise-managed Node, a dark +
 amber theme, and the **Super+Space** system search as the headline feature.
 
 NoctraOS is **one product shipped in flavours**: `zorin` (GNOME on Zorin OS 18.1, shipped) and
@@ -48,10 +48,10 @@ install/
   lib.sh                    shared helpers: log/warn/die, as_user(), apt_install(),
                             desktop_file_exists(). Modules MUST source it.
   00_preflight.sh           user/sudo/OS/network/25GB-disk/RAM checks
-  01_system.sh              apt core + python build deps, Flathub, Nerd Font
+  01_system.sh              apt core, Flathub, Nerd Font
   01b_vm_guest.sh           VM guest tools, FIRST in install.sh (before the preflight): qemu-guest-agent + spice-vdagent (KVM/Proxmox), open-vm-tools (VMware), VirtualBox
                             guest utils, Hyper-V daemons; a no-op on bare metal; NOCTRAOS_VM_GUEST=all installs every set (images)
-  02_mise.sh                mise binary, profile.d + bash.bashrc hooks, runtimes,
+  02_mise.sh                mise binary, profile.d + bash.bashrc hooks, Node LTS (the only language: agents + Hermes build need it),
                             Herdr, Starship, lazygit, lazydocker
   optional/local_llm.sh     OPTIONAL, run later by `noc llm setup` (install.sh --only): GPU stack (bin/noc-gpu, before Ollama
                             so it sees the GPU), Ollama engine + service, LLMFIT (pipx). Downloads NO model: the person picks one
@@ -78,8 +78,9 @@ install/
                             free Nous tier primary, local Ollama fallback; runs LAST (25+ min, no sudo)
                             (module order in install.sh: 01b 00 01 02 04 04_workstation 04c 04d 05 06 08 09 10 07 11 — the first run never downloads a model)
 bin/
-  noc                       CLI: update [--json] [--only ..] | updates | doctor [--json] | status | models [list [--json]|default|presets|pull|rm] | llm [setup|fit]
-                            | skip [list [--json]|add|rm] | bg [list|next|set] | gpu. Sourceable (tests call its functions); NOC_OLLAMA_URL overrides the Ollama URL
+  noc                       CLI: update [--json] [--only ..] | updates | doctor [--json] | status | models [list [--json]|default|presets|pull|rm] | llm [setup|fit|start|stop|autostart [on|off]]
+                            | skip [list [--json]|add|rm] | bg [list|next|set] | gpu | channel [stable|nightly|rollback] | apps [update] | repair <appmanager|vm-guest|hermes>
+                            | privacy [status [--json]|remote on|off|clipboard clear|hermes local|cloud]. Sourceable (tests call its functions); NOC_OLLAMA_URL overrides the Ollama URL
   noc-gpu                   GPU detect [--json] | install | status [--json] (NVIDIA driver+CUDA, AMD ROCm); VERSION must match noc
   noctraos-control          wrapper that execs the system-Python Control Panel (control/)
   noc-disk                  notices a disk bigger than the system partition (an enlarged VM disk) and uses the space: `status [--json]` (no root,
@@ -91,7 +92,7 @@ bin/
                             installed vs newest release, version history, user-level updates; `noc apps`, the panel's Apps page
   noc-selfupdate            updates the NoctraOS layer itself (signed manifest + bundle, staged rollout, migrations, rollback);
                             installed to /usr/local/libexec/noctraos by module 07; check/status/notify/migrate user-side, apply/rollback as root
-  noc-privileged            root side of the panel, run through pkexec: allowlisted `update apt,flatpak,noctraos`, `update-channel`, `update-rollback`, `module <name>`, `gpu-install <vendor>`, `disk-grow`
+  noc-privileged            root side of the panel, run through pkexec: allowlisted `update apt,flatpak,noctraos`, `update-channel`, `update-rollback`, `module <name>`, `gpu-install <vendor>`, `disk-grow`, `remote-access <on|off>`, `ollama-service <start|stop>`, `ollama-autostart <on|off>`
                             (installed to /usr/local/libexec/noctraos; policy in configs/polkit/)
   noctraos-hermes           Hermes Desktop launcher/installer: launch | local [--no-launch] | cloud | mode | install | ready | status.
                             Sets HERMES_GUEST_ONBOARDING=1 (free tier), seeds the Ollama fallback
@@ -128,7 +129,7 @@ docs/launch/                launch copy: x-posts.md (the thread, standalone post
 .github/workflows/ci.yml    shell + VERSION checks only; GitHub Actions does not run on this account
 .agents/skills, skills-lock.json  vendored pstack agent skills (.claude/skills symlinks into them); not product code
 configs/
-  mise/config.toml          node=lts, python=3.12, go=latest, terminal tools
+  mise/config.toml          node=lts + terminal tools (no python/go: nothing needs them)
   vscode/                   settings.json, extensions.list, continue_config.yaml,
                             vscode.sources (Microsoft apt repo)
   copyq/copyq.conf          clipboard history preseed (1000 entries, silent, tray)
@@ -183,8 +184,8 @@ iso/build-local.sh          build the release (and appliance) ISO on a fast work
 iso/local-vm.sh             local KVM test VM: start/stop, console screenshot, absolute clicks, keys,
                             ssh/scp. No root, no host changes
 iso/pve-console-shot.py     console frames from a Proxmox VM via the API (boot-testing without a shell)
-docs/                       objectives (source of truth), onboarding, desktop-layout, control-panel (+ -plan), theme-design,
-                            omarchy-parity, release-runbook
+docs/                       objectives (source of truth), what-we-do (user-facing: what we set up, what stays the user's), onboarding, desktop-layout,
+                            control-panel (+ -plan), theme-design, omarchy-parity, release-runbook
 docs/release-runbook.md     ORDERED HANDOFF for shipping 0.3.0: rebuild, test, VM disk, upload, tag
 iso/vm-sysprep.sh           run inside a fully provisioned VM before exporting its disk as a
                             downloadable image: strips machine id, SSH host keys, Hermes
@@ -352,7 +353,7 @@ bash -n boot.sh install.sh install/*.sh install/optional/*.sh bin/noc bin/noc-gp
 docker run --rm -v "$PWD:/mnt" koalaman/shellcheck:stable --severity=warning \
   boot.sh install.sh install/*.sh install/optional/*.sh bin/noc bin/noc-gpu bin/noc-privileged bin/noctraos-control bin/noctraos-agent \
   bin/noctraos-copyq bin/noctraos-hermes configs/nautilus-scripts/*     # same list as CI
-python3 -m unittest discover -s tests                # 501 tests: theme, GPU detection, noc JSON modes, root helper, Control Panel
+python3 -m unittest discover -s tests                # 635 tests: theme, GPU detection, noc JSON modes, root helper, Control Panel
 python3 scripts/render-theme.py --check              # committed theme outputs match palette.json
 
 # wallpaper iteration (venv at ~/workspace/scratch/zorin-img-venv: pillow+numpy)
@@ -582,7 +583,56 @@ tail -f /root/noctraos-build.log
   `panel.GPU_NEEDS` are estimates shown as "about".
 - **Privacy page rules**: the Nous free tier is a cloud service and the page must never say otherwise;
   switching to cloud needs an explicit confirmation; a user's own Hermes provider (`mode: other`) is
-  never touched; `noctraos-hermes local --no-launch` switches without opening the app.
+`noc privacy hermes local` (`noctraos-hermes local --no-launch`) switches without opening the app.
+  The page also states three things the installer arranges without asking (settings, not setup chores: no skip button, no
+  Overview nag). **Remote login**: `openssh-server` comes from module 01; on Ubuntu 24.04 sshd starts from `ssh.socket`, so the
+  state is "on" when either the socket or the service is active or enabled, and `noc-privileged remote-access off` disables
+  both (disabling only `ssh.service` leaves the socket listening); `on` re-enables the socket (else the service) and
+  confirms first. **Clipboard history**: CopyQ keeps it on disk; `noc privacy` counts and clears only the default `&clipboard` tab
+  through fixed `copyq eval` scripts run as the X11 client, and asks CopyQ only while it runs (asking would start it).
+  **Saved passwords**: `scripts/seed-password-store.py` makes the login keyring an unencrypted file, so the page reads the
+  file header (`[keyring]` plain, `GnomeKeyring` encrypted) and only states the trade-off and offers Passwords and Keys; it never
+  changes the keyring. Chromium and VS Code use `--password-store=basic`, so a keyring password would not cover them, and the
+  text says so. The page reads all of it from `noc privacy status --json` (one implementation, in `bin/noc`; the page only words it);
+  tests stand in for `systemctl`, `copyq` and the keyring file with `NOC_KEYRING_FILE` and PATH stubs, and `noc privacy remote` reaches
+  `noc-privileged remote-access` through `sudo` (`NOC_PRIVILEGED` in tests). Untested on a real desktop so far: the `copyq eval` clear
+  script and the `ssh.socket` switch.
+- **We set up the system, then the user takes control** (user's rule, 2026-10-09: "our job is to set up the system", "updates will always be
+  reversible and optional and should never break the system", "a frictionless experience"). Consequences: (1) the coding agents (Codex,
+  Claude Code, Gemini CLI, ...) get a launcher and nothing more; never build sign-in, API-key or config setup for them, and do not
+  offer it in the panel (the Git name/e-mail and GitHub sign-in are the one exception: nothing can be saved to GitHub without them, and
+  they are skippable); (2) anything that costs memory, sends data off the machine or belongs to the person is an opt-in with a
+  `noc` twin, never a default we silently choose; (3) an update or a re-run of an installer module must keep the person's choices (see
+  Ollama below) and ship reversibly; (4) say it in plain words: `docs/what-we-do.md` is the user-facing statement of what NoctraOS does
+  and does not do, and `docs/objectives.md` principle 6 holds it. Keep both current when a default changes; (5) install only what NoctraOS
+  itself needs (user's rule, 2026-10-09: "if languages does not need to be in it should not be in", no heavy stuff like local models): Node is
+  the only language (the agent launchers' npm and the Hermes desktop build use it); no mise Python or Go, no Ruby, clang or Python build libraries,
+  no Go VS Code extension; people add languages with `mise use -g`. The apps themselves are a deliberate, specific selection: keep them.
+  New installs only: existing machines keep whatever they have, nothing is removed behind anyone's back. `noc doctor` shows Python and Go as
+  `info` when absent, never `fail`.
+- **Ollama starts with the computer only if the person turns that on.** Ollama's own installer enables `ollama.service` at boot (it also
+  starts it). `install/optional/local_llm.sh` and `install/03b_ollama_update.sh` therefore bracket the vendor installer with
+  `ollama_boot_choice` / `ollama_boot_restore` (`install/lib.sh`): a first install ends with it OFF at boot but running now (so a model can
+  be pulled); a re-run or an Ollama update puts back what the person had. Machines that already had it enabled keep it: nothing is
+  disabled behind anyone's back, and there is no migration for it. The state is `systemctl is-enabled ollama.service` (no file of ours);
+  `noc status --json` carries it as `ollama.autostart` (true/false/null when there is no unit; so does `noc models list --json`),
+  `noc llm start|stop|autostart [on|off]` change it through the `ollama-service` / `ollama-autostart` verbs of `noc-privileged`, and the AI
+  models page has the Engine row (Start/Stop, Start with this computer). A stopped Ollama that is not set to start is NOT a failure:
+  `noc doctor` shows `info`, and the Overview/card say "Off", not "Not running". Newer systemd prints `not-found` (older prints nothing)
+  from `is-enabled` for a missing unit: treat both as "no unit" (`ollama_boot_state`, `remote_state`).
+- **Local AI is set up from the AI models page, never on its own.** When `noc status --json` says `ollama.installed` is false the page offers
+  "Set up local AI…": a summary (Ollama about 1.4 GB, the GPU driver lines from `noc-gpu`, LLMFIT, "no model is downloaded"), a free-disk check
+  (`panel.LOCAL_AI_NEEDS` plus the GPU's need) and a yes, then `pkexec noc-privileged module optional/local_llm.sh` (the exact name is in
+  `MODULES`; it runs from the root-owned snapshot like every module). It is an option, not a setup chore: the Overview card and checklist step
+  only point at the page (`waiting`, never `todo`), so there is no skip button. A failed run keeps its log open on the page. Untested on a real
+  desktop so far: the pkexec run itself (the GTK flow is driven in `tests/test_control_smoke.py` with a stand-in for it).
+- **Everything the Control Panel can do, `noc` can do** (user's rule, 2026-10-09: "we should still have noc that should have all the
+  configuration options in case something on the user frontend breaks"). The panel is a front end: state comes from `noc ... --json`,
+  actions are a `noc` command or, for root, a `noc-privileged` verb that `noc` reaches through `sudo` (one implementation of each, never
+  a copy in Python). When you add a panel action: put the logic in `bin/noc` first, make the panel call it, add its `noc` form to
+  `TERMINAL` and to the table in `docs/control-panel.md`. `PanelParityTests` in `tests/test_noc_cli.py` fails when a `noc-privileged`
+  verb, an allowed module or a Health fix has no `noc` command. Installer modules a terminal runs go through `run_module` (the
+  root-owned snapshot, as the person, `NOC_INSTALLER` in tests): `noc llm setup`, `noc repair`, `noc apps update ollama`.
 - **The Control Panel is a GUI for `noc`, nothing more.** `control/main.py` calls `noc ... --json`
   on a thread (`background()`), never blocks GTK, and every page needs a "not ready yet" state
   (Ollama down, no network) rather than an exception. Put anything that can be tested without
@@ -664,7 +714,7 @@ tail -f /root/noctraos-build.log
   launcher every run; the wrapper hides it and sets `desktop.manage_launcher_entry=false`.
 
 - **Python GUI apps must pin `#!/usr/bin/python3`.** In a real session a mise-managed `python3`
-  is first on PATH and has no PyGObject, so `#!/usr/bin/env python3` dies with `No module named
+  is first on PATH (only where the person added one: mise no longer installs Python by default) and has no PyGObject, so `#!/usr/bin/env python3` dies with `No module named
   'gi'` at autostart while working fine from an SSH shell (different PATH). `noctraos-welcome`
   and `noctraos-appearance` hit this; `noctraos-search` already execs `/usr/bin/python3`.
 - **`retire_apt` judges each package alone and only by collateral removals.** Batching them let one
@@ -736,8 +786,8 @@ What 0.4.0 added: the Accounts page (Git name/e-mail and the GitHub sign-in with
 (installed vs newest release of Hermes, Ollama, AppManager and the coding agents), the built-in updater `noc-selfupdate`
 (signed, staged updates of the NoctraOS layer, `docs/updates.md`), and the fastest-disk policy for VM disks and ISO scratch
 (`iso/disks.sh`). Still untested: a full interactive ISO install, real hardware, NVIDIA/ROCm, a real desktop session running the
-GitHub approval and the privileged update prompts, and a machine applying an update from a real desktop. Not in the Control Panel
-yet: signing in to the coding agents.
+GitHub approval and the privileged update prompts, and a machine applying an update from a real desktop. Signing in to the coding agents
+is deliberately not offered (see "We set up the system, then the user takes control").
 
 **Update channels (2026-10-08):** `nightly` and `stable` are both at update 2 (update 1 was a baseline identical to 0.4.0; update 2
 is the client fix below). Manifests expire after 30 days; the weekly timer from `iso/setup-update-renewal.sh` renews both
