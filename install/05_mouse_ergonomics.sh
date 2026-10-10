@@ -1,7 +1,13 @@
 #!/usr/bin/env bash
+# desktops: gnome
 # Module 05: mouse ergonomics — Nautilus right-click script actions.
 set -Eeuo pipefail
 source "$REPO_ROOT/install/lib.sh"
+
+if ! desktop_is_gnome; then
+  warn "NOT APPLIED on this desktop: Nautilus right-click scripts (GNOME Files)"
+  exit 0
+fi
 
 SCRIPTS_DIR="$TARGET_HOME/.local/share/nautilus/scripts"
 as_user mkdir -p "$SCRIPTS_DIR"

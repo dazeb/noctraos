@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# desktops: any
+# Pending the flavour split (docs/flavours.md): the GNOME packages in the optional loop belong to the GNOME desktop code.
 # Module 01: system base — apt packages, Flathub, Nerd Fonts.
 set -Eeuo pipefail
 source "$REPO_ROOT/install/lib.sh"

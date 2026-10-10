@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# desktops: any
+# Pending the flavour split (docs/flavours.md): the Zorin and GNOME removals and hides belong to the GNOME/Zorin flavour.
 # Module 04c: application policy.
 #   - Flatpak (Flathub) and AppImage first. apt stays for CLI tools, system tools and
 #     things that need deep host integration (VS Code, CopyQ, Docker).

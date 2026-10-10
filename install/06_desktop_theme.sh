@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# desktops: gnome
 # Module 06: desktop customization — Windows/KDE ergonomics on Zorin.
 # Every step is warn-not-die: a schema drift must never abort the install.
 set -Eeuo pipefail
