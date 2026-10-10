@@ -5,15 +5,31 @@ changing anything; the pitfalls section saves real debugging time.
 
 ## What this repo is
 
-NoctraOS (`noctraos`) is an **AI development workstation OS**, on an Ubuntu base (Zorin OS 18.x today) — Omarchy's idea without
+NoctraOS (`noctraos`) is an **AI development workstation OS**, on an Ubuntu base — Omarchy's idea without
 the tiling-WM learning curve. It is delivered as a bootable **ISO**; the
 Omakub-style provisioner (`install.sh`) is the engine baked into it. Contents:
 local Ollama stack, a six-agent start menu, mise-managed runtimes, a dark +
 amber theme, and the **Super+Space** system search as the headline feature.
 
+NoctraOS is **one product shipped in flavours**: `zorin` (GNOME on Zorin OS 18.1, shipped) and
+`kubuntu` (KDE Plasma on Kubuntu 26.04, in progress). Read the section below and `docs/flavours.md`
+before any change that differs by desktop or base.
+
 Read `docs/objectives.md` first: it defines the audience, principles
 (muscle memory over Windows imitation, no terminal required, no tiling WM),
 the onboarding goal, and non-goals. Keep it current when direction changes.
+
+## Flavours (read before touching desktop code, `iso/`, `branding/`, releases or updates)
+
+The full contract is in [docs/flavours.md](docs/flavours.md). The rules that matter most:
+
+- Name the flavour in every commit title, PR and status report, and say which flavours a change was tested on.
+- Shared code has no Zorin or Kubuntu branch. Desktop code lives in `install/desktop/<desktop>/` (planned) or in a
+  module whose second line is `# desktops: gnome|plasma|any`.
+- Never copy a fix between flavours. Each flavour gets its own change and its own test.
+- Skipped desktop work prints `NOT APPLIED`, never a success line.
+- Artifacts, release folders and update channels are per flavour. Never cross them.
+- Product decisions live only in `docs/objectives.md`.
 
 The repo is **public on GitHub** (`github.com/dazeb/noctraos`) — this is a hard
 requirement: the one-liner bootstrap and the ISO's first-boot fetch clone it
@@ -206,6 +222,8 @@ iso/vm-sysprep.sh           run inside a fully provisioned VM before exporting i
     (`NAUTILUS_SCRIPT_SELECTED_FILE_PATHS`), not argv. VNC-typed text into the
     guest loses shifted characters (`& @ > :`) — route anything complex
     through SSH or an HTTP fetch from port 80 (no colon in URL).
+11. **Flavours are not forks.** Read `docs/flavours.md` before changing anything desktop- or
+    base-specific. Never mix one flavour's code, artifacts, release folders or update items into another.
 
 ## Environment (infrastructure)
 
