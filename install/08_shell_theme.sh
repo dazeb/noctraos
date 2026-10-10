@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# desktops: gnome
 # Module 08: Omarchy-inspired NoctraOS-Dark, derived from installed Zorin themes.
 # Desktop operations are best-effort. Never override user GTK CSS or GTK_THEME.
 set -Eeuo pipefail

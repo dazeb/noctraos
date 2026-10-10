@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# desktops: any
+# Pending the flavour split (docs/flavours.md): the OS check should accept any Ubuntu-based ID_LIKE, not a fixed list.
 # Module 00: preflight — validate the environment before any mutation.
 set -Eeuo pipefail
 source "$REPO_ROOT/install/lib.sh"

@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# desktops: any
+# Pending the flavour split (docs/flavours.md): the Nautilus skel scripts belong to the GNOME desktop code.
 # Module 07: persistence — /etc/skel defaults for new users + noc management CLI.
 set -Eeuo pipefail
 source "$REPO_ROOT/install/lib.sh"

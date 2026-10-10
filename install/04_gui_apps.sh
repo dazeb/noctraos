@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# desktops: any
+# Pending the flavour split (docs/flavours.md): the gnome-keyring restart belongs to the GNOME desktop code.
 # Module 04: VS Code, Mission Center, and CopyQ; retire the previous app set.
 set -Eeuo pipefail
 source "$REPO_ROOT/install/lib.sh"

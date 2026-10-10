@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# desktops: any
+# Pending the flavour split (docs/flavours.md): the GNOME-only apps in APT_APPS belong to the GNOME desktop code.
 # Module 04b: Omarchy-style workstation applications with Ubuntu equivalents.
 set -Eeuo pipefail
 source "$REPO_ROOT/install/lib.sh"

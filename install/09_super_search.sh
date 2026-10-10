@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# desktops: gnome
 # Module 09: Super+Space system search and the Noctra start button.
 # Two GNOME Shell extensions plus the user-owned search index. Per-account
 # enablement happens at first login via /etc/xdg/autostart (and now, for the
