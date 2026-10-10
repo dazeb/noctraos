@@ -5,7 +5,11 @@ summarise it; if they disagree with this file, this file wins.
 
 ## What we are building
 
-An **AI development workstation OS**, on an Ubuntu base (Zorin OS 18.x today).
+An **AI development workstation OS**, on an Ubuntu base. It ships as one product
+in flavours: Zorin OS 18.x with GNOME (`zorin`, shipped) and Kubuntu 26.04 with KDE
+Plasma (`kubuntu`, in progress). The name, version, features and commands are the
+same in every flavour; see [flavours.md](flavours.md).
+
 It does what [Omarchy](https://omarchy.org) does for developers who live in a
 tiling window manager — a complete, opinionated, AI-first workstation out of the
 box — but without the learning curve. Omarchy's window manager and
@@ -16,8 +20,9 @@ make it powerful instead.
 
 1. **Muscle memory first.** Everything sits where someone used to a
    conventional desktop expects it: taskbar and start button, window buttons, a
-   task manager (Mission Center), Files, a system tray. We follow users' habits;
-   we do not clone another OS's look.
+   task manager (Mission Center), Files, a system tray. Each flavour follows its own
+   desktop's conventions for these. We follow users' habits; we do not clone another
+   OS's look.
 2. **No terminal required, and never forced on you either.** The terminal is there
    for those who want it (the agents live in it), but nothing day-to-day depends
    on it. The mouse comes first and the terminal a close second: every setup
@@ -109,9 +114,11 @@ some stock icons) are tracked in the coverage table in `theme-design.md`.
 
 ## Decisions
 
-- **Stay on GNOME** (Zorin base) until the current experience is complete.
-  Moving to KDE Plasma was considered and deferred; revisit with a time-boxed
-  spike only after the GNOME work is done.
+- **One product, several flavours** (decided 2026-10-10). NoctraOS keeps one name,
+  version, feature set and command set. Flavours differ only in base and desktop:
+  `zorin` (GNOME, Zorin OS 18.1) is the shipped one, and `kubuntu` (KDE Plasma,
+  Kubuntu 26.04) ships only after its VM acceptance tests pass. Super+Space is the same
+  shortcut in every flavour. The rules for agents are in [flavours.md](flavours.md).
 - **Autologin keyring prompt: fixed for every app.** Autologin never unlocks the
   account's keyring, so Hermes, browsers and VS Code asked for a password on first
   use. Setup now gives the account an unencrypted login keyring while it is empty
