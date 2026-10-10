@@ -4,3 +4,4 @@
 .zcodeignore
 __pycache__/
 *.pyc
+.codex/
