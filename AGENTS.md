@@ -88,6 +88,12 @@ bin/
                             amount); `noc disk ...`, `noc status` (`disk.can_grow`), the panel's Disk card and Hardware page, and the first-boot preflight
   noc-accounts              first-time setup without a terminal: Git name/e-mail (`git config --global`) and the GitHub sign-in (`gh auth login --web`
                             device flow); `noc accounts ...`, the panel's Accounts page, the Overview card, a button in the Welcome app
+  noc-agent-skills          installs the NoctraOS agent skill (configs/agent-skills/noctraos: SKILL.md + references/) into ~/.agents/skills, the
+                            global agents folder, and links it for Hermes (~/.hermes/skills) and Claude Code (~/.claude/skills) when they are there; Codex
+                            reads ~/.agents/skills itself. `noc agent-skills install|status|remove|on`. Content only: no agent setting or sign-in is touched;
+                            an edited copy, a folder it did not install and ~/.config/noctraos/no-agent-skills are respected; a same-named Hermes skill is
+                            reported (Hermes hides both). Module 07 runs it on every install/update, module 11 again once Hermes exists,
+                            migrations/user/0002 for other accounts. Keep the skill in step with the code (tests/test_agent_skills.py checks its frontmatter)
   noc-upstream              tracks apps that come from their publisher's releases (Hermes, Ollama, AppManager, the coding agents):
                             installed vs newest release, version history, user-level updates; `noc apps`, the panel's Apps page
   noc-selfupdate            updates the NoctraOS layer itself (signed manifest + bundle, staged rollout, migrations, rollback);
@@ -353,7 +359,7 @@ bash -n boot.sh install.sh install/*.sh install/optional/*.sh bin/noc bin/noc-gp
 docker run --rm -v "$PWD:/mnt" koalaman/shellcheck:stable --severity=warning \
   boot.sh install.sh install/*.sh install/optional/*.sh bin/noc bin/noc-gpu bin/noc-privileged bin/noctraos-control bin/noctraos-agent \
   bin/noctraos-copyq bin/noctraos-hermes configs/nautilus-scripts/*     # same list as CI
-python3 -m unittest discover -s tests                # 639 tests: theme, GPU detection, noc JSON modes, root helper, Control Panel
+python3 -m unittest discover -s tests                # 661 tests: theme, GPU detection, noc JSON modes, root helper, Control Panel, agent skill
 python3 scripts/render-theme.py --check              # committed theme outputs match palette.json
 
 # wallpaper iteration (venv at ~/workspace/scratch/zorin-img-venv: pillow+numpy)

@@ -12,6 +12,7 @@ When you install, NoctraOS prepares a complete AI workstation so you do not have
 - **Hermes Desktop**, an AI assistant that works on first launch. Its free tier is a cloud service, so what you type there leaves your computer. The Privacy page switches it to local only.
 - **Launchers for the coding agents** (Codex, Claude Code, OpenCode, Grok, Gemini CLI, Qwen Code) in the Start panel.
 - **Guest tools** when NoctraOS runs inside a virtual machine.
+- **A NoctraOS skill for your AI agents.** One folder of notes in `~/.agents/skills/noctraos` that tells Hermes, Codex and Claude Code how this computer works (the `noc` commands, updates, privacy, local AI), so they can help without guessing. It is only text: it changes no agent setting and signs in to nothing. Edit it and your copy is kept; `noc agent-skills remove` takes it away and keeps it off.
 
 ## What stays yours
 

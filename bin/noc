@@ -16,6 +16,7 @@
 #                     | start | stop (the Ollama service now) | autostart [on|off] (start it with the computer; off unless you turn it on)
 #   noc gpu           detect | install | status  (NVIDIA CUDA / AMD ROCm for local LLMs)
 #   noc disk          status | grow  (use the space when the system disk was made bigger)
+#   noc agent-skills  the NoctraOS skill for the coding agents: install | status [--json] | remove | on  (~/.agents/skills)
 set -uo pipefail
 
 VERSION="0.4.0"
@@ -442,6 +443,8 @@ ACCOUNTS=/usr/local/bin/noc-accounts
 test_hooks && ACCOUNTS="${NOC_ACCOUNTS:-$ACCOUNTS}"
 DISKTOOL=/usr/local/bin/noc-disk
 test_hooks && DISKTOOL="${NOC_DISKTOOL:-$DISKTOOL}"
+SKILLSTOOL=/usr/local/bin/noc-agent-skills
+test_hooks && SKILLSTOOL="${NOC_SKILLSTOOL:-$SKILLSTOOL}"
 
 step_apps() {
   if [ ! -x "$UPSTREAM" ]; then
@@ -1148,6 +1151,7 @@ main() {
     privacy) shift; cmd_privacy "$@" ;;
     bg)     shift; cmd_bg "$@" ;;
     disk)   shift; if [ -x "$DISKTOOL" ]; then exec "$DISKTOOL" "$@"; else bad "noc-disk not installed (re-run the installer)"; exit 1; fi ;;
+    agent-skills) shift; if [ -x "$SKILLSTOOL" ]; then exec "$SKILLSTOOL" "$@"; else bad "noc-agent-skills not installed (re-run the installer)"; exit 1; fi ;;
     gpu)    shift; have noc-gpu && exec noc-gpu "$@" \
               || { bad "noc-gpu not installed (re-run the installer)"; exit 1; } ;;
     --version|-v) echo "noc $VERSION" ;;
@@ -1169,6 +1173,7 @@ main() {
       echo "  noc bg          cycle or set the wallpaper (list | next | set)"
       echo "  noc gpu         GPU setup for local LLMs (detect | install | status)"
       echo "  noc disk        use the extra space when the disk was made bigger (status | grow)"
+      echo "  noc agent-skills  the NoctraOS skill for Hermes, Codex, Claude Code (install | status | remove | on)"
       echo "  noctraos-control  the NoctraOS Control Panel (GUI)"
       ;;
   esac

@@ -1,0 +1,334 @@
+#!/usr/bin/python3
+"""noc-agent-skills — put the NoctraOS skill where every coding agent on this computer finds it.
+
+  noc-agent-skills install [--dry-run]   copy the skill into ~/.agents/skills and link it for Hermes and Claude Code
+  noc-agent-skills status [--json]       what is installed, linked, kept as the person edited it, or switched off
+  noc-agent-skills remove                take our copy and our links away (the choice sticks: install stays off)
+  noc-agent-skills on                    lift that choice again
+
+The skill (configs/agent-skills/<name>/SKILL.md plus references/) follows the open Agent Skills layout, so one copy serves
+every agent: Codex reads ~/.agents/skills itself; Hermes and Claude Code get a relative symlink (~/.hermes/skills/<name>,
+~/.claude/skills/<name> -> ../../.agents/skills/<name>), the same layout `npx skills` makes. Nothing is written to any agent's
+settings and no sign-in is touched: this is content, not configuration.
+
+Rules (docs/what-we-do.md): keep what the person made. A skill folder we did not install is left alone; one we installed that
+they then edited is left alone too (the updater only replaces a copy that still matches what it wrote). A link is made only
+where nothing exists. `~/.config/noctraos/no-agent-skills` switches the whole thing off, and `remove` creates it.
+Run it as the person, never as root: it reads and writes only under $HOME.
+"""
+import argparse
+import hashlib
+import json
+import os
+import shutil
+import sys
+import tempfile
+
+LOCK_NAME = 'agent-skills.json'
+OPT_OUT = 'no-agent-skills'
+SNAPSHOT_SRC = '/usr/local/share/noctraos/repo/configs/agent-skills'
+# (label, home-relative skills dir, home-relative marker that says the agent is there). Codex and any agent that follows the
+# shared layout read ~/.agents/skills directly and need no link.
+LINK_TARGETS = (
+    ('hermes', '.hermes/skills', '.hermes'),
+    ('claude', '.claude/skills', '.claude'),
+)
+
+
+def home():
+    return os.environ.get('HOME') or os.path.expanduser('~')
+
+
+def source_dir():
+    """Where the skills ship: tests set NOC_SKILLS_SRC; the installed copy is the root-owned snapshot; a checkout has them
+    next to bin/."""
+    override = os.environ.get('NOC_SKILLS_SRC')
+    if override and os.environ.get('NOC_TEST_HOOKS') == '1':
+        return override
+    if os.path.isdir(SNAPSHOT_SRC):
+        return SNAPSHOT_SRC
+    here = os.path.dirname(os.path.realpath(__file__))
+    return os.path.join(here, '..', 'configs', 'agent-skills')
+
+
+def config_dir():
+    return os.path.join(os.environ.get('XDG_CONFIG_HOME') or os.path.join(home(), '.config'), 'noctraos')
+
+
+def state_dir():
+    return os.path.join(os.environ.get('XDG_STATE_HOME') or os.path.join(home(), '.local/state'), 'noctraos')
+
+
+def opt_out_path():
+    return os.path.join(config_dir(), OPT_OUT)
+
+
+def agents_dir():
+    return os.path.join(home(), '.agents', 'skills')
+
+
+def lock_path():
+    return os.path.join(state_dir(), LOCK_NAME)
+
+
+def load_lock():
+    try:
+        with open(lock_path()) as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def save_lock(lock):
+    os.makedirs(state_dir(), exist_ok=True)
+    tmp = lock_path() + '.new'
+    with open(tmp, 'w') as f:
+        json.dump(lock, f, indent=1, sort_keys=True)
+        f.write('\n')
+    os.replace(tmp, lock_path())
+
+
+def tree_hash(root):
+    """One digest for a folder: relative names and bytes of every regular file. Symlinks are not followed."""
+    h = hashlib.sha256()
+    for base, dirs, files in os.walk(root):
+        dirs.sort()
+        for name in sorted(files):
+            path = os.path.join(base, name)
+            if os.path.islink(path):
+                return None
+            h.update(os.path.relpath(path, root).encode() + b'\0')
+            with open(path, 'rb') as f:
+                h.update(f.read())
+            h.update(b'\0')
+    return h.hexdigest()
+
+
+def shipped_skills():
+    """Skill folders in the source: a directory holding a SKILL.md."""
+    src = source_dir()
+    try:
+        names = sorted(os.listdir(src))
+    except OSError:
+        return []
+    return [n for n in names if os.path.isfile(os.path.join(src, n, 'SKILL.md'))]
+
+
+def copy_skill(src, dest):
+    """Copy atomically: build next to the target, then swap, so an agent never reads half a skill."""
+    parent = os.path.dirname(dest)
+    os.makedirs(parent, exist_ok=True)
+    stage = tempfile.mkdtemp(prefix='.noctraos-skill-', dir=parent)
+    try:
+        staged = os.path.join(stage, 'skill')
+        shutil.copytree(src, staged, symlinks=False)
+        for base, dirs, files in os.walk(staged):
+            for d in dirs:
+                os.chmod(os.path.join(base, d), 0o755)
+            for fn in files:
+                os.chmod(os.path.join(base, fn), 0o644)
+        os.chmod(staged, 0o755)
+        old = None
+        if os.path.lexists(dest):
+            old = os.path.join(stage, 'old')
+            os.replace(dest, old)
+        os.replace(staged, dest)
+    finally:
+        shutil.rmtree(stage, ignore_errors=True)
+
+
+def link_state(name, skills_dir):
+    """'linked' (our symlink), 'absent', or 'kept' (something else is there)."""
+    link = os.path.join(skills_dir, name)
+    want = os.path.join('..', '..', '.agents', 'skills', name)
+    if os.path.islink(link):
+        return 'linked' if os.readlink(link) in (want, os.path.join(agents_dir(), name)) else 'kept'
+    return 'kept' if os.path.lexists(link) else 'absent'
+
+
+def name_clashes(name):
+    """Other skills in Hermes' folder that declare the same name. Hermes refuses to pick between two same-named skills in one
+    folder and hides both from its list, so the person has to know. Reads frontmatter only; never changes anything."""
+    root = os.path.join(home(), '.hermes', 'skills')
+    ours = os.path.realpath(os.path.join(agents_dir(), name))
+    found = []
+    for base, dirs, files in os.walk(root, followlinks=True):
+        dirs[:] = [d for d in dirs if not d.startswith('.')]
+        if 'SKILL.md' not in files or os.path.realpath(base) == ours:
+            continue
+        try:
+            with open(os.path.join(base, 'SKILL.md'), errors='replace') as f:
+                head = f.read(4000)
+        except OSError:
+            continue
+        for line in head.split('\n---', 1)[0].splitlines():
+            key, _, value = line.partition(':')
+            if key.strip() == 'name' and value.strip().strip('"\'') == name:
+                found.append(base)
+                break
+    return sorted(found)
+
+
+def label_present(name):
+    return link_state(name, os.path.join(home(), '.hermes', 'skills')) == 'linked'
+
+
+def say(msg):
+    print(f'noc-agent-skills: {msg}')
+
+
+def cmd_install(args):
+    if os.path.exists(opt_out_path()):
+        say('switched off (remove ~/.config/noctraos/no-agent-skills or run `noc agent-skills on`); nothing changed')
+        return 0
+    names = shipped_skills()
+    if not names:
+        say(f'NOT APPLIED: no skills found in {source_dir()}')
+        return 1
+    lock = load_lock()
+    dry = args.dry_run
+    failed = False
+    for name in names:
+        src = os.path.join(source_dir(), name)
+        dest = os.path.join(agents_dir(), name)
+        want = tree_hash(src)
+        if want is None:
+            say(f'{name}: NOT APPLIED (the source holds a symlink)')
+            failed = True
+            continue
+        recorded = lock.get(name, {}).get('hash')
+        if not os.path.lexists(dest):
+            say(f'{name}: install into {dest}' if dry else f'{name}: installed into {dest}')
+            if not dry:
+                copy_skill(src, dest)
+                lock[name] = {'hash': want}
+        else:
+            have = tree_hash(dest) if os.path.isdir(dest) and not os.path.islink(dest) else None
+            if have == want:
+                lock[name] = {'hash': want}
+                say(f'{name}: up to date')
+            elif recorded and have == recorded:
+                say(f'{name}: update' if dry else f'{name}: updated')
+                if not dry:
+                    copy_skill(src, dest)
+                    lock[name] = {'hash': want}
+            else:
+                say(f'{name}: kept as it is ({dest} was not installed by NoctraOS, or you changed it)')
+                continue
+        for label, rel, marker in LINK_TARGETS:
+            if not os.path.isdir(os.path.join(home(), marker)):
+                continue
+            skills_dir = os.path.join(home(), rel)
+            state = link_state(name, skills_dir)
+            if state == 'absent':
+                say(f'{name}: link for {label}' if dry else f'{name}: linked for {label}')
+                if not dry:
+                    os.makedirs(skills_dir, exist_ok=True)
+                    os.symlink(os.path.join('..', '..', '.agents', 'skills', name), os.path.join(skills_dir, name))
+            elif state == 'kept':
+                say(f'{name}: {label} already has its own {name}; left alone')
+        if label_present(name):
+            for other in name_clashes(name):
+                say(f'{name}: NOTE Hermes also has a skill called {name} at {other}; with two of the same name Hermes hides both. '
+                    f'Rename or remove one of them.')
+    if not dry:
+        save_lock(lock)
+    return 1 if failed else 0
+
+
+def status_rows():
+    rows = []
+    shipped = shipped_skills()
+    lock = load_lock()
+    for name in shipped:
+        src = os.path.join(source_dir(), name)
+        dest = os.path.join(agents_dir(), name)
+        want = tree_hash(src)
+        if not os.path.lexists(dest):
+            state = 'missing'
+        else:
+            have = tree_hash(dest) if os.path.isdir(dest) and not os.path.islink(dest) else None
+            if have is not None and have == want:
+                state = 'current'
+            elif have is not None and have == lock.get(name, {}).get('hash'):
+                state = 'outdated'
+            else:
+                state = 'modified'
+        links = {}
+        for label, rel, marker in LINK_TARGETS:
+            if os.path.isdir(os.path.join(home(), marker)):
+                links[label] = link_state(name, os.path.join(home(), rel))
+        rows.append({'name': name, 'path': dest, 'state': state, 'links': links,
+                     'clashes': name_clashes(name) if links.get('hermes') == 'linked' else []})
+    return rows
+
+
+def cmd_status(args):
+    rows = status_rows()
+    off = os.path.exists(opt_out_path())
+    if args.json:
+        print(json.dumps({'off': off, 'source': os.path.realpath(source_dir()), 'skills': rows}, indent=1))
+        return 0
+    if off:
+        say('switched off by you (noc agent-skills on)')
+    for r in rows:
+        extra = ', '.join(f'{k}: {v}' for k, v in r['links'].items())
+        say(f"{r['name']}: {r['state']}" + (f' ({extra})' if extra else ''))
+        for other in r['clashes']:
+            say(f"{r['name']}: NOTE Hermes also has a skill called {r['name']} at {other}, so it hides both; rename or remove one")
+    if not rows:
+        say(f'no skills found in {source_dir()}')
+    return 0
+
+
+def cmd_remove(args):
+    os.makedirs(config_dir(), exist_ok=True)
+    open(opt_out_path(), 'a').close()
+    lock = load_lock()
+    for name in shipped_skills():
+        for label, rel, _marker in LINK_TARGETS:
+            link = os.path.join(home(), rel, name)
+            if os.path.islink(link) and link_state(name, os.path.dirname(link)) == 'linked':
+                os.unlink(link)
+                say(f'{name}: link for {label} removed')
+        dest = os.path.join(agents_dir(), name)
+        if os.path.isdir(dest) and not os.path.islink(dest) and tree_hash(dest) == lock.get(name, {}).get('hash'):
+            shutil.rmtree(dest)
+            say(f'{name}: removed')
+        elif os.path.lexists(dest):
+            say(f'{name}: {dest} is yours now (you changed it), so it stays')
+        lock.pop(name, None)
+    save_lock(lock)
+    return 0
+
+
+def cmd_on(args):
+    try:
+        os.unlink(opt_out_path())
+    except FileNotFoundError:
+        pass
+    say('on again; run `noc agent-skills install`')
+    return 0
+
+
+def main(argv=None):
+    if os.geteuid() == 0 and os.environ.get('NOC_TEST_HOOKS') != '1':
+        print('noc-agent-skills: run it as your own account, not as root (it only touches your home folder)', file=sys.stderr)
+        return 2
+    p = argparse.ArgumentParser(prog='noc-agent-skills', description=__doc__.split('\n\n')[0])
+    sub = p.add_subparsers(dest='cmd', required=True)
+    s = sub.add_parser('install')
+    s.add_argument('--dry-run', action='store_true')
+    s.set_defaults(fn=cmd_install)
+    s = sub.add_parser('status')
+    s.add_argument('--json', action='store_true')
+    s.set_defaults(fn=cmd_status)
+    sub.add_parser('remove').set_defaults(fn=cmd_remove)
+    sub.add_parser('on').set_defaults(fn=cmd_on)
+    args = p.parse_args(argv)
+    return args.fn(args)
+
+
+if __name__ == '__main__':
+    sys.exit(main())

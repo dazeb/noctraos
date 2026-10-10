@@ -55,6 +55,7 @@ sudo install -m 755 "$REPO_ROOT/bin/noc-gpu" /usr/local/bin/noc-gpu
 sudo install -m 755 "$REPO_ROOT/bin/noc-upstream" /usr/local/bin/noc-upstream
 sudo install -m 755 "$REPO_ROOT/bin/noc-accounts" /usr/local/bin/noc-accounts
 sudo install -m 755 "$REPO_ROOT/bin/noc-disk" /usr/local/bin/noc-disk
+sudo install -m 755 "$REPO_ROOT/bin/noc-agent-skills" /usr/local/bin/noc-agent-skills
 # Programs other modules installed (noctraos-hermes, noctraos-agent, the welcome app, ...) are refreshed in place, so an update
 # that changes one reaches machines that already have it. Only programs that are already there: a new one arrives with its own
 # module (menu entry, icon). This copies files only; it never touches a person's settings.
@@ -127,6 +128,11 @@ else
   sudo mv "$SNAPSHOT.new" "$SNAPSHOT"
   log "Root-owned module snapshot written to $SNAPSHOT."
 fi
+
+# The NoctraOS skill for the coding agents (Hermes, Codex, Claude Code): copied to ~/.agents/skills from the snapshot just
+# written, linked where an agent is already installed. Content only, no agent setting is touched; a copy the person edited,
+# or ~/.config/noctraos/no-agent-skills, is respected. Other accounts catch up through migrations/user/0002.
+as_user /usr/local/bin/noc-agent-skills install || warn "Could not install the NoctraOS agent skill (noc agent-skills install retries)"
 
 log "Persistence complete: new users inherit mise, Continue and Nautilus script defaults."
 log "Manage the workstation with: noc (CLI) or the NoctraOS Control Panel (GUI)."

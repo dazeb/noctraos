@@ -12,3 +12,6 @@ if as_user /usr/local/bin/noctraos-hermes install; then
 else
   warn "Hermes Desktop install did not finish — clicking Hermes will retry it"
 fi
+
+# Hermes now exists: link the NoctraOS skill into it (module 07 ran before ~/.hermes did). Idempotent, never fatal.
+as_user /usr/local/bin/noc-agent-skills install || warn "Could not link the NoctraOS agent skill for Hermes (noc agent-skills install retries)"
