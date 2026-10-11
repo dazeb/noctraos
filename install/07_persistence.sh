@@ -86,6 +86,12 @@ log "Installing the NoctraOS updater (signed, staged updates of the NoctraOS lay
 sudo install -m 755 "$REPO_ROOT/bin/noc-selfupdate" /usr/local/libexec/noctraos/noc-selfupdate
 sudo install -d -m 755 /usr/local/share/noctraos /etc/noctraos
 sudo install -m 644 "$REPO_ROOT/configs/update/update-signers" /usr/local/share/noctraos/update-signers
+# The flavour picks this machine's update channel (docs/flavours.md). It is recorded once, only when it was given explicitly
+# (the ISO writes it itself); a machine without the file is zorin, so nothing is written for the default.
+if [ ! -f /etc/noctraos/flavour ] && [ -n "${NOCTRAOS_FLAVOUR_GIVEN:-}" ]; then
+  printf '%s\n' "$NOCTRAOS_FLAVOUR" | sudo tee /etc/noctraos/flavour >/dev/null
+  log "Recorded the ${NOCTRAOS_FLAVOUR} flavour in /etc/noctraos/flavour"
+fi
 # The channel is the person's choice and is never overwritten; the mirror list stays in the code so an update can change it.
 if [ ! -f /etc/noctraos/update.json ]; then
   printf '{"channel": "stable"}\n' | sudo tee /etc/noctraos/update.json >/dev/null

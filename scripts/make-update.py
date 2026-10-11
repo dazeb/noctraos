@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """make-update.py — build and sign a NoctraOS update (the release side of bin/noc-selfupdate).
 
-  make-update.py bundle   --ref REF --serial N --out DIR        git ref -> DIR/bundles/noctraos-N.tar.gz + DIR/bundle.json
+  make-update.py bundle   --ref REF --serial N --out DIR [--flavour F]
+                                                                git ref -> DIR/[F/]bundles/noctraos-N.tar.gz + DIR/bundle.json
   make-update.py manifest --bundle-json F|--from-manifest F --channel C --rollout PCT --key KEY --out DIR [...]
-                                                                -> DIR/C/manifest.json and manifest.json.sig
+                                                                -> DIR/[F/]C/manifest.json and manifest.json.sig
   make-update.py serial   [MANIFEST ...]                        next serial: highest in the given manifests, plus one
 
 A bundle is the file set that install/07_persistence.sh keeps as the root-owned snapshot, plus migrations/ and
@@ -11,6 +12,9 @@ A bundle is the file set that install/07_persistence.sh keeps as the root-owned 
 The manifest names the bundle by SHA-256 and is signed with `ssh-keygen -Y sign` (ed25519, namespace noctraos-update);
 clients verify it against /usr/local/share/noctraos/update-signers. Promoting a nightly update to stable is
 `manifest --from-manifest nightly/manifest.json --channel stable --rollout 10`: same bundle, same serial.
+Each flavour (docs/flavours.md) has its own serials, bundles and channels. zorin keeps the top-level layout every installed
+machine already reads; any other flavour lives under its own folder (kubuntu/bundles/, kubuntu/stable/). The manifest names
+its flavour, taken from the bundle, and clients accept only their own.
 Design: docs/updates.md.
 """
 import argparse
@@ -29,10 +33,16 @@ NAMESPACE = 'noctraos-update'
 FORMAT = 1
 TIME_FORMAT = '%Y-%m-%dT%H:%M:%SZ'
 META = '.update.json'
+FLAVOURS = ('zorin', 'kubuntu')
 # Keep equal to BUNDLE_ITEMS in bin/noc-selfupdate and the item list in install/07_persistence.sh (a test pins all three).
 ITEMS = ['VERSION', 'install.sh', 'install', 'bin', 'configs', 'scripts', 'assets', 'help', 'extensions', 'branding',
          'search', 'control', 'migrations']
 EXCLUDE_PREFIXES = ('assets/promo/', 'assets/social/')   # module 07 removes them from the snapshot too
+
+
+def flavour_prefix(flavour):
+    """Same rule as bin/noc-selfupdate: zorin at the top (the layout that predates flavours), others in their own folder."""
+    return '' if flavour == 'zorin' else f'{flavour}/'
 
 
 def git(*args, check=True):
@@ -42,7 +52,7 @@ def git(*args, check=True):
     return r.stdout
 
 
-def build_bundle(ref, serial, out):
+def build_bundle(ref, serial, out, flavour='zorin'):
     commit = git('rev-parse', '--verify', f'{ref}^{{commit}}').decode().strip()
     version = git('show', f'{commit}:VERSION').decode().strip()
     present = [i for i in ITEMS
@@ -74,11 +84,11 @@ def build_bundle(ref, serial, out):
     with gzip.GzipFile(fileobj=gz, mode='wb', mtime=0, compresslevel=9) as g:
         g.write(buf.getvalue())
     data = gz.getvalue()
-    os.makedirs(os.path.join(out, 'bundles'), exist_ok=True)
-    name = f'bundles/noctraos-{serial}.tar.gz'
+    name = f'{flavour_prefix(flavour)}bundles/noctraos-{serial}.tar.gz'
+    os.makedirs(os.path.join(out, os.path.dirname(name)), exist_ok=True)
     with open(os.path.join(out, name), 'wb') as f:
         f.write(data)
-    info = {'serial': serial, 'version': version, 'commit': commit, 'path': name,
+    info = {'serial': serial, 'version': version, 'commit': commit, 'path': name, 'flavour': flavour,
             'sha256': hashlib.sha256(data).hexdigest(), 'size': len(data)}
     with open(os.path.join(out, 'bundle.json'), 'w') as f:
         json.dump(info, f, indent=1, sort_keys=True)
@@ -103,6 +113,9 @@ def build_manifest(args):
     if bool(args.bundle_json) == bool(args.from_manifest):
         sys.exit('give exactly one of --bundle-json and --from-manifest')
     src = json.load(open(args.bundle_json or args.from_manifest))
+    flavour = src.get('flavour', 'zorin')   # sources made before flavours are zorin's
+    if flavour not in FLAVOURS:
+        sys.exit(f'unknown flavour "{flavour}" in the source')
     if args.from_manifest:
         bundle = dict(src['bundle'])
         serial, version, commit = src['serial'], src['version'], src.get('commit', '')
@@ -116,12 +129,12 @@ def build_manifest(args):
     if not 0 <= args.rollout <= 100:
         sys.exit('--rollout is a percentage, 0 to 100')
     issued = now()
-    manifest = {'format': FORMAT, 'channel': args.channel, 'serial': serial, 'version': version, 'commit': commit,
+    manifest = {'format': FORMAT, 'flavour': flavour, 'channel': args.channel, 'serial': serial, 'version': version, 'commit': commit,
                 'issued': issued.strftime(TIME_FORMAT),
                 'expires': (issued + datetime.timedelta(days=args.expires_days)).strftime(TIME_FORMAT),
                 'rollout': {'percent': args.rollout}, 'bundle': bundle, 'notes': notes,
                 'relogin': relogin, 'reboot': reboot}
-    outdir = os.path.join(args.out, args.channel)
+    outdir = os.path.join(args.out, flavour_prefix(flavour) + args.channel)
     os.makedirs(outdir, exist_ok=True)
     target = os.path.join(outdir, 'manifest.json')
     with open(target, 'w') as f:
@@ -148,6 +161,7 @@ def main(argv=None):
     b.add_argument('--ref', required=True)
     b.add_argument('--serial', type=int, required=True)
     b.add_argument('--out', required=True)
+    b.add_argument('--flavour', choices=FLAVOURS, default='zorin')
     m = sub.add_parser('manifest')
     m.add_argument('--bundle-json')
     m.add_argument('--from-manifest')
@@ -166,7 +180,7 @@ def main(argv=None):
     if args.cmd == 'bundle':
         if args.serial < 1:
             sys.exit('--serial starts at 1')
-        info = build_bundle(args.ref, args.serial, args.out)
+        info = build_bundle(args.ref, args.serial, args.out, args.flavour)
         print(json.dumps(info))
     elif args.cmd == 'manifest':
         print(build_manifest(args))

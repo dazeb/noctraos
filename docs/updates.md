@@ -151,7 +151,14 @@ last, and each store is read back through its **public** hostname with the same 
 ```
 updates/bundles/noctraos-N.tar.gz            immutable, never overwritten (a different one with the same N stops the publish)
 updates/<channel>/manifest.json + .sig       the only mutable files
+updates/kubuntu/bundles/, kubuntu/<channel>/ the same for the kubuntu flavour: its own serials, bundles and channels
 ```
+
+Each flavour (`docs/flavours.md`) has its own channels. zorin keeps the top-level layout every installed machine already
+reads; any other flavour lives in its own folder. `make-update.py bundle --flavour kubuntu` builds into that folder, the
+manifest carries `"flavour"` from the bundle (no field means zorin), and a machine takes only manifests of its own flavour,
+read from `/etc/noctraos/flavour` (no file means zorin). `iso/publish-update.sh` still publishes zorin only; publishing kubuntu
+updates is wired with the kubuntu release.
 
 The default mirror list is in the code (`DEFAULT_MIRRORS` in `bin/noc-selfupdate`), so an update can change it. A
 machine's `/etc/noctraos/update.json` holds only the person's choice (`channel`); `"mirrors"` there overrides the list.

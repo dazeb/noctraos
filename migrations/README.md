@@ -26,5 +26,7 @@ install (GNOME Shell extensions, the search app, themes, launchers, menu entries
 module, for example `SUDO_USER="$NOCTRAOS_USER" bash "$NOCTRAOS_SNAPSHOT/install.sh" --only 09_super_search.sh`, and set
 `--relogin` when publishing if extensions changed.
 
-Environment: `NOCTRAOS_SNAPSHOT` (the root-owned snapshot), `NOCTRAOS_MIGRATION_SCOPE`, and for system migrations
+Environment: `NOCTRAOS_SNAPSHOT` (the root-owned snapshot), `NOCTRAOS_MIGRATION_SCOPE`, `NOCTRAOS_FLAVOUR` (`zorin` or
+`kubuntu`, from `/etc/noctraos/flavour`; a migration for one flavour prints `NOT APPLIED on the <flavour> flavour: ...` and
+exits 0 on the others, so it is recorded as done instead of retried), and for system migrations
 `NOCTRAOS_USER` (the desktop user who asked). User migrations run with that user's `HOME` and session bus.

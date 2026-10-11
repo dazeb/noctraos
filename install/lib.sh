@@ -89,6 +89,23 @@ install_launchers() {
   return 0
 }
 
+# noctraos_flavour — this machine's flavour (docs/flavours.md): the flavour file, written once by the ISO or by the first
+# install that was given NOCTRAOS_FLAVOUR; else NOCTRAOS_FLAVOUR; else zorin (a machine installed before flavours existed).
+# A NOCTRAOS_FLAVOUR that contradicts the file is an error: changing flavour would switch the machine to another update channel.
+# The flavour picks the update channel and, later, the desktop modules; desktop_is_gnome stays a guard, never a selector.
+noctraos_flavour() {
+  local file="${NOCTRAOS_FLAVOUR_FILE:-/etc/noctraos/flavour}" recorded="" wanted="${NOCTRAOS_FLAVOUR:-}"
+  [ -r "$file" ] && recorded="$(tr -d '[:space:]' < "$file")"
+  if [ -n "$recorded" ] && [ -n "$wanted" ] && [ "$recorded" != "$wanted" ]; then
+    die "this machine is the $recorded flavour ($file), but NOCTRAOS_FLAVOUR=$wanted: unset it, or reinstall from the $wanted ISO"
+  fi
+  local flavour="${recorded:-${wanted:-zorin}}"
+  case "$flavour" in
+    zorin|kubuntu) printf '%s\n' "$flavour" ;;
+    *) die "unknown NoctraOS flavour \"$flavour\" (expected zorin or kubuntu)" ;;
+  esac
+}
+
 # desktop_name — the session desktop for messages ("KDE", "GNOME", "unknown").
 desktop_name() { printf '%s' "${XDG_CURRENT_DESKTOP:-${DESKTOP_SESSION:-unknown}}"; }
 
