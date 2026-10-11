@@ -60,8 +60,12 @@ class RealBundleTests(Sandbox):
         (self.tmp / "apps/noctraos-control.desktop").write_text("[Desktop Entry]\n")
         (self.tmp / "favorites").write_text("['org.gnome.Nautilus.desktop']\n")
         (self.home / ".local/state/noctraos").mkdir(parents=True)
+        # migrations/user/0002 hands over to the installed noc-agent-skills, which a bare test box does not have
+        skills = self.tmp / "noc-agent-skills"
+        skills.write_text("#!/bin/sh\nexit 0\n")
+        skills.chmod(0o755)
         self.env.update(PATH=f"{bin_dir}:{os.environ['PATH']}", FAKE_FAVORITES=str(self.tmp / "favorites"), HOME=str(self.home),
-                        NOCTRAOS_APPLICATIONS_DIR=str(self.tmp / "apps"))
+                        NOCTRAOS_APPLICATIONS_DIR=str(self.tmp / "apps"), NOCTRAOS_AGENT_SKILLS_TOOL=str(skills))
 
     def test_a_bundle_of_this_repository_is_applied_and_its_migrations_run(self):
         self.fake_desktop()
