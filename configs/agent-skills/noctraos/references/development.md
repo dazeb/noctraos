@@ -6,7 +6,7 @@ Read the repo `AGENTS.md` first; it is authoritative and longer than this page. 
 
 ```
 install.sh, boot.sh, proxmox-install.sh   orchestrator, remote fetcher, Proxmox VM installer
-install/        modules 00-11 (+01b, optional/), lib.sh helpers
+install/        modules 00-10 (+01b, optional/), lib.sh helpers
 bin/            noc, noc-gpu, noc-disk, noc-accounts, noc-upstream, noc-selfupdate, noc-privileged, noctraos-* programs
 control/        Control Panel (panel.py pure, main.py/pages.py GTK)
 search/, extensions/, branding/, help/      Super+Space, GNOME Shell extensions, layout script, help page
@@ -80,6 +80,6 @@ A full interactive ISO install, real hardware, NVIDIA/ROCm, VMware/VirtualBox/Hy
 
 ## Installing this skill
 
-This skill lives at `configs/agent-skills/noctraos/` and is installed by `bin/noc-agent-skills` (`noc agent-skills install|status|remove|on`) into `~/.agents/skills/noctraos`, the global agents folder. Codex reads `~/.agents/skills` directly; Hermes and Claude Code get a relative symlink (`~/.hermes/skills/noctraos`, `~/.claude/skills/noctraos` -> `../../.agents/skills/noctraos`) when those agents are present. No agent setting is written. Module 07 runs it on every install and update (from the root-owned snapshot), module 11 runs it again once Hermes exists, and `migrations/user/0002_install_agent_skill.sh` catches up other accounts. It never overwrites a folder it did not install or one the person edited, and `~/.config/noctraos/no-agent-skills` (made by `remove`) switches it off. Tests: `tests/test_agent_skills.py` (also checks this skill's frontmatter and that every reference is linked).
+This skill lives at `configs/agent-skills/noctraos/` and is installed by `bin/noc-agent-skills` (`noc agent-skills install|status|remove|on`) into `~/.agents/skills/noctraos`, the global agents folder. Codex reads `~/.agents/skills` directly; Hermes and Claude Code get a relative symlink (`~/.hermes/skills/noctraos`, `~/.claude/skills/noctraos` -> `../../.agents/skills/noctraos`) when those agents are present. No agent setting is written. Module 07 runs it on every install and update (from the root-owned snapshot), `noctraos-hermes install` runs it again once Hermes exists, and `migrations/user/0002_install_agent_skill.sh` catches up other accounts. It never overwrites a folder it did not install or one the person edited, and `~/.config/noctraos/no-agent-skills` (made by `remove`) switches it off. Tests: `tests/test_agent_skills.py` (also checks this skill's frontmatter and that every reference is linked).
 
 Keep the skill in step with the code: when a command, rule or default changes, update the matching reference file in the same change. Keep SKILL.md small and put detail in `references/`. Frontmatter is only `name` (equal to the folder) and `description` (under 1024 characters) so Hermes, Codex and Claude Code all accept it.

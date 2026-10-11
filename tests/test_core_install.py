@@ -17,6 +17,19 @@ class CoreInstallTests(unittest.TestCase):
         self.assertTrue(run)
         self.assertFalse([m for m in run if m.startswith(("02b", "03", "optional"))], run)
 
+    def test_hermes_desktop_is_not_part_of_the_install(self):
+        """About 5 GB and a 25 to 40 minute Electron build: it is set up when the person asks (`noc hermes setup`, the Apps
+        page), not by the installer. The only module that ran it is gone, and nothing in the core run calls its installer."""
+        self.assertFalse((ROOT / "install/11_hermes.sh").exists())
+        self.assertFalse([m for m in re.findall(r"^run_module (\S+)", INSTALL.read_text(), re.MULTILINE) if "hermes" in m])
+        for path in [INSTALL, *CORE_MODULES]:
+            for number, line in enumerate(path.read_text().splitlines(), 1):
+                if line.lstrip().startswith("#"):
+                    continue
+                self.assertNotRegex(line, r"noctraos-hermes\s+(install|update|launch)|hermes desktop|hermes.*install\.sh",
+                                    f"{path.relative_to(ROOT)}:{number}: {line.strip()}")
+        self.assertIn("noc hermes setup", INSTALL.read_text())                  # the closing message says how to get it
+
     def test_the_flags_for_local_ai_are_gone(self):
         text = INSTALL.read_text()
         self.assertNotIn("--skip-ai", text)

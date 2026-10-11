@@ -398,6 +398,33 @@ class DoctorStatusTests(unittest.TestCase):
         self.assertEqual(row["status"], "info")
         self.assertIn("noc llm setup", row["detail"])
 
+    def hermes_row(self, status_text):
+        e = Env(self, ollama=False)
+        e.stub("noctraos-hermes", f"cat <<'EOF'\n{status_text}\nEOF")
+        return {r["id"]: r for r in json.loads(e.noc("doctor", "--json").stdout)}["hermes"]
+
+    def test_doctor_does_not_call_a_hermes_that_was_never_set_up_a_fault(self):
+        row = self.hermes_row("mode:    none\nruntime: missing\napp:     not built\nprimary: Nous free tier (no model.provider set)")
+        self.assertEqual(row["status"], "info")
+        self.assertIsNone(row["fix"])                       # the Apps page asks first; Health does not install 5 GB on a click
+        self.assertIn("noc hermes setup", row["detail"])
+
+    def test_doctor_still_warns_about_a_half_finished_hermes_and_offers_the_fix(self):
+        row = self.hermes_row("mode:    cloud\nruntime: ok (/x)\napp:     not built\nprimary: Nous free tier")
+        self.assertEqual((row["status"], row["fix"]), ("warn", "hermes:install"))
+        self.assertIn("noc repair hermes", row["detail"])
+
+    def test_doctor_is_happy_with_an_installed_hermes(self):
+        row = self.hermes_row("mode:    cloud\nruntime: ok (/x)\napp:     ok\nprimary: Nous free tier (no model.provider set)")
+        self.assertEqual(row["status"], "ok")
+
+    def test_status_json_has_no_hermes_mode_until_it_is_installed(self):
+        e = Env(self, ollama=False)
+        e.stub("noctraos-hermes", '[ "$1" = mode ] && echo none; [ "$1" = ready ] && exit 1; exit 0')
+        self.assertEqual(json.loads(e.noc("status", "--json").stdout)["hermes"], {"installed": False, "mode": None})
+        e.stub("noctraos-hermes", '[ "$1" = mode ] && echo cloud; exit 0')
+        self.assertEqual(json.loads(e.noc("status", "--json").stdout)["hermes"], {"installed": True, "mode": "cloud"})
+
     def test_doctor_text_is_still_text(self):
         out = Env(self).noc("doctor").stdout
         self.assertTrue(out.startswith("NoctraOS doctor\n"))
@@ -745,6 +772,8 @@ class HermesModeTests(unittest.TestCase):
         stub = self.e.home / ".local/bin/hermes"
         stub.write_text(f'#!/bin/sh\necho "$@" >> "{self.calls}"\n')
         stub.chmod(0o755)
+        (self.hermes_home / "hermes-agent").mkdir()
+        (self.hermes_home / "hermes-agent/.hermes-bootstrap-complete").touch()      # Hermes is installed
 
     def hermes(self, *args):
         return self.e.run(HERMES, *args, HERMES_HOME=str(self.hermes_home))
@@ -763,6 +792,16 @@ class HermesModeTests(unittest.TestCase):
             with self.subTest(config=text):
                 self.config(text)
                 self.assertEqual(self.hermes("mode").stdout.strip(), want)
+
+    def test_a_machine_without_hermes_has_no_mode_and_nothing_to_switch(self):
+        (self.hermes_home / "hermes-agent/.hermes-bootstrap-complete").unlink()          # never set up: it is optional
+        self.config("")
+        self.assertEqual(self.hermes("mode").stdout.strip(), "none")
+        for args in (("local", "--no-launch"), ("cloud",)):
+            result = self.hermes(*args)
+            self.assertEqual(result.returncode, 1, args)
+            self.assertIn("noc hermes setup", result.stdout)
+        self.assertFalse(self.calls.exists())                                              # no `config set` was attempted
 
     def test_status_reports_mode(self):
         self.config("")
@@ -856,6 +895,22 @@ class RepairTests(unittest.TestCase):
         e.stub("noctraos-hermes", f'echo "hermes $*" >> "{e.home}/calls"')
         self.assertEqual(e.noc("repair", "hermes").returncode, 0)
         self.assertEqual((e.home / "calls").read_text().strip(), "hermes install")
+
+    def test_hermes_setup_is_the_same_step_as_repairing_it(self):
+        e = Env(self, ollama=False)
+        e.stub("noctraos-hermes", f'echo "hermes $*" >> "{e.home}/calls"')
+        self.assertEqual(e.noc("hermes", "setup").returncode, 0)
+        self.assertEqual((e.home / "calls").read_text().strip(), "hermes install")
+
+    def test_hermes_setup_without_the_wrapper_says_so_and_anything_else_is_usage(self):
+        e = Env(self, ollama=False)
+        self.assertEqual(e.noc("hermes", "setup").returncode, 1)
+        e.stub("noctraos-hermes", f'echo "hermes $*" >> "{e.home}/calls"')
+        for args in ((), ("bogus",), ("install",)):
+            result = e.noc("hermes", *args)
+            self.assertEqual(result.returncode, 1, args)
+            self.assertIn("usage: noc hermes [setup]", result.stdout)
+        self.assertFalse((e.home / "calls").exists())
 
     def test_anything_else_is_a_usage_message_and_runs_nothing(self):
         e = Env(self, ollama=False)
@@ -1281,6 +1336,18 @@ class PanelParityTests(unittest.TestCase):
             hints = re.findall(rf'\(run: ([^)]*)\)"[^\n]*"{re.escape(fix)}"', noc)
             self.assertEqual(len(hints), 1, f"{fix}: noc doctor has no (run: ...) hint for it")
             self.assertTrue(hints[0].startswith("noc "), f"{fix}: the hint is '{hints[0]}', not a noc command")
+
+    def test_the_apps_page_setup_button_is_a_noc_command_with_a_terminal_tip(self):
+        import sys
+        sys.path.insert(0, str(ROOT / "control"))
+        try:
+            import panel
+        finally:
+            sys.path.remove(str(ROOT / "control"))
+        self.assertEqual(panel.HERMES_SETUP, [panel.NOC, "hermes", "setup"])
+        self.assertRegex((ROOT / "bin/noc").read_text(), r"(?m)^\s+hermes\)")
+        self.assertIn("noc hermes setup", panel.TERMINAL["apps"])
+        self.assertIn("noc hermes setup", (ROOT / "docs/control-panel.md").read_text())
 
     def test_every_terminal_tip_is_a_noc_command_or_the_tool_for_it(self):
         import sys

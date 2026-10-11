@@ -80,9 +80,10 @@ run_desktop_module 01_desktop_packages.sh
 run_module 02_mise.sh
 
 # Local AI (GPU stack, Ollama, LLMFIT) is optional and runs later: `noc llm setup`. No model is downloaded by this installer.
+# Hermes Desktop (about 5 GB, a 25 to 40 minute build) is optional too: `noc hermes setup`, or the Control Panel's Apps page.
 
 if [ "$SKIP_GUI" -eq 1 ]; then
-  log "SKIP 04/04b/04c/04d/05/06/08/09/10/11 (--skip-gui)"
+  log "SKIP 04/04b/04c/04d/05/06/08/09/10 (--skip-gui)"
 else
   run_module 04_gui_apps.sh
   run_module 04_workstation_apps.sh
@@ -100,13 +101,7 @@ fi
 
 run_module 07_persistence.sh
 
-# Last on purpose: the Hermes build takes 25+ minutes and uses no sudo, so
-# anything that needs sudo must run before it. Otherwise the sudo credential
-# cache (~15 min) expires and an interactive install stalls on a password prompt.
-if [ "$SKIP_GUI" -eq 0 ]; then
-  run_module 11_hermes.sh
-fi
-
 log "✔ Install complete. Full log: $LOG_FILE"
 log "Local AI is optional and not set up yet: noc llm setup (then noc llm fit to find a model that fits)."
+log "Hermes Desktop is optional and not set up yet: noc hermes setup (about 5 GB, 25 to 40 minutes), or the Control Panel's Apps page."
 log "Health check anytime with: noc doctor"

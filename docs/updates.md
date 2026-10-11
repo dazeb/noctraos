@@ -69,6 +69,9 @@ Some apps are not in apt or Flatpak: they are installed from the publisher's own
   (`config.yaml`, memories, sessions, `SOUL.md`) lives in `~/.hermes` outside that directory and is never touched. It refuses while Hermes
   is running and when under 4 GB is free. If Nous publishes the `stable` channel, switch `cmd_update` to
   `hermes update --channel stable`.
+* **Hermes is optional, and an update never installs it.** Only an app that is installed and behind its newest release is
+  updated. Until Hermes is set up (`noc hermes setup`, or the Apps page's "Set up Hermes…" with its summary and a yes), its row says
+  so and offers that instead.
 * **Where it shows:** Overview has an **Apps** card; the **Apps** page lists every tracked app with installed and newest version,
   when it last changed, and an Update button (a confirmation for Ollama); the **Updates** page has a "Hermes and coding agents"
   step; `noc update` runs it as step `apps`.

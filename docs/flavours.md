@@ -156,7 +156,7 @@ Not yet done: promotion to `stable`, and no real-desktop (interactive) check of 
 | Component | zorin | kubuntu |
 |---|---|---|
 | Core provisioner | shipped | earlier 26.04.1 VM run returned 0; the Oct 14 search test is not a full provisioner rerun |
-| Optional local Ollama, 11 Hermes | shipped | no new runtime acceptance claimed by the Oct 14 search test |
+| Optional steps: local AI (`noc llm setup`), Hermes Desktop (`noc hermes setup`) | shipped | no runtime acceptance claimed |
 | 05 mouse ergonomics | shipped (Nautilus scripts) | written (Dolphin right-click actions through `noctraos-fileaction`); interactive action acceptance not established by the search test |
 | 06 desktop theme | shipped | written: colour scheme, Konsole profile, wallpapers, Agents section, panel layout; broad interactive acceptance remains untested |
 | 08 shell theme | shipped | written: Global Theme `dev.noctraos.desktop` (splash, previews, layout), wallpaper packages, SDDM login screen, lock-screen picture, About this System, NoctraOS logo on Kickoff (`configs/plasma/install-look.sh`, also baked into the ISO); unit-tested and splash rendered offscreen with Qt 6; broad interactive acceptance remains untested; AI-first Kickoff Start categories are not implemented |

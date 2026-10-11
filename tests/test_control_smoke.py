@@ -206,6 +206,29 @@ Gtk.MessageDialog.run = lambda self: (asked.append(self.get_property("secondary-
 models.setup_button.clicked()
 pump(0.5)
 assert ran == [] and "Not enough free disk space" in asked[0], (ran, asked)
+# Apps: a Hermes that is not set up gets "Set up…" (a dialog, then `noc hermes setup`); an installed one keeps "Update".
+apps = window.pages["apps"]
+hermes_app = {"id": "hermes", "title": "Hermes", "agent": False, "critical": True, "installed": None, "latest": "0.21.6",
+              "status": "absent", "updater": "user", "about": "", "url": "", "updated_at": ""}
+apps._loaded({"apps": [hermes_app], "updates": 0, "online": True, "checked_at": ""})
+shown = texts(apps.holder, [])
+assert "Set up…" in shown and "Update" not in shown, shown
+assert any("Optional" in t and "25 to 40 minutes" in t for t in shown), shown
+asked.clear(); ran.clear()
+def apps_events(argv):
+    ran.append(argv)
+    yield {"event": "log", "line": "Installing Hermes..."}
+    yield {"event": "exit", "code": 0}
+panel.run_events = apps_events
+Gtk.MessageDialog.run = fake_dialog
+apps.buttons[0].clicked()
+pump(1.5)
+assert ran == [panel.HERMES_SETUP] and ran[0][-2:] == ["hermes", "setup"], ran
+assert len(asked) == 1 and "5 GB" in asked[0] and "cloud" in asked[0], asked
+assert "Hermes is ready" in apps.note.get_text(), apps.note.get_text()
+apps._loaded({"apps": [{**hermes_app, "installed": "0.21.5", "status": "outdated"}], "updates": 1, "online": True, "checked_at": ""})
+shown = texts(apps.holder, [])
+assert "Update" in shown and "Set up…" not in shown, shown
 for page_id in ("updates", "apps", "models", "hardware", "health", "privacy", "accounts"):
     page = window.pages[page_id]
     tips = []

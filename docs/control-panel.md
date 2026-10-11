@@ -23,7 +23,7 @@ Keyboard: Ctrl+1 to Ctrl+9 switch pages, Ctrl+R or F5 check again, Ctrl+W or Ctr
 |---|---|---|
 | Overview | **Setup checklist** first: Git name and e-mail, GitHub sign-in, GPU for local AI, a local model, meeting Hermes, the Start panel weather. Finished steps are only counted; what is left (and what you skipped, so the way back stays in sight) has a row and a button. Then the cards: version, updates, local AI, graphics, disk, Hermes mode, search index; each opens its page | Refresh, Run health check, a button per step |
 | Accounts | The two first-time chores that stop a newcomer's first `git commit` and `git push`: the name and e-mail Git signs work with, and signing in to GitHub (a code to paste in the browser; no terminal, no password typed). Offers GitHub's private e-mail address | Save, Sign in, Use my GitHub details, Sign out, No I'll set it up myself (each chore) |
-| Apps | Hermes, Ollama, AppManager and the coding agents: installed version, newest upstream release, when it last changed, an Update button ([updates.md](updates.md#apps-that-come-straight-from-their-publishers-hermes-ollama-coding-agents)) | Check now, Update |
+| Apps | Hermes, Ollama, AppManager and the coding agents: installed version, newest upstream release, when it last changed, an Update button ([updates.md](updates.md#apps-that-come-straight-from-their-publishers-hermes-ollama-coding-agents)). Hermes Desktop is optional and not part of the install: until it is set up, its row says so | Check now, Update, **Set up Hermes…** (a summary of the 5 GB and the 25 to 40 minutes, that its free tier is a cloud service, and a yes first; then a progress log) |
 | Updates | System packages (count and download size), Flatpak, NoctraOS features (signed rolling updates, [updates.md](updates.md)), programming languages (mise), AI models | Tick what to update, then Update. Needs no terminal; one password prompt for the system steps. Below the list: which NoctraOS update is installed, the update channel (Stable or Nightly) and Go back to the previous update |
 | AI models | Installed models with size and the default; suggestions chosen from this machine's RAM and video memory. Until local AI is set up (it is not part of the first install), the page says so. An Engine row says whether Ollama is running and whether it starts with the computer (it does not unless you turn that on) | Set up local AI… (summary and a yes, then the engine, the GPU driver if there is one, and LLMFIT; no model is downloaded), Start Ollama / Stop Ollama, Start with this computer (one password prompt), Download with a progress bar and Cancel, Remove (confirms), Make default, a custom name |
 | Hardware | The GPU found, whether the stack is ready, RAM and disk; a notice when the disk is bigger than the system uses | Set up the GPU, or use all of an enlarged disk, each only after a summary of what will change and a yes; or "No, I'll set up the GPU myself" |
@@ -32,7 +32,7 @@ Keyboard: Ctrl+1 to Ctrl+9 switch pages, Ctrl+R or F5 check again, Ctrl+W or Ctr
 | About | Version, base system, links | Copy diagnostics |
 
 Every page has a "not ready yet" state (no network, Ollama still starting, no GPU, Hermes not
-installed). The only things the panel never does on its own: install drivers, switch Hermes to the
+set up). The only things the panel never does on its own: install drivers, switch Hermes to the
 cloud, or cancel a half-finished system upgrade.
 
 ## The setup checklist
@@ -40,7 +40,8 @@ cloud, or cancel a half-finished system upgrade.
 Everything the Welcome app and the first boot ask for lives in one list at the top of the Overview, so nobody has to remember
 where a skipped step was. `panel.setup_steps()` builds it from `noc status --json` plus `panel.setup_extras()` (GPU stack state,
 whether Hermes' first-run chat happened, the weather city). A step is `done`, `todo`, `skipped` (a `noc skip` chore) or
-`waiting` (cannot be done yet, for example Hermes while the first boot still builds it, so nothing nags). Steps that do not
+`waiting` (cannot be done yet, or is an option rather than a chore: Hermes until the person sets it up from Apps, local AI until the
+engine is there, so nothing nags and there is no skip button). Steps that do not
 apply, like the GPU step on a machine with no usable GPU, are left out. The weather step is optional and never counts as "left".
 A new chore needs a step in `setup_steps()` and a test in `SetupChecklistTests`.
 
@@ -78,6 +79,7 @@ panel action and the command that does the same:
 | Updates: channel, Go back | `noc channel [stable\|nightly]`, `noc channel rollback` |
 | Apps: Update | `noc apps update [app,app]` (Ollama and AppManager ask for sudo) |
 | AI models: Set up local AI, Download, Remove, Make default | `noc llm setup`, `noc models pull <model>`, `noc models rm <model>`, `noc models default <model>` |
+| Apps: Set up Hermes | `noc hermes setup` (the same step `noc repair hermes` runs for a half-finished one) |
 | AI models: Start Ollama, Stop Ollama, Start with this computer | `noc llm start`, `noc llm stop`, `noc llm autostart on\|off` |
 | Hardware: GPU setup, Use all the disk space | `noc gpu install`, `sudo noc disk grow` |
 | Health: Fix | `noc repair appmanager\|vm-guest\|hermes` (the doctor row says which) |

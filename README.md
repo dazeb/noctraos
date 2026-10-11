@@ -33,10 +33,12 @@ in, and the desktop is dark with a little amber along the way.
   your graphics card, a health check, and your privacy choices in one window,
   with no terminal needed.
 - **Assistants within reach.** Hermes Desktop, Codex, Claude Code, OpenCode,
-  Grok, Gemini CLI, and Qwen Code have a place in the Start panel. Signing in
-  to the coding agents is yours to do. Hermes, Ollama and the agents follow
-  their publishers' newest releases, and the Control Panel shows which version
-  you have.
+  Grok, Gemini CLI, and Qwen Code have a place in the Start panel. The coding
+  agents install the first time you open them, and signing in to them is yours
+  to do. Hermes Desktop is optional (about 5 GB): set it up from the Control
+  Panel's Apps page or with `noc hermes setup`. Hermes, Ollama and the agents
+  follow their publishers' newest releases, and the Control Panel shows which
+  version you have.
 - **The everyday tools, too.** A browser, office apps, media tools, a task
   manager, and support for Flatpaks and AppImages.
 
@@ -51,7 +53,8 @@ in, and the desktop is dark with a little amber along the way.
 *Real screenshots from a running NoctraOS GNOME VM. Click any image for the full view.*
 
 **A note on AI:** Ollama runs locally. Hermes' free tier uses the Nous cloud,
-so prompts leave your computer; a local-only option is available. Other coding
+so prompts leave your computer; a local-only option is available once you have
+set Hermes up. Other coding
 assistants use their own providers and may need accounts.
 
 ## Try it
