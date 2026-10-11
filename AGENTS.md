@@ -63,20 +63,18 @@ install/
                             its Flatpak is in, retires unwanted base apps, hides junk launchers
   04d_appmanager.sh         AppManager (kem-a/AppManager): AppImage installer/updater, sha256-verified
                             release in /opt/appmanager; non-fatal; rerun: install.sh --only 04d_appmanager.sh
-  05_mouse_ergonomics.sh    Nautilus right-click scripts
-  06_desktop_theme.sh       gsettings ergonomics, wallpapers, Agents menu,
-                            AI-first /etc/xdg/menus/gnome-applications.menu
+  desktop/gnome/            GNOME-only modules (flavour zorin), run through run_desktop_module; kubuntu prints NOT APPLIED until the Plasma port:
+                            01_desktop_packages, 04_desktop_apps, 07_nautilus_skel (called from 07), 05_mouse_ergonomics (Nautilus right-click scripts),
+                            06_desktop_theme (gsettings ergonomics, wallpapers, Agents menu, AI-first /etc/xdg/menus/gnome-applications.menu),
+                            08_shell_theme (NoctraOS-Dark shell + GTK themes, white menu icons, terminal/app palette),
+                            09_super_search (Super+Space search, Start panel: the three GNOME Shell extensions, search app,
+                            schemas, help page, index timer, welcome/branding autostart)
   07_persistence.sh         /etc/skel defaults, noc + Control Panel install (retires the old noc-menu)
-  08_shell_theme.sh         NoctraOS-Dark shell + GTK themes (derived, not
-                            shipped), white menu icons, terminal/app palette
-  09_super_search.sh        Super+Space search, Noctra start button and Start panel:
-                            installs the three GNOME Shell extensions, search app,
-                            schemas, help page, index timer, welcome/branding autostart
   10_boot_theme.sh          Plymouth splash + GRUB theme for non-ISO installs
                             (update-alternatives, update-initramfs, update-grub)
   11_hermes.sh              Hermes Desktop preinstalled (runtime + Electron app build),
                             free Nous tier primary, local Ollama fallback; runs LAST (25+ min, no sudo)
-                            (module order in install.sh: 01b 00 01 02 04 04_workstation 04c 04d 05 06 08 09 10 07 11 — the first run never downloads a model)
+                            (module order in install.sh: 01b 00 01 02 04 04_workstation 04c 04d, then the desktop/gnome modules 05 06 08 09, 10 07 11 — the first run never downloads a model)
 bin/
   noc                       CLI: update [--json] [--only ..] | updates | doctor [--json] | status | models [list [--json]|default|presets|pull|rm] | llm [setup|fit|start|stop|autostart [on|off]]
                             | skip [list [--json]|add|rm] | bg [list|next|set] | gpu | channel [stable|nightly|rollback] | apps [update] | repair <appmanager|vm-guest|hermes>
@@ -359,7 +357,7 @@ bash -n boot.sh install.sh install/*.sh install/optional/*.sh bin/noc bin/noc-gp
 docker run --rm -v "$PWD:/mnt" koalaman/shellcheck:stable --severity=warning \
   boot.sh install.sh install/*.sh install/optional/*.sh bin/noc bin/noc-gpu bin/noc-privileged bin/noctraos-control bin/noctraos-agent \
   bin/noctraos-copyq bin/noctraos-hermes configs/nautilus-scripts/*     # same list as CI
-python3 -m unittest discover -s tests                # 661 tests: theme, GPU detection, noc JSON modes, root helper, Control Panel, agent skill
+python3 -m unittest discover -s tests: theme, GPU detection, noc JSON modes, root helper, Control Panel, agent skill
 python3 scripts/render-theme.py --check              # committed theme outputs match palette.json
 
 # wallpaper iteration (venv at ~/workspace/scratch/zorin-img-venv: pillow+numpy)

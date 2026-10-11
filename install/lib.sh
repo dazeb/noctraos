@@ -106,6 +106,29 @@ noctraos_flavour() {
   esac
 }
 
+# flavour_desktop — the desktop folder of this machine's flavour under install/desktop/ (zorin: gnome, kubuntu: plasma).
+flavour_desktop() {
+  case "$(noctraos_flavour)" in
+    zorin) printf 'gnome\n' ;;
+    kubuntu) printf 'plasma\n' ;;
+  esac
+}
+
+# run_desktop_module <file> — run install/desktop/<this flavour's desktop>/<file>, or say plainly that this flavour has no
+# such module yet (NOT APPLIED, never a success line; docs/flavours.md). Used by install.sh and by core modules that have a
+# desktop-specific part, so a core module holds no desktop code of its own.
+run_desktop_module() {
+  local file="$1" flavour desktop path
+  flavour="$(noctraos_flavour)" && desktop="$(flavour_desktop)" || die "cannot tell which flavour this machine is"
+  path="$REPO_ROOT/install/desktop/$desktop/$file"
+  if [ -f "$path" ]; then
+    log "───────────────────── desktop/$desktop/$file ─────────────────────"
+    bash "$path"
+  else
+    warn "NOT APPLIED on the $flavour flavour: $file has no $desktop counterpart yet"
+  fi
+}
+
 # desktop_name — the session desktop for messages ("KDE", "GNOME", "unknown").
 desktop_name() { printf '%s' "${XDG_CURRENT_DESKTOP:-${DESKTOP_SESSION:-unknown}}"; }
 

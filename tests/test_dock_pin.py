@@ -63,7 +63,7 @@ class PinMigrationTests(unittest.TestCase):
 
 class FreshInstallTests(unittest.TestCase):
     def test_the_desktop_module_pins_the_panel_and_the_launcher_exists(self):
-        module = (ROOT / "install/06_desktop_theme.sh").read_text()
+        module = (ROOT / "install/desktop/gnome/06_desktop_theme.sh").read_text()
         self.assertIn(ID, module)
         self.assertTrue((ROOT / "configs/applications" / ID).is_file())
         self.assertTrue((ROOT / "assets/icons/noctraos-control.svg").is_file())

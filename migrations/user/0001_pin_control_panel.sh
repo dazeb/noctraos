@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Pin the NoctraOS Control Panel to the dock (the favorites the taskbar shows) on accounts made before it was pinned by
 # default. Runs once per account; a person who unpins it afterwards keeps that choice, because the updater records this
-# migration as done. A fresh install pins it in install/06_desktop_theme.sh.
+# migration as done. A fresh install pins it in install/desktop/gnome/06_desktop_theme.sh.
 set -u
 ID=noctraos-control.desktop
 # Where module 06/07 install launchers (tests point this at a temp directory).

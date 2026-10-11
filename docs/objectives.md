@@ -65,7 +65,7 @@ private cache (`~/.cache/noctraos-search/history`, mode 0700) and searched
 locally; nothing is uploaded. It is the main thing a new user should learn, and the reference
 for the visual theme.
 
-Status: in the repo and installed by `install/09_super_search.sh` — two GNOME
+Status: in the repo and installed by `install/desktop/gnome/09_super_search.sh` — two GNOME
 Shell extensions (`extensions/noctraos-search@noctraos.local`, the overlay;
 `extensions/noctraos-branding@noctraos.local`, the Noctra start button), the
 search app in `search/` (user-owned SQLite index, CopyQ bridge, settings

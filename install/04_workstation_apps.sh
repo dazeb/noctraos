@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 # desktops: any
-# Pending the flavour split (docs/flavours.md): the GNOME-only apps in APT_APPS belong to the GNOME desktop code.
 # Module 04b: Omarchy-style workstation applications with Ubuntu equivalents.
 set -Eeuo pipefail
 source "$REPO_ROOT/install/lib.sh"
@@ -14,7 +13,7 @@ APT_APPS=(
   avahi-daemon bat btop brightnessctl cups cups-filters
   cups-pk-helper ddcutil docker.io docker-compose-v2 eza
   exfatprogs fd-find ffmpeg ffmpegthumbnailer fzf gh
-  gnome-disk-utility gnome-sushi gnome-tweaks gvfs-backends
+  gvfs-backends
   imagemagick inotify-tools inxi libsecret-tools
   man-db ncdu plocate qrencode ripgrep
   socat system-config-printer tesseract-ocr tldr tmux whois

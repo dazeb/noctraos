@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 # desktops: any
-# Pending the flavour split (docs/flavours.md): the GNOME packages in the optional loop belong to the GNOME desktop code.
 # Module 01: system base — apt packages, Flathub, Nerd Fonts.
 set -Eeuo pipefail
 source "$REPO_ROOT/install/lib.sh"
@@ -39,16 +38,6 @@ for p in xdg-desktop-portal xdg-desktop-portal-gtk xdg-desktop-portal-gnome xdg-
       || warn "Flatpak portal failed to install: $p"
   else
     warn "Flatpak portal not available in this release (skipped): $p"
-  fi
-done
-
-# Optional packages whose names vary across Zorin/Ubuntu releases.
-for p in nautilus gnome-terminal nautilus-extension-gnome-terminal; do
-  if apt-cache show "$p" >/dev/null 2>&1; then
-    sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "$p" \
-      || warn "Optional package failed to install: $p"
-  else
-    warn "Optional package not available in this release (skipped): $p"
   fi
 done
 

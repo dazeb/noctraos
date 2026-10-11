@@ -10,7 +10,7 @@
 # files already in the image, the shell finds the extensions at its first start, and the two
 # autostart setup scripts (which add them to `enabled-extensions`) switch them on live.
 #
-# This is the file-copy half of install/09_super_search.sh: keep the two lists in step. Module 09
+# This is the file-copy half of install/desktop/gnome/09_super_search.sh: keep the two lists in step. Module 09
 # stays the owner (it copies only what differs, so on a baked image it changes nothing and still
 # repairs an image that lacks a file). Nothing here needs apt, a network or a running session.
 

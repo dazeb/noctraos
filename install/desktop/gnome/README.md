@@ -9,5 +9,5 @@ Rules:
 - Nothing here names Kubuntu, Plasma, KDE or KWin.
 - Changes here need the code owner's review (`.github/CODEOWNERS`).
 
-Status: empty. Modules 05, 06, 08 and 09 still live in `install/` and will move here in a
-separate change.
+Status: modules 01_desktop_packages, 04_desktop_apps, 05, 06, 07_nautilus_skel, 08 and 09 live here.
+`install.sh` runs them through `run_desktop_module`; `install.sh --only 09_super_search.sh` still works by bare name.
