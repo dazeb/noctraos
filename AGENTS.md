@@ -74,7 +74,7 @@ install/
                             (update-alternatives, update-initramfs, update-grub)
   11_hermes.sh              Hermes Desktop preinstalled (runtime + Electron app build),
                             free Nous tier primary, local Ollama fallback; runs LAST (25+ min, no sudo)
-                            (module order in install.sh: 01b 00 01 02 04 04_workstation 04c 04d, then the desktop/gnome modules 05 06 08 09, 10 07 11 — the first run never downloads a model)
+                            (module order in install.sh: 01b 00 01 [desktop 01_desktop_packages] 02 04 04_workstation [desktop 04_desktop_apps] 04c 04d, then the desktop modules 05 06 08 09, 10 07 [07 runs desktop 07_nautilus_skel] 11 — the first run never downloads a model)
 bin/
   noc                       CLI: update [--json] [--only ..] | updates | doctor [--json] | status | models [list [--json]|default|presets|pull|rm] | llm [setup|fit|start|stop|autostart [on|off]]
                             | skip [list [--json]|add|rm] | bg [list|next|set] | gpu | channel [stable|nightly|rollback] | apps [update] | repair <appmanager|vm-guest|hermes>
@@ -352,10 +352,10 @@ iso/vm-sysprep.sh           run inside a fully provisioned VM before exporting i
 
 ```bash
 # static checks (docker shellcheck — not installed on this host)
-bash -n boot.sh install.sh install/*.sh install/optional/*.sh bin/noc bin/noc-gpu bin/noc-privileged bin/noctraos-control bin/noctraos-agent \
+bash -n boot.sh install.sh install/*.sh install/optional/*.sh install/desktop/*/*.sh bin/noc bin/noc-gpu bin/noc-privileged bin/noctraos-control bin/noctraos-agent \
   bin/noctraos-copyq bin/noctraos-hermes bin/noctraos-search configs/nautilus-scripts/*     # other bin/ files are Python
 docker run --rm -v "$PWD:/mnt" koalaman/shellcheck:stable --severity=warning \
-  boot.sh install.sh install/*.sh install/optional/*.sh bin/noc bin/noc-gpu bin/noc-privileged bin/noctraos-control bin/noctraos-agent \
+  boot.sh install.sh install/*.sh install/optional/*.sh install/desktop/*/*.sh bin/noc bin/noc-gpu bin/noc-privileged bin/noctraos-control bin/noctraos-agent \
   bin/noctraos-copyq bin/noctraos-hermes configs/nautilus-scripts/*     # same list as CI
 python3 -m unittest discover -s tests: theme, GPU detection, noc JSON modes, root helper, Control Panel, agent skill
 python3 scripts/render-theme.py --check              # committed theme outputs match palette.json
