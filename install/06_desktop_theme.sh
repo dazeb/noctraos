@@ -72,7 +72,7 @@ for i in "$REPO_ROOT"/assets/icons/hermes/hicolor/*/apps/hermes.png; do
     || sudo install -D -m 644 "$i" "/usr/local/share/icons/hicolor/$size/apps/hermes.png"
 done
 sudo gtk-update-icon-cache -q -t -f /usr/local/share/icons/hicolor 2>/dev/null || true
-log "OK: Agents section — Hermes, Codex, Claude Code, OpenCode, Grok, Gemini CLI, Qwen Code (Hermes preinstalled by module 11, the rest install-on-first-use)"
+log "OK: Agents section — Hermes, Codex, Claude Code, OpenCode, Grok, Gemini CLI, Qwen Code (Hermes sets itself up when you ask for it, the rest install-on-first-use)"
 
 log "Installing AI-first application menu (replaces stock category tree)..."
 sudo install -m 644 "$REPO_ROOT/configs/applications/noctraos-local-llm.directory" \

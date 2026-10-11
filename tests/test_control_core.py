@@ -150,7 +150,8 @@ class CardTests(unittest.TestCase):
         local = by_id({**STATUS, "hermes": {"installed": True, "mode": "local"}})["hermes"]
         self.assertEqual((local.value, local.level), ("Local only", "ok"))
         missing = by_id({**STATUS, "hermes": {"installed": False, "mode": None}})["hermes"]
-        self.assertEqual(missing.value, "Not installed")
+        self.assertEqual((missing.value, missing.level, missing.page), ("Not set up", "info", "apps"))   # optional, not a fault
+        self.assertIn("Optional", missing.detail)
 
     def test_low_disk_warns(self):
         low = {**STATUS, "disk": {"root_free_bytes": 5 * 2**30, "root_total_bytes": 200 * 2**30}}
@@ -206,6 +207,26 @@ class AppsTests(unittest.TestCase):
         self.assertIn("earlier check", rows["gemini"]["detail"])
         self.assertIn("Version 0.21.6", rows["hermes"]["detail"])
         self.assertIn("changed", rows["hermes"]["detail"])
+
+    def test_hermes_is_set_up_from_here_when_the_person_asks_for_it(self):
+        absent = {**APPS, "apps": [{**a, "installed": None, "status": "absent", "updated_at": ""} if a["id"] == "hermes" else a
+                                   for a in APPS["apps"]]}
+        row = self.rows(absent)["hermes"]
+        self.assertEqual(row["argv"], panel.HERMES_SETUP)
+        self.assertEqual(row["argv"], [panel.NOC, "hermes", "setup"])         # the same step `noc hermes setup` runs
+        self.assertTrue(row["setup"])
+        self.assertIn("Optional", row["status"])
+        self.assertEqual(row["level"], "info")
+        for want in ("5 GB", "25 to 40 minutes", "leaves this computer", "Nothing changes until you press Set up"):
+            self.assertIn(want, row["confirm"])                                # a yes first, never on its own
+        self.assertFalse(self.rows()["hermes"]["setup"])                      # an installed Hermes is updated, not set up
+        self.assertNotIn("sudo", row["argv"])
+
+    def test_no_other_absent_app_gets_a_setup_button(self):
+        for r in self.rows(
+                {**APPS, "apps": [{**a, "installed": None, "status": "absent"} for a in APPS["apps"] if a["id"] != "hermes"]}).values():
+            self.assertIsNone(r["argv"], r["id"])
+            self.assertFalse(r["setup"], r["id"])
 
     def test_user_apps_update_as_the_person_and_root_ones_through_the_helper(self):
         rows = self.rows()
@@ -1006,6 +1027,8 @@ class PrivacyTests(unittest.TestCase):
         self.assertEqual((local["headline"], local["level"]), ("Local only", "ok"))
         self.assertFalse(panel.hermes_privacy("other")["can_switch"])
         self.assertFalse(panel.hermes_privacy(None)["can_switch"])
+        self.assertIn("optional", panel.hermes_privacy(None)["text"])                 # not set up is a choice, not a fault
+        self.assertIn("Apps", panel.hermes_privacy(None)["text"])
 
     def test_switch_command(self):
         self.assertEqual(panel.switch_command("local", "cloud"), [panel.NOC, "privacy", "hermes", "local"])
@@ -1160,6 +1183,11 @@ class SetupChecklistTests(unittest.TestCase):
         self.assertIn("installed but not running", silent.text)
         none = self.steps(ollama={"running": True, "models": 0, "default_model": "m"})
         self.assertEqual(none["models"].state, "todo")
+
+    def test_hermes_not_set_up_points_at_the_apps_page(self):
+        step = self.steps(hermes={"installed": False, "mode": None})["hermes"]
+        self.assertEqual((step.state, step.page), ("waiting", "apps"))
+        self.assertIn("Optional", step.text)
 
     def test_hermes_is_started_by_its_launcher_and_says_it_is_cloud(self):
         step = self.steps()["hermes"]

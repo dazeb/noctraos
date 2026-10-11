@@ -12,7 +12,7 @@ Dock icon (pinned last), Start panel sliders icon, Super+Space then type "contro
 |---|---|---|
 | Overview | Setup checklist first, then cards (version, updates, local AI, graphics, disk, Hermes mode, search index); each card opens its page | Refresh, run health check, a button per step |
 | Accounts | Git name/e-mail and GitHub sign-in | `noc accounts git set`, `noc accounts github login\|logout` |
-| Apps | Hermes, Ollama, AppManager, coding agents: installed vs newest | `noc apps update [app]` |
+| Apps | Hermes, Ollama, AppManager, coding agents: installed vs newest; "Set up Hermes…" while it is not installed | `noc apps update [app]`, `noc hermes setup` |
 | Updates | apt, Flatpak, NoctraOS layer, mise languages, models; channel; Go back | `noc update [--only ...]`, `noc channel [stable\|nightly\|rollback]` |
 | AI models | Installed models, suggestions sized to RAM/VRAM, Engine row | `noc llm setup`, `noc models pull\|rm\|default`, `noc llm start\|stop\|autostart` |
 | Hardware | GPU found, RAM, disk, enlarged-disk notice | `noc gpu install`, `sudo noc disk grow` |
@@ -24,7 +24,7 @@ The only things the panel never does on its own: install drivers, switch Hermes 
 
 ## Setup checklist
 
-At the top of the Overview, built by `panel.setup_steps()` from `noc status --json` plus `panel.setup_extras()`. Step states: `done`, `todo`, `skipped` (a `noc skip` chore), `waiting` (cannot be done yet, e.g. Hermes while the first boot still builds it - so nothing nags). Steps that do not apply (GPU step with no usable GPU) are omitted. Local AI is an option, never a chore (`waiting`, no skip button). The weather step is optional and never counts as "left".
+At the top of the Overview, built by `panel.setup_steps()` from `noc status --json` plus `panel.setup_extras()`. Step states: `done`, `todo`, `skipped` (a `noc skip` chore), `waiting` (cannot be done yet, or an option rather than a chore, e.g. Hermes until the person sets it up from the Apps page - so nothing nags). Steps that do not apply (GPU step with no usable GPU) are omitted. Local AI is an option, never a chore (`waiting`, no skip button). The weather step is optional and never counts as "left".
 
 ## Skippable chores and terminal tips
 
