@@ -24,6 +24,12 @@ export REPO_ROOT TARGET_USER TARGET_UID TARGET_HOME
 # shellcheck source=install/lib.sh
 source "$REPO_ROOT/install/lib.sh"
 
+# ---- flavour (docs/flavours.md) ------------------------------------------------
+# Given explicitly on a machine that has no flavour file yet, module 07 records it there.
+NOCTRAOS_FLAVOUR_GIVEN="${NOCTRAOS_FLAVOUR:+1}"
+NOCTRAOS_FLAVOUR="$(noctraos_flavour)" || exit 1
+export NOCTRAOS_FLAVOUR NOCTRAOS_FLAVOUR_GIVEN
+
 # ---- flags ---------------------------------------------------------------------
 SKIP_GUI=0
 ONLY=""
@@ -42,6 +48,7 @@ echo "  NoctraOS :: AI-first developer workstation"
 echo "======================================================"
 log "Log file: $LOG_FILE"
 log "Target user: $TARGET_USER ($TARGET_HOME)"
+log "Flavour: $NOCTRAOS_FLAVOUR"
 
 run_module() {
   log "───────────────────── $1 ─────────────────────"

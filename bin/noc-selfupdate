@@ -10,6 +10,11 @@
   noc-selfupdate set-channel stable|nightly   root
   noc-selfupdate status [--json]
 
+Each flavour (docs/flavours.md) has its own channels: /etc/noctraos/flavour names it, and a machine without that file
+was installed before flavours existed, so it is zorin. zorin reads <mirror>/<channel>/ (the layout every installed machine
+already uses); any other flavour reads <mirror>/<flavour>/<channel>/. A manifest names its flavour (no name means zorin) and
+a machine accepts only its own, so a mirror that serves the wrong file cannot cross flavours.
+
 The design is in docs/updates.md. In short: a channel publishes a small manifest signed with the NoctraOS
 update key (ssh-keygen -Y, ed25519); the manifest names an immutable bundle by SHA-256. Mirrors are untrusted
 transports, so they are all read and the highest verified serial wins. Nothing is trusted until the signature,
@@ -40,6 +45,7 @@ FORMAT = 1
 IDENTITY = 'release@noctraos.dev'
 NAMESPACE = 'noctraos-update'
 CHANNELS = ('stable', 'nightly')
+FLAVOURS = ('zorin', 'kubuntu')
 DEFAULT_MIRRORS = ['https://dl.noctraos.dev/updates', 'https://noctraos-releases.fsn1.your-objectstorage.com/updates']
 # What a bundle may contain. Must stay equal to the item list in install/07_persistence.sh (a test pins it).
 BUNDLE_ITEMS = ['VERSION', 'install.sh', 'install', 'bin', 'configs', 'scripts', 'assets', 'help', 'extensions',
@@ -50,7 +56,7 @@ MAX_BUNDLE = 200 * 1024 * 1024
 MAX_UNPACKED = 400 * 1024 * 1024
 MAX_MEMBERS = 20000
 MIN_FREE = 600 * 1024 * 1024
-BUNDLE_PATH = re.compile(r'^bundles/noctraos-[0-9]{1,9}\.tar\.gz$')
+BUNDLE_PATH = re.compile(r'^(kubuntu/)?bundles/noctraos-[0-9]{1,9}\.tar\.gz$')
 VERSION_RE = re.compile(r'^[0-9][0-9A-Za-z.+~-]{0,31}$')
 TIME_FORMAT = '%Y-%m-%dT%H:%M:%SZ'
 MIGRATION_RE = re.compile(r'^[0-9]{4}_[a-z0-9][a-z0-9_-]*\.sh$')
@@ -90,6 +96,10 @@ def snapshot_dir():
     return path('/usr/local/share/noctraos/repo')
 
 
+def flavour_path():
+    return path('/etc/noctraos/flavour')
+
+
 def signers_path():
     return path('/usr/local/share/noctraos/update-signers')
 
@@ -104,8 +114,27 @@ def say(msg=''):
 
 # ---- config and state ----------------------------------------------------------------------------
 
+def load_flavour():
+    """This machine's flavour: the flavour file, else zorin (installed before flavours existed)."""
+    try:
+        with open(flavour_path()) as f:
+            value = f.read().strip()
+    except FileNotFoundError:
+        return 'zorin'
+    except OSError as e:
+        raise UpdateError(f'{flavour_path()} cannot be read ({e})')
+    if value not in FLAVOURS:
+        raise UpdateError(f'unknown flavour "{value}" in {flavour_path()}')
+    return value
+
+
+def flavour_prefix(flavour):
+    """Where a flavour's files live under a mirror: zorin at the top (the layout that predates flavours)."""
+    return '' if flavour == 'zorin' else f'{flavour}/'
+
+
 def load_config():
-    cfg = {'channel': 'stable', 'mirrors': list(DEFAULT_MIRRORS)}
+    cfg = {'channel': 'stable', 'mirrors': list(DEFAULT_MIRRORS), 'flavour': load_flavour()}
     try:
         with open(conf_path()) as f:
             data = json.load(f)
@@ -212,6 +241,8 @@ def validate_manifest(m, cfg):
                           'this updater: update the system first (apt upgrade)')
     if m.get('channel') != cfg['channel']:
         raise UpdateError(f'manifest is for channel "{m.get("channel")}", not "{cfg["channel"]}"')
+    if m.get('flavour', 'zorin') != cfg['flavour']:
+        raise UpdateError(f'manifest is for the {m.get("flavour", "zorin")} flavour, not {cfg["flavour"]}')
     serial = m.get('serial')
     if not isinstance(serial, int) or isinstance(serial, bool) or serial < 1:
         raise UpdateError('manifest has no valid serial')
@@ -222,7 +253,7 @@ def validate_manifest(m, cfg):
             or not re.fullmatch(r'[0-9a-f]{64}', str(b.get('sha256', ''))) \
             or not isinstance(b.get('size'), int) or not 0 < b['size'] <= MAX_BUNDLE:
         raise UpdateError('manifest bundle entry is invalid')
-    if b['path'] != f'bundles/noctraos-{serial}.tar.gz':
+    if b['path'] != f'{flavour_prefix(cfg["flavour"])}bundles/noctraos-{serial}.tar.gz':
         raise UpdateError('manifest bundle does not belong to its serial')
     r = m.get('rollout', {})
     pct = r.get('percent') if isinstance(r, dict) else None
@@ -250,7 +281,7 @@ def fetch_manifests(cfg):
     for base in cfg['mirrors']:
         base = base.rstrip('/')
         try:
-            url = f'{base}/{cfg["channel"]}/manifest.json'
+            url = f'{base}/{flavour_prefix(cfg["flavour"])}{cfg["channel"]}/manifest.json'
             manifest = last = None
             for attempt in (1, 2):   # a publish writes manifest and signature one after the other
                 manifest = http_get(url, MAX_MANIFEST, missing=MANIFEST_MISSING)
@@ -446,11 +477,12 @@ def run_migrations(scope, logfile, user=None, home=None):
     os.makedirs(done_dir, exist_ok=True)
     os.makedirs(failed_dir, exist_ok=True)
     failures = []
+    flavour = load_flavour()   # a migration that only applies to one flavour checks NOCTRAOS_FLAVOUR
     for name in pending_migrations(scope, snap, done_dir):
         say(f'  migration ({scope}): {name}')
-        env = clean_env({'NOCTRAOS_SNAPSHOT': snap, 'NOCTRAOS_MIGRATION_SCOPE': scope})
+        env = clean_env({'NOCTRAOS_SNAPSHOT': snap, 'NOCTRAOS_MIGRATION_SCOPE': scope, 'NOCTRAOS_FLAVOUR': flavour})
         if scope == 'user':
-            env = dict(os.environ, NOCTRAOS_SNAPSHOT=snap, NOCTRAOS_MIGRATION_SCOPE=scope)
+            env = dict(os.environ, NOCTRAOS_SNAPSHOT=snap, NOCTRAOS_MIGRATION_SCOPE=scope, NOCTRAOS_FLAVOUR=flavour)
             if home:
                 env['HOME'] = home
         elif user:
@@ -737,7 +769,7 @@ def cmd_set_channel(args):
 def cmd_status(args):
     state = load_state()
     cfg = load_config()
-    out = {'channel': cfg['channel'], 'mirrors': cfg['mirrors'], 'serial': state['serial'],
+    out = {'channel': cfg['channel'], 'flavour': cfg['flavour'], 'mirrors': cfg['mirrors'], 'serial': state['serial'],
            'version': state['version'], 'applied': state['applied'],
            'can_rollback': os.path.isdir(snapshot_dir() + '.prev'), 'held': state['held'],
            'failed_migrations': failed_migrations('system'), 'signing_key': os.path.isfile(signers_path())}

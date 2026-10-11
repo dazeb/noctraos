@@ -24,6 +24,11 @@ if [ -n "${NOC_TEST_HOOKS:-}" ]; then      # stand-ins for tests only; root neve
   [ -n "${NOC_OWNERSHIP_NO_LOOKUP:-}" ] && LOOKUP=0
 fi
 
+# Only zorin images were built with the flattened owners, and the list is Zorin's own.
+if [ "${NOCTRAOS_FLAVOUR:-zorin}" != zorin ]; then
+  echo "NOT APPLIED on the ${NOCTRAOS_FLAVOUR} flavour: the ownership list is for Zorin images"
+  exit 0
+fi
 [ -f "$MANIFEST" ] || { echo "noctraos: no ownership list in this snapshot, nothing to do"; exit 0; }
 
 # Evidence first: a NoctraOS system, and at least one canary that is still flattened.

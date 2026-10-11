@@ -85,11 +85,12 @@ class Sandbox(unittest.TestCase):
         self.git("commit", "-q", "-m", "c", "--allow-empty")
 
     def publish(self, channel="stable", rollout=100, mirror=None, key=None, expires_days=30, notes="Test update.",
-                relogin=False, serial=None, extra=()):
+                relogin=False, serial=None, extra=(), flavour=None):
         mirror = mirror or self.mirror
         self.serial = serial or self.serial + 1
         menv = {**os.environ, "NOC_UPDATE_REPO": str(self.repo)}
-        r = sh(sys.executable, MAKE, "bundle", "--ref", "HEAD", "--serial", self.serial, "--out", mirror, env=menv)
+        r = sh(sys.executable, MAKE, "bundle", "--ref", "HEAD", "--serial", self.serial, "--out", mirror,
+               *(("--flavour", flavour) if flavour else ()), env=menv)
         self.assertEqual(r.returncode, 0, r.stderr)
         args = [sys.executable, MAKE, "manifest", "--bundle-json", mirror / "bundle.json", "--channel", channel,
                 "--rollout", rollout, "--key", key or self.key, "--out", mirror, "--expires-days", expires_days,
@@ -98,6 +99,18 @@ class Sandbox(unittest.TestCase):
             args.append("--relogin")
         r = sh(*args, env=menv)
         self.assertEqual(r.returncode, 0, r.stderr)
+
+    def serve(self, directory):
+        import functools
+        import http.server
+        import threading
+        handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=str(directory))
+        handler.log_message = lambda *a, **k: None
+        server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        return f"http://127.0.0.1:{server.server_address[1]}"
 
     # -- client side
     def client(self, *a, user="tester"):
@@ -114,6 +127,81 @@ class Sandbox(unittest.TestCase):
 
     def snap(self, name=""):
         return self.machine / "usr/local/share/noctraos/repo" / name
+
+
+class FlavourTests(Sandbox):
+    """docs/flavours.md: each flavour has its own channels, and a machine only ever takes its own flavour's updates."""
+
+    def set_flavour(self, value):
+        (self.machine / "etc/noctraos/flavour").write_text(value + "\n")
+
+    def over_http(self):
+        """A missing manifest reads as "nothing published" (HTTP 404) only over HTTP; a file:// mirror reads as unreachable."""
+        self.write_config(mirrors=[self.serve(self.mirror)])
+
+    def test_a_kubuntu_machine_takes_its_update_from_its_own_folder(self):
+        self.set_flavour("kubuntu")
+        self.commit({"migrations/system/0002_flavour.sh": '#!/bin/sh\necho "$NOCTRAOS_FLAVOUR" > "$NOCTRAOS_SNAPSHOT/../flavour-seen"\n'})
+        self.publish(flavour="kubuntu")
+        self.assertTrue((self.mirror / "kubuntu/bundles/noctraos-1.tar.gz").is_file())
+        self.assertTrue((self.mirror / "kubuntu/stable/manifest.json").is_file())
+        self.assertFalse((self.mirror / "stable").exists(), "a kubuntu publish must not touch zorin's channel")
+        self.assertEqual(json.loads((self.mirror / "kubuntu/stable/manifest.json").read_text())["flavour"], "kubuntu")
+        self.assertEqual(self.check()["status"], "available")
+        r = self.client("apply")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertEqual(self.state()["serial"], 1)
+        self.assertEqual((self.machine / "usr/local/share/noctraos/flavour-seen").read_text().strip(), "kubuntu")
+        status = json.loads(self.client("status", "--json").stdout)
+        self.assertEqual(status["flavour"], "kubuntu")
+
+    def test_a_kubuntu_machine_never_sees_a_zorin_update(self):
+        self.set_flavour("kubuntu")
+        self.over_http()
+        self.publish()                      # zorin, at the top level
+        c = self.check()
+        self.assertEqual(c["status"], "current")
+        self.assertEqual(c["installed"]["serial"], 0)
+        self.assertEqual(self.client("apply").returncode, 0)
+        self.assertFalse(self.snap("VERSION").exists())
+
+    def test_a_machine_without_the_file_is_zorin_and_ignores_kubuntu(self):
+        self.over_http()
+        self.publish(flavour="kubuntu")
+        self.assertEqual(self.check()["status"], "current")
+        self.publish()
+        self.assertEqual(self.check()["status"], "available")
+        self.assertEqual(json.loads((self.mirror / "stable/manifest.json").read_text())["flavour"], "zorin")
+
+    def test_a_manifest_served_from_the_wrong_folder_is_refused(self):
+        self.publish()                      # a validly signed zorin manifest and bundle
+        (self.mirror / "kubuntu").mkdir()
+        shutil.copytree(self.mirror / "stable", self.mirror / "kubuntu/stable")
+        self.set_flavour("kubuntu")
+        c = self.check()
+        self.assertEqual(c["status"], "unverified")
+        self.assertIn("zorin flavour, not kubuntu", c["detail"])
+
+    def test_an_old_manifest_without_a_flavour_counts_as_zorin(self):
+        self.publish()
+        m = self.mirror / "stable/manifest.json"
+        data = json.loads(m.read_text())
+        del data["flavour"]
+        m.write_text(json.dumps(data))
+        (self.mirror / "stable/manifest.json.sig").unlink()
+        sh("ssh-keygen", "-q", "-Y", "sign", "-f", self.key, "-n", "noctraos-update", m)
+        self.assertEqual(self.check()["status"], "available")
+        self.set_flavour("kubuntu")
+        (self.mirror / "kubuntu").mkdir()
+        shutil.copytree(self.mirror / "stable", self.mirror / "kubuntu/stable")
+        self.assertEqual(self.check()["status"], "unverified")
+
+    def test_an_unknown_flavour_is_an_error_not_a_guess(self):
+        self.set_flavour("fedora")
+        self.publish()
+        r = self.client("check", "--json")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn('unknown flavour "fedora"', r.stdout + r.stderr)
 
 
 class ApplyTests(Sandbox):
@@ -405,18 +493,6 @@ class MirrorTests(Sandbox):
 
 class HttpTests(Sandbox):
     """The real HTTP path, against a throwaway server on 127.0.0.1 (the only plain-http host test mode allows)."""
-
-    def serve(self, directory):
-        import functools
-        import http.server
-        import threading
-        handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=str(directory))
-        handler.log_message = lambda *a, **k: None
-        server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
-        threading.Thread(target=server.serve_forever, daemon=True).start()
-        self.addCleanup(server.server_close)
-        self.addCleanup(server.shutdown)
-        return f"http://127.0.0.1:{server.server_address[1]}"
 
     def test_an_empty_channel_is_current_not_offline(self):
         empty = self.tmp / "empty"

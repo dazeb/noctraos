@@ -82,9 +82,13 @@ check to enforce the header is planned, not written yet.
 Desktop detection: `desktop_is_gnome()` in `install/lib.sh` is a guard, not a selector. The flavour is
 selected from the flavour file (below), never from `XDG_CURRENT_DESKTOP`, which is unset over SSH.
 
-Flavour file (planned): the ISO writes `/etc/noctraos/flavour` containing `zorin` or `kubuntu`.
-`install.sh` reads that file, or `NOCTRAOS_FLAVOUR` when it is set. A machine with no file was installed
-before flavours existed, so it is `zorin`.
+Flavour file: `/etc/noctraos/flavour` contains `zorin` or `kubuntu`. The ISO will write it (not yet: neither ISO
+script does); module 07 writes it once when `install.sh` was given `NOCTRAOS_FLAVOUR` and the file is missing. A machine
+with no file was installed before flavours existed, so it is `zorin`, and nothing is written for that default.
+`noctraos_flavour` in `install/lib.sh` resolves it (file, else `NOCTRAOS_FLAVOUR`, else `zorin`) and refuses a variable that
+contradicts the file or an unknown value; `install.sh` exports the result as `NOCTRAOS_FLAVOUR`. `bin/noc-selfupdate` reads
+the same file to pick the machine's update channel (`docs/updates.md`) and passes `NOCTRAOS_FLAVOUR` to migrations; a
+migration for one flavour prints `NOT APPLIED on the <flavour> flavour` on the others and exits 0.
 
 ## Current state of the code (2026-10-10)
 

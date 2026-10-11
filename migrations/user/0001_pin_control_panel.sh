@@ -7,6 +7,13 @@ ID=noctraos-control.desktop
 # Where module 06/07 install launchers (tests point this at a temp directory).
 APPS="${NOCTRAOS_APPLICATIONS_DIR:-/usr/local/share/applications}"
 
+# The dock is the GNOME desktop's (zorin flavour). Elsewhere there is nothing to pin, and failing would make the updater retry
+# this at every update and login, so it reports that and counts as done.
+if [ "${NOCTRAOS_FLAVOUR:-zorin}" != zorin ]; then
+  echo "NOT APPLIED on the ${NOCTRAOS_FLAVOUR} flavour: the Control Panel dock pin is for the GNOME dock"
+  exit 0
+fi
+
 current="$(gsettings get org.gnome.shell favorite-apps 2>/dev/null)" || { echo "no desktop settings yet; retrying later" >&2; exit 1; }
 case "$current" in *"'$ID'"*) exit 0 ;; esac
 
