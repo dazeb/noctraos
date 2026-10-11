@@ -9,5 +9,8 @@ Rules:
 - Never add a flavour `if` inside `iso/build-noctraos-iso.sh`. Shared helpers only.
 - Changes here need the code owner's review (`.github/CODEOWNERS`).
 
-Status: empty. The Zorin remaster is still `iso/build-noctraos-iso.sh`, and it moves here in a
-separate change. The Kubuntu build has not started.
+Status: `kubuntu.sh` is the Kubuntu 26.04.1 remaster (release ISO only; the base uses Calamares, so there is no
+unattended build, and it prints `NOT APPLIED` for one). It is a script you run (`sudo iso/flavours/kubuntu.sh <base.iso> [out.iso]`,
+or `NOCTRAOS_FLAVOUR=kubuntu iso/build-local.sh <dir>`) and, when sourced, only defines functions (`tests/test_kubuntu_iso.py`).
+The first-boot runner text is shared (`iso/firstboot-runner.sh`; a test pins it to the Zorin script's copy). The Zorin remaster is
+still `iso/build-noctraos-iso.sh` and moves here in a separate change.

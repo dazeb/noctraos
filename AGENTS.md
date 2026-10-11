@@ -178,6 +178,8 @@ iso/bake-shell.sh           sourced by the build script: copies the Shell extens
 iso/boot-theme.sh           sourced by the build script: themes the extracted ISO
                             tree, the live initrd and the squashfs
 iso/initrd-theme.py         swaps the Plymouth theme inside casper/initrd.zstd
+iso/flavours/kubuntu.sh     Kubuntu 26.04.1 remaster (flavour kubuntu; release ISO only, Calamares, GRUB-only boot; writes /etc/noctraos/flavour);
+                            `NOCTRAOS_FLAVOUR=kubuntu iso/build-local.sh <dir>`; iso/firstboot-runner.sh is the first-boot text it shares
 iso/build-noctraos-iso.sh   ISO remaster pipeline (runs on the Proxmox node);
                             NOCTRAOS_UNATTENDED=1 + NOCTRAOS_USER/PASSWORD/…
                             bake an unattended-install seed and boot entries

@@ -3,10 +3,12 @@
 # container, with the work directory on a big drive. About 2 minutes per ISO on NVMe.
 #
 #   iso/build-local.sh <dir> [release|appliance|both]       (default: release)
+#   NOCTRAOS_FLAVOUR=kubuntu iso/build-local.sh <dir>       the kubuntu flavour (default zorin); release only
 #
 # <dir> layout (created as needed):
 #   in/Zorin-OS-18.1-Core-64-bit.iso   the base ISO. Put it there once (the Proxmox node has a copy
-#                                      in /var/lib/vz/template/iso/).
+#                                      in /var/lib/vz/template/iso/). Flavour kubuntu: in/kubuntu-26.04.1-desktop-amd64.iso
+#                                      (cdimage.ubuntu.com/kubuntu/releases/26.04.1/release/, check it against SHA256SUMS).
 #   out/                               results: noctraos-<VERSION>-amd64.iso (+ .sha256) and, for
 #                                      `appliance`, noctraos-<VERSION>-appliance-build.iso
 #   work/                              scratch, removed when the build ends (ext4/xfs/btrfs/zfs drives)
@@ -29,9 +31,18 @@ set -Eeuo pipefail
 DIR="${1:?usage: build-local.sh <dir> [release|appliance|both]}"
 WHAT="${2:-release}"
 DIR="$(cd "$DIR" 2>/dev/null && pwd || { mkdir -p "$DIR" && cd "$DIR" && pwd; })"
-BASE="Zorin-OS-18.1-Core-64-bit.iso"
+FLAVOUR="${NOCTRAOS_FLAVOUR:-zorin}"
+case "$FLAVOUR" in
+  zorin)   BASE="Zorin-OS-18.1-Core-64-bit.iso"; BUILDER=iso/build-noctraos-iso.sh; NAME_PART="" ;;
+  kubuntu) BASE="kubuntu-26.04.1-desktop-amd64.iso"; BUILDER=iso/flavours/kubuntu.sh; NAME_PART="-kubuntu" ;;
+  *) echo "unknown flavour: $FLAVOUR (zorin or kubuntu)" >&2; exit 1 ;;
+esac
 IMAGE="${BUILDER_IMAGE:-noctraos-iso-builder}"
 case "$WHAT" in release|appliance|both) ;; *) echo "unknown target: $WHAT" >&2; exit 1 ;; esac
+if [ "$FLAVOUR" = kubuntu ] && [ "$WHAT" != release ]; then
+  echo "NOT APPLIED: the $WHAT build is not available on the kubuntu flavour (its installer is Calamares; no unattended seed yet)" >&2
+  exit 2
+fi
 
 mkdir -p "$DIR/in" "$DIR/out" "$DIR/ctx"
 [ -f "$DIR/in/$BASE" ] || { echo "missing $DIR/in/$BASE (copy the base ISO there first)" >&2; exit 1; }
@@ -78,11 +89,11 @@ git clone -q --depth 1 --branch "${NOCTRAOS_BRANCH:-main}" "${REPO_URL:-https://
 git -C "$WORK/src" log -1 --format="building ${NOCTRAOS_BRANCH:-main} at %h %s"
 VERSION="$(tr -d '[:space:]' < "$WORK/src/VERSION")"
 export WORK_BASE="$WORK/tmp"; mkdir -p "$WORK_BASE"
-BASE=/host/in/Zorin-OS-18.1-Core-64-bit.iso
-BUILD="$WORK/src/iso/build-noctraos-iso.sh"
+BASE="/host/in/$BASE_NAME"
+BUILD="$WORK/src/$BUILDER"
 
 if [ "$WHAT" = release ] || [ "$WHAT" = both ]; then
-  OUT=/host/out/noctraos-$VERSION-amd64.iso
+  OUT="/host/out/noctraos-$VERSION${NAME_PART}-amd64.iso"
   echo "=== release ISO (interactive) $(date +%H:%M)"
   nice -n 10 bash "$BUILD" "$BASE" "$OUT"
   rm -rf "$WORK_BASE"/noctraos-iso-build.*
@@ -109,6 +120,6 @@ echo "=== ALL DONE $(date +%H:%M)"
 INNER
 
 PRIV=(); [ "$DIRECT" = 1 ] || PRIV=(--privileged)
-docker run --rm "${PRIV[@]}" -e WHAT="$WHAT" -e DIRECT="$DIRECT" ${REPO_URL:+-e REPO_URL="$REPO_URL"} ${NOCTRAOS_BRANCH:+-e NOCTRAOS_BRANCH="$NOCTRAOS_BRANCH"} -v "$DIR:/host" "$IMAGE" \
+docker run --rm "${PRIV[@]}" -e WHAT="$WHAT" -e DIRECT="$DIRECT" -e BASE_NAME="$BASE" -e BUILDER="$BUILDER" -e NAME_PART="$NAME_PART" ${REPO_URL:+-e REPO_URL="$REPO_URL"} ${NOCTRAOS_BRANCH:+-e NOCTRAOS_BRANCH="$NOCTRAOS_BRANCH"} -v "$DIR:/host" "$IMAGE" \
   bash /host/run-build.sh
 ls -lh "$DIR/out"
