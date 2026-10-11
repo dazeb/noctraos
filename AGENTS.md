@@ -43,7 +43,7 @@ proxmox-install.sh          one-command Proxmox VE installer: downloads the rele
 boot.sh                     remote fetcher: clones repo to ~/.local/share/noctraos,
                             runs install.sh; env: NOCTRAOS_REPO_URL, NOCTRAOS_BRANCH, NOCTRAOS_HOME
 install.sh                  orchestrator: logging, TARGET_USER resolution, flags
-                            (--skip-gui, --only <module>), runs modules 00-11 (plus 01b). Local AI is NOT in the first run: optional/ runs later via `noc llm setup`
+                            (--skip-gui, --only <module>), runs modules 00-10 (plus 01b). Local AI is NOT in the first run: optional/ runs later via `noc llm setup`
 install/
   lib.sh                    shared helpers: log/warn/die, as_user(), apt_install(),
                             desktop_file_exists(). Modules MUST source it.
@@ -74,12 +74,11 @@ install/
                             schemas, help page, index timer, welcome/branding autostart
   10_boot_theme.sh          Plymouth splash + GRUB theme for non-ISO installs
                             (update-alternatives, update-initramfs, update-grub)
-  11_hermes.sh              Hermes Desktop preinstalled (runtime + Electron app build),
-                            free Nous tier primary, local Ollama fallback; runs LAST (25+ min, no sudo)
-                            (module order in install.sh: 01b 00 01 02 04 04_workstation 04c 04d 05 06 08 09 10 07 11 — the first run never downloads a model)
+                            (module order in install.sh: 01b 00 01 02 04 04_workstation 04c 04d 05 06 08 09 10 07 — the first run never downloads a model
+                            and never builds Hermes Desktop: that is `noc hermes setup`, see "Hermes Desktop is optional" below)
 bin/
   noc                       CLI: update [--json] [--only ..] | updates | doctor [--json] | status | models [list [--json]|default|presets|pull|rm] | llm [setup|fit|start|stop|autostart [on|off]]
-                            | skip [list [--json]|add|rm] | bg [list|next|set] | gpu | channel [stable|nightly|rollback] | apps [update] | repair <appmanager|vm-guest|hermes>
+                            | skip [list [--json]|add|rm] | bg [list|next|set] | gpu | channel [stable|nightly|rollback] | apps [update] | repair <appmanager|vm-guest|hermes> | hermes [setup]
                             | privacy [status [--json]|remote on|off|clipboard clear|hermes local|cloud]. Sourceable (tests call its functions); NOC_OLLAMA_URL overrides the Ollama URL
   noc-gpu                   GPU detect [--json] | install | status [--json] (NVIDIA driver+CUDA, AMD ROCm); VERSION must match noc
   noctraos-control          wrapper that execs the system-Python Control Panel (control/)
@@ -92,7 +91,7 @@ bin/
                             global agents folder, and links it for Hermes (~/.hermes/skills) and Claude Code (~/.claude/skills) when they are there; Codex
                             reads ~/.agents/skills itself. `noc agent-skills install|status|remove|on`. Content only: no agent setting or sign-in is touched;
                             an edited copy, a folder it did not install and ~/.config/noctraos/no-agent-skills are respected; a same-named Hermes skill is
-                            reported (Hermes hides both). Module 07 runs it on every install/update, module 11 again once Hermes exists,
+                            reported (Hermes hides both). Module 07 runs it on every install/update, `noctraos-hermes install` again once Hermes exists,
                             migrations/user/0002 for other accounts. Keep the skill in step with the code (tests/test_agent_skills.py checks its frontmatter)
   noc-upstream              tracks apps that come from their publisher's releases (Hermes, Ollama, AppManager, the coding agents):
                             installed vs newest release, version history, user-level updates; `noc apps`, the panel's Apps page
@@ -359,7 +358,7 @@ bash -n boot.sh install.sh install/*.sh install/optional/*.sh bin/noc bin/noc-gp
 docker run --rm -v "$PWD:/mnt" koalaman/shellcheck:stable --severity=warning \
   boot.sh install.sh install/*.sh install/optional/*.sh bin/noc bin/noc-gpu bin/noc-privileged bin/noctraos-control bin/noctraos-agent \
   bin/noctraos-copyq bin/noctraos-hermes configs/nautilus-scripts/*     # same list as CI
-python3 -m unittest discover -s tests                # 661 tests: theme, GPU detection, noc JSON modes, root helper, Control Panel, agent skill
+python3 -m unittest discover -s tests                # 682 tests: theme, GPU detection, noc JSON modes, root helper, Control Panel, agent skill
 python3 scripts/render-theme.py --check              # committed theme outputs match palette.json
 
 # wallpaper iteration (venv at ~/workspace/scratch/zorin-img-venv: pillow+numpy)
@@ -613,7 +612,8 @@ tail -f /root/noctraos-build.log
   and does not do, and `docs/objectives.md` principle 6 holds it. Keep both current when a default changes; (5) install only what NoctraOS
   itself needs (user's rule, 2026-10-09: "if languages does not need to be in it should not be in", no heavy stuff like local models): Node is
   the only language (the agent launchers' npm and the Hermes desktop build use it); no mise Python or Go, no Ruby, clang or Python build libraries,
-  no Go VS Code extension; people add languages with `mise use -g`. The apps themselves are a deliberate, specific selection: keep them.
+  no Go VS Code extension; people add languages with `mise use -g`; Hermes Desktop (about 5 GB) is an option, see below. The apps themselves
+  are a deliberate, specific selection: keep them.
   New installs only: existing machines keep whatever they have, nothing is removed behind anyone's back. `noc doctor` shows Python and Go as
   `info` when absent, never `fail`.
 - **Ollama starts with the computer only if the person turns that on.** Ollama's own installer enables `ollama.service` at boot (it also
@@ -664,19 +664,32 @@ tail -f /root/noctraos-build.log
   on the GPU (29/29 layers). Not covered: ROCm (Polaris has none) and NVIDIA. Do not start it
   while the NAS is under memory pressure (it takes 8 GiB); stop it when done. The dev workstation's
   RTX 3080 Ti drives the desktop, so it cannot be passed through without ending the session.
+- **Hermes Desktop is optional: nothing installs it on its own** (user's decision, 2026-10-11: "opt in for now"). It adds about 5 GiB and a
+  25 to 40 minute Electron build, so the first run no longer includes it (module 11 is gone; `install.sh` only says how to get it). It is
+  set up by `noc hermes setup` (the same step as `noc repair hermes`, which `noc doctor` offers for a half-finished one), by the Control
+  Panel's Apps page ("Set up Hermes…": a summary of the size, the time and the cloud free tier, and a yes first), or by opening Hermes in the
+  Start panel, which asks `[y/N]` in its terminal window before downloading anything. All three end in `noctraos-hermes install`, which
+  holds a lock (`$XDG_RUNTIME_DIR/noctraos-hermes-<uid>.lock`) so two windows never build at once, refuses under 7 GB free, and links the
+  NoctraOS agent skill (`noc-agent-skills install`) once Hermes exists. Until then `noctraos-hermes mode` prints `none`, `local` and `cloud`
+  refuse, `noc status --json` has `hermes.installed: false, mode: null`, `noc doctor` shows `info` (never `warn`) when neither the runtime nor
+  the app exist and the Overview/Privacy/checklist point at the Apps page (`waiting`, no skip button); the Welcome app shows only "Set up
+  Hermes…" (it opens that page). Machines that already have Hermes keep it; `noc update` and `noc apps update` only ever update an installed
+  Hermes, never install one. Untested on a real desktop so far: the Set up button's real run (the smoke test drives it with a stand-in), the
+  terminal `[y/N]` flow from the Start panel, and a full first-boot install now that the 25 to 40 minute step is gone (re-measure
+  the timing in `docs/setup.md` and the release runbook).
 - **Hermes' free tier is a cloud service: prompts leave the machine.** Everything the welcome app
   and README say about "local AI" is about the Ollama model; Hermes resolves to the Nous cloud
   unless it is local-only. Never describe Hermes as local without that qualification. The welcome
   app discloses it and offers `noctraos-hermes local` (Ollama primary, free tier off, persistent;
   undo with `noctraos-hermes cloud`, which refuses to touch a provider the user set). `noctraos-hermes ready` (runtime and app
-  built) gates the Hermes buttons so they cannot start a second installer during provisioning.
+  built) decides which Welcome buttons show: "Set up Hermes…" until it is, then Meet Hermes / local only.
 - **Hermes free tier is gated and pre-GA.** The Nous free tier only exists when
   `HERMES_GUEST_ONBOARDING=1` (or `--guest-onboarding`); `noctraos-hermes` exports it. Never
   set `model.provider` for the user: an explicit provider beats the free tier in
   `resolve_provider`, and a bare `fallback_providers` entry does not rescue a machine that has
   no identity and no network (no_provider_configured fires first), which is why the wrapper makes
   Ollama the primary only in that offline-first-launch case. Upstream disabled Linux desktop
-  release builds, so module 11 builds the app locally with `hermes desktop --build-only`; write
+  release builds, so `noctraos-hermes install` builds the app locally with `hermes desktop --build-only`; write
   config with `hermes config set`, never by editing config.yaml. Verified on VM 114
   (2026-10-04): free tier resolves to `provider=nous` / `nous/welcome` with no signup.
   `model.provider: "auto"` is Hermes' stock default and is NOT an explicit choice
@@ -815,7 +828,7 @@ What the first 0.4.0 run taught us, all fixed:
 - A background job started from a tool call is killed at about 10 minutes: run anything longer (a rehearsal, an offload) as a
   `systemd-run --user` unit and watch its log. Never `pkill -f <pattern>` when your own command line contains the pattern.
 
-- On `main`: provisioner modules 00 to 11 (Hermes Desktop last), the app policy
+- On `main`: provisioner modules 00 to 10 (Hermes Desktop is optional since 2026-10-11), the app policy
   (`04c_app_policy.sh`: Flatpak/AppImage first, unwanted apps removed, launchers hidden), the
   NoctraOS welcome (replaces Zorin's tour), the Control Panel and its root helper (see the Control Panel
   section above), the appearance panel, the release/unattended ISO split, `iso/build-local.sh`,

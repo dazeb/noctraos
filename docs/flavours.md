@@ -130,7 +130,7 @@ Taken from the repo and the VM runs. Not every item has been verified on a VM.
 | Component | zorin | kubuntu |
 |---|---|---|
 | Core provisioner: 00, 01, 02, 04, 04b, 04c, 04d, 07, 10 | shipped | ran on a 26.04.1 VM with return code 0; 01, 04b, 04c and 07 still contain GNOME-coupled lines |
-| 03 Ollama, 11 Hermes | shipped | 03 and 11 not run |
+| Optional steps: local AI (`noc llm setup`), Hermes Desktop (`noc hermes setup`) | shipped | not run |
 | 05 mouse ergonomics | shipped (Nautilus scripts) | ran with return code 0, but it writes Nautilus scripts Dolphin never reads. It needs the `NOT APPLIED` guard |
 | 06 desktop theme, 08 shell theme | shipped | report `NOT APPLIED`; the Plasma theme is not started |
 | 09 Super+Space and Start | shipped (GNOME Shell extensions) | report `NOT APPLIED`; plan is a KRunner runner and Kickoff |

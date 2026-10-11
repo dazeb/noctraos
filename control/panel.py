@@ -132,7 +132,7 @@ def _gpu_card(gpu):
 def _hermes_card(hermes):
     mode = hermes.get('mode')
     if not hermes.get('installed') and mode is None:
-        return Card('hermes', 'Hermes', 'Not installed', 'Hermes Desktop is set up on first boot.', 'info', 'privacy')
+        return Card('hermes', 'Hermes', 'Not set up', 'Optional. Set it up from Apps when you want this AI agent.', 'info', 'apps')
     if mode == 'local':
         return Card('hermes', 'Hermes', 'Local only', 'Prompts stay on this computer.', 'ok', 'privacy')
     if mode == 'other':
@@ -224,7 +224,7 @@ TERMINAL = {
     'gpu': ['noc gpu status', 'noc gpu install'],
     'disk': ['noc disk status', 'sudo noc disk grow'],
     'updates': ['noc update', 'noc update --only mise,models', 'noc channel', 'noc channel nightly', 'noc channel rollback'],
-    'apps': ['noc apps', 'noc apps update', 'noc apps update <app>'],
+    'apps': ['noc apps', 'noc apps update', 'noc apps update <app>', 'noc hermes setup'],
     'models': ['noc llm setup', 'noc llm fit', 'noc llm start', 'noc llm stop', 'noc llm autostart on', 'noc models list', 'noc models pull <model>', 'noc models default <model>', 'noc models rm <model>'],
     'privacy': ['noc privacy status', 'noc privacy remote off', 'noc privacy clipboard clear', 'noc privacy hermes local',
                 'noc privacy hermes cloud', 'noctraos-search --settings', 'noctraos-weather --setup'],
@@ -797,9 +797,21 @@ def _ago(stamp):
     return fmt_age(max(0, (datetime.datetime.now(datetime.timezone.utc) - then).total_seconds()))
 
 
+# Hermes Desktop is the one app the Apps page can also set up: it is optional, so it is not part of the install
+# (`noc hermes setup`). Every other app comes with the system, or installs itself the first time you open it.
+HERMES_SETUP = [NOC, 'hermes', 'setup']
+HERMES_SETUP_ABOUT = ('Hermes is an AI agent with its own app. Setting it up downloads Hermes and builds its desktop app: about 5 GB '
+                      'of disk and 25 to 40 minutes, and it needs the internet.\n\n'
+                      "Its free tier is Nous Research's cloud service, so what you type to Hermes leaves this computer. "
+                      'Privacy switches it to local only afterwards.\n\nNothing changes until you press Set up.')
+
+
 def app_action(row):
-    """How to update one app: (argv, confirmation text or ''), or None when there is nothing to do.
+    """How to update one app: (argv, confirmation text or ''), or None when there is nothing to do. The one exception is
+    Hermes before it is set up: its action is the setup, always with the confirmation.
     User-level apps (Hermes, the coding agents) update as the person; root ones go through the privileged helper."""
+    if row.get('id') == 'hermes' and row.get('status') == 'absent':
+        return HERMES_SETUP, HERMES_SETUP_ABOUT
     if row.get('status') != 'outdated':
         return None
     if row.get('updater') == 'user':
@@ -821,6 +833,8 @@ def apps_rows(data):
             text, level = f'Update available: {inst} → {late}', 'warn'
         elif status == 'current':
             text, level = 'Up to date', 'ok'
+        elif status == 'absent' and r.get('id') == 'hermes':
+            text, level = 'Not set up. Optional: it adds about 5 GB and takes 25 to 40 minutes to build.', 'info'
         elif status == 'absent':
             text, level = ('Not installed yet. It installs the first time you open it.' if r.get('agent')
                            else 'Not installed.'), 'info'
@@ -839,7 +853,8 @@ def apps_rows(data):
         rows.append({'id': r['id'], 'title': r['title'], 'critical': bool(r.get('critical')), 'agent': bool(r.get('agent')),
                      'about': r.get('about', ''), 'status': text, 'level': level, 'detail': ', '.join(notes),
                      'url': r.get('url', ''), 'argv': action[0] if action else None,
-                     'confirm': action[1] if action else '', 'updater': r.get('updater')})
+                     'confirm': action[1] if action else '', 'updater': r.get('updater'),
+                     'setup': bool(action) and action[0] == HERMES_SETUP})
     rows.sort(key=lambda x: (not x['critical'], x['agent'], x['title'].lower()))
     return rows
 
@@ -1046,8 +1061,9 @@ WEATHER_SETUP = ['/usr/local/bin/noctraos-weather', '--setup']
 def hermes_privacy(mode):
     """What the Privacy page says about Hermes for each mode. The free tier is never called local."""
     if mode is None:
-        return {'headline': 'Hermes is not installed yet', 'level': 'info', 'can_switch': False,
-                'text': 'Hermes Desktop is set up on first boot. Come back when it is ready.'}
+        return {'headline': 'Hermes is not set up', 'level': 'info', 'can_switch': False,
+                'text': 'Hermes Desktop is optional and not installed. Set it up from the Apps page when you want it; '
+                        'this page then shows where it sends what you type.'}
     if mode == 'other':
         return {'headline': 'Hermes uses your own provider', 'level': 'info', 'can_switch': False,
                 'text': 'You set a provider in Hermes itself, so this panel leaves it alone.'}
@@ -1231,7 +1247,8 @@ def setup_steps(status, extras=None):
 
     hermes = status.get('hermes') or {}
     if not hermes.get('installed'):
-        steps.append(Step('hermes', 'Meet Hermes', 'Hermes Desktop is still being set up on first boot.', 'waiting', 'privacy', button='Open'))
+        # An option, like local AI: nothing nags and there is no "skip". The Apps page has the consent dialog.
+        steps.append(Step('hermes', 'Meet Hermes', 'Optional. Set up Hermes Desktop from Apps whenever you want this AI agent.', 'waiting', 'apps', button='Open'))
     elif extras.get('onboarded'):
         steps.append(Step('hermes', 'Meet Hermes', 'You have met Hermes.', 'done', 'privacy'))
     else:

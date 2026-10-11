@@ -72,7 +72,8 @@ The numbered sections below are the same steps by hand: still the way to recover
 
 ## Where things stand
 
-Done and on `main`: the Hermes Desktop module (`install/11_hermes.sh`, runs last), the onboarding
+Done and on `main`: the Hermes Desktop installer and launcher (`bin/noctraos-hermes`; optional since 2026-10-11, so the
+first run no longer builds it and the images no longer contain it), the onboarding
 prompt, the release/unattended split in the ISO build (a release ISO has no seed and no
 unattended boot entry), the `VERSION` file (0.3.0) and ISO labelling, `iso/vm-sysprep.sh`.
 
@@ -120,18 +121,18 @@ iso/local-vm.sh shot /tmp/s.png                 # look at it; the installer slid
 ```
 
 The installer takes about 5 minutes and reboots into the installed system, which autologins and
-starts provisioning (25 to 40 minutes: Ollama model, Flatpaks, Hermes Electron build). Things to
+starts provisioning (Flatpaks and desktop apps; there is no Ollama model and no Hermes build any more, so re-measure the time). Things to
 look at with `shot`/`click`, none verified yet:
 
 - The welcome opens during provisioning, shows the "Setting up your AI workstation in the
   background" status line, and the Windows+Space screen can be tried at once (the ISO bakes the
-  Shell extensions in; if it says "after setup and a new sign-in", the bake did not work). Both Hermes buttons stay disabled
-  until module 11 finishes. Skipping/finishing must NOT write `~/.config/noctraos/welcome-done`
+  Shell extensions in; if it says "after setup and a new sign-in", the bake did not work). The Hermes section offers only
+  "Set up Hermes…" (Hermes is not installed). Skipping/finishing must NOT write `~/.config/noctraos/welcome-done`
   when the shortcut could not be tried.
 - The first session already has Super+Space and the Start panel (`gnome-extensions info
   noctraos-search@noctraos.local` says ACTIVE before provisioning ends), with no sign-out needed.
-- "Meet Hermes (free, uses the Nous cloud)" starts Hermes on the free tier; "Hermes, local only"
-  starts it on the local model (this one was verified).
+- Once Hermes has been set up (Apps page or `noc hermes setup`, about 5 GB): "Meet Hermes (free, uses the Nous cloud)" starts
+  Hermes on the free tier; "Hermes, local only" starts it on the local model (this one was verified).
 - Provisioning finished: `iso/local-vm.sh ssh 'test -f ~/.local/share/noctraos/.provisioned && noc doctor'`.
 
 The interactive release ISO cannot be installed unattended. Boot it to the installer screen to

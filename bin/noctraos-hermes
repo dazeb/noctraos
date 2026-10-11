@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 # noctraos-hermes — Hermes Desktop launcher and installer.
-#   noctraos-hermes            launch the app (installs it first if missing)
-#   noctraos-hermes install    idempotent: runtime + desktop app + model defaults (a fresh install is the newest release)
+#   noctraos-hermes            launch the app (offers to set it up first when it is not installed: Hermes is optional)
+#   noctraos-hermes install    idempotent: runtime + desktop app + model defaults (a fresh install is the newest release),
+#                              then links the NoctraOS agent skill; one install at a time, about 5 GB and 25 to 40 minutes
 #   noctraos-hermes update     move to the newest published release: the old code is set aside, the release is installed,
 #                              and the old code comes back if anything fails (your ~/.hermes data is never touched)
 #   noctraos-hermes local [--no-launch]   local-only: Ollama is the primary and the Nous free tier stays off,
 #                              so nothing typed to Hermes leaves this computer (persistent)
 #   noctraos-hermes cloud     back to the Nous free tier (undoes `local`; never touches your own provider)
-#   noctraos-hermes mode       print cloud | local | other
+#   noctraos-hermes mode       print cloud | local | other (none while Hermes is not installed)
 #   noctraos-hermes ready      exit 0 when the runtime and the desktop app are both built
 #   noctraos-hermes status     print what is installed / configured
 #
@@ -35,6 +36,9 @@ OLLAMA_MODEL="${NOCTRAOS_MODEL:-$(head -n 1 "${XDG_CONFIG_HOME:-$HOME/.config}/n
 OLLAMA_MODEL="${OLLAMA_MODEL:-qwen2.5-coder:7b}"
 INSTALLER_URL="${NOCTRAOS_HERMES_INSTALLER_URL:-https://hermes-agent.nousresearch.com/install.sh}"
 NOC_UPSTREAM="${NOC_UPSTREAM:-/usr/local/bin/noc-upstream}"
+AGENT_SKILLS="${NOC_AGENT_SKILLS:-/usr/local/bin/noc-agent-skills}"
+# Two installers at once would build into the same directory: the lock lives outside ~/.hermes, which the installer owns.
+INSTALL_LOCK="${XDG_RUNTIME_DIR:-/tmp}/noctraos-hermes-$(id -u).lock"
 NOUS_URL="https://portal.nousresearch.com"
 ONBOARD_FILE="${NOCTRAOS_HERMES_ONBOARDING:-/usr/local/share/noctraos/hermes/onboarding.md}"
 ONBOARD_DONE="$HERMES_HOME/.noctraos-onboarded"
@@ -211,12 +215,33 @@ onboarding_active() {
     && [ -z "${HERMES_EPHEMERAL_SYSTEM_PROMPT:-}" ] && ! config_has agent.system_prompt
 }
 
+# Hermes is optional, so a fresh install checks the disk first: it adds about 5 GB and runs for 25 to 40 minutes,
+# and running out of space half way through the Electron build wastes all of it.
+enough_room_to_install() {
+  local free_kb
+  free_kb="$(df -Pk "$HOME" | awk 'NR==2 {print $4}')"
+  if [ "${free_kb:-0}" -lt "${NOCTRAOS_HERMES_INSTALL_MIN_FREE_KB:-7000000}" ]; then
+    say "ERROR: not enough free disk space to set up Hermes (about 7 GB free is needed). Nothing was changed."
+    return 1
+  fi
+}
+
 cmd_install() {
+  if { exec 9>"$INSTALL_LOCK"; } 2>/dev/null; then
+    flock -n 9 || { say "Hermes is already being set up in another window. Wait for that to finish."; return 75; }
+  fi
+  if ! runtime_ready || ! app_ready; then
+    runtime_ready || enough_room_to_install || return 1
+  fi
   install_runtime || { say "ERROR: runtime install failed"; return 1; }
   build_app || { say "ERROR: desktop build failed"; return 1; }
   seed_ollama_fallback
   seed_vm_electron_flags
   hide_hermes_own_launcher
+  # Hermes exists now: link the NoctraOS skill into it (the skill installer ran before ~/.hermes did). Idempotent, never fatal.
+  if [ -x "$AGENT_SKILLS" ]; then
+    "$AGENT_SKILLS" install || say "WARN: could not link the NoctraOS agent skill for Hermes (noc agent-skills install retries)"
+  fi
 }
 
 # Move an existing install to the newest published release. The runtime directory (code, venv, Electron app) is the only
@@ -268,8 +293,10 @@ cmd_update() {
 }
 
 # Where prompts go: "cloud" (Nous free tier, they leave this computer), "local" (this machine's
-# Ollama only, set by `local`) or "other" (the user's own provider). Read by `noc status --json`.
+# Ollama only, set by `local`), "other" (the user's own provider) or "none" (Hermes is not installed:
+# it is optional). Read by `noc status --json`.
 hermes_mode() {
+  runtime_ready || { echo none; return; }
   explicit_provider || { echo cloud; return; }
   if [ "$(config_get model.base_url)" = "$OLLAMA_API/v1" ]; then echo local; else echo other; fi
 }
@@ -302,6 +329,10 @@ cmd_status() {
 cmd_local() {
   local launch=1
   [ "${1:-}" = "--no-launch" ] && launch=0   # the Control Panel switches the mode without opening the app
+  if ! runtime_ready; then
+    say "ERROR: Hermes is not set up yet — set it up first (Control Panel, Apps page, or: noc hermes setup)"
+    return 1
+  fi
   if ! ollama_ready; then
     say "ERROR: the local model $OLLAMA_MODEL is not ready yet — try again in a few minutes"
     return 1
@@ -318,6 +349,10 @@ cmd_local() {
 # back. Undoes the three keys `local` wrote, and only when they point at this machine's Ollama,
 # so a provider the user configured themselves is never touched.
 cmd_cloud() {
+  if ! runtime_ready; then
+    say "ERROR: Hermes is not set up yet — set it up first (Control Panel, Apps page, or: noc hermes setup)"
+    return 1
+  fi
   if [ "$(hermes_mode)" = other ]; then
     say "ERROR: model.provider is set to your own provider — leaving it alone"
     return 1
@@ -330,13 +365,25 @@ cmd_cloud() {
   say "OK: Hermes is back on the Nous free tier (prompts leave this computer)"
 }
 
+confirm_setup() {
+  local answer
+  say "Hermes Desktop is not set up on this computer yet."
+  say "Setting it up downloads Hermes and builds its desktop app: about 5 GB of disk, 25 to 40 minutes."
+  say "Its free tier is Nous Research's cloud service, so what you type to Hermes leaves this computer."
+  say "(Control Panel > Privacy switches it to local only once it is installed.)"
+  read -r -n 1 -p "[noctraos-hermes] Set it up now? [y/N] " answer
+  echo
+  case "$answer" in y|Y) return 0 ;; *) say "Nothing was installed."; return 1 ;; esac
+}
+
 cmd_launch() {
   if ! runtime_ready || ! app_ready; then
     # Desktop entries have no terminal; first-run install needs one to show progress.
     if [ ! -t 1 ]; then
       exec gnome-terminal --title="Setting up Hermes" -- "$0" launch
     fi
-    say "Hermes Desktop is not installed yet — installing now."
+    # Hermes is optional and heavy: nothing is downloaded until the person says yes here.
+    confirm_setup || exit 0
     cmd_install || { read -r -n 1 -s -p "Press any key to close..."; exit 1; }
   fi
   offline_first_launch_fallback

@@ -64,7 +64,7 @@ class SkillContentTests(unittest.TestCase):
     def test_installed_and_updated_by_the_pipeline(self):
         self.assertIn("bin/noc-agent-skills", (ROOT / "install/07_persistence.sh").read_text())
         self.assertIn("noc-agent-skills install", (ROOT / "install/07_persistence.sh").read_text())
-        self.assertIn("noc-agent-skills install", (ROOT / "install/11_hermes.sh").read_text())
+        self.assertIn('"$AGENT_SKILLS" install', (ROOT / "bin/noctraos-hermes").read_text())   # linked once Hermes is installed
         self.assertIn("'configs'", (ROOT / "scripts/make-update.py").read_text(), "the skill rides in the configs bundle item")
         self.assertTrue(os.access(ROOT / "migrations/user/0002_install_agent_skill.sh", os.X_OK))
 
