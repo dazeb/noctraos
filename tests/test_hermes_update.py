@@ -30,7 +30,8 @@ HERMES_STUB = r'''#!/usr/bin/env bash
 case "$1" in
   --version) [ -f "$HERMES_HOME/hermes-agent/VERSION" ] || exit 1
              echo "Hermes Agent v$(cat "$HERMES_HOME/hermes-agent/VERSION") (2026.9.24) · upstream abc" ;;
-  desktop) mkdir -p "$HERMES_HOME/hermes-agent/apps/desktop/release/linux-unpacked"
+  desktop) [ -z "${LOCK_PROBE:-}" ] || { flock -n "$LOCK_PROBE" true && echo free || echo held; } > "$LOCK_PROBE.result"
+           mkdir -p "$HERMES_HOME/hermes-agent/apps/desktop/release/linux-unpacked"
            printf '#!/bin/sh\n' > "$HERMES_HOME/hermes-agent/apps/desktop/release/linux-unpacked/hermes"
            chmod +x "$HERMES_HOME/hermes-agent/apps/desktop/release/linux-unpacked/hermes" ;;
   *) exit 0 ;;
@@ -208,6 +209,21 @@ class OptionalInstallTests(HermesBox):
         code, out = self.launch_in_a_terminal("y\n")
         self.assertEqual(code, 0, out)
         self.assertEqual(self.installs(), ["--skip-setup --branch v0.21.7"])
+
+    def test_the_setup_lock_is_released_before_hermes_starts(self):
+        probe = self.tmp / "run" / f"noctraos-hermes-{os.getuid()}.lock"        # what the app asks: is the setup lock free?
+        self.env["LOCK_PROBE"] = str(probe)
+        code, out = self.launch_in_a_terminal("y\n")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(Path(str(probe) + ".result").read_text().strip(), "free",
+                         "Hermes inherited the lock, so a later Set up would be refused for as long as it runs")
+
+    def test_the_disk_is_checked_when_only_the_app_is_missing(self):
+        self.install_version("0.21.5")                                           # an interrupted setup: runtime in, app never built
+        (self.hh / "hermes-agent/apps/desktop/release/linux-unpacked/hermes").unlink()
+        r = self.hermes("install", NOCTRAOS_HERMES_INSTALL_MIN_FREE_KB="999999999999")
+        self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
+        self.assertIn("not enough free disk space", r.stdout)
 
     def test_opening_hermes_from_the_menu_runs_in_a_terminal_window(self):
         window = self.tmp / "window-args"

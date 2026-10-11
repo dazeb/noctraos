@@ -227,11 +227,19 @@ enough_room_to_install() {
 }
 
 cmd_install() {
+  local rc=0
   if { exec 9>"$INSTALL_LOCK"; } 2>/dev/null; then
-    flock -n 9 || { say "Hermes is already being set up in another window. Wait for that to finish."; return 75; }
+    flock -n 9 || { exec 9>&-; say "Hermes is already being set up in another window. Wait for that to finish."; return 75; }
   fi
+  setup_hermes || rc=$?
+  # Let go of the lock here: cmd_launch execs Hermes next, and an open fd 9 would keep the lock held for as long as it runs.
+  exec 9>&-
+  return "$rc"
+}
+
+setup_hermes() {
   if ! runtime_ready || ! app_ready; then
-    runtime_ready || enough_room_to_install || return 1
+    enough_room_to_install || return 1
   fi
   install_runtime || { say "ERROR: runtime install failed"; return 1; }
   build_app || { say "ERROR: desktop build failed"; return 1; }

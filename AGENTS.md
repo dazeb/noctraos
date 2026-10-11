@@ -358,7 +358,7 @@ bash -n boot.sh install.sh install/*.sh install/optional/*.sh bin/noc bin/noc-gp
 docker run --rm -v "$PWD:/mnt" koalaman/shellcheck:stable --severity=warning \
   boot.sh install.sh install/*.sh install/optional/*.sh bin/noc bin/noc-gpu bin/noc-privileged bin/noctraos-control bin/noctraos-agent \
   bin/noctraos-copyq bin/noctraos-hermes configs/nautilus-scripts/*     # same list as CI
-python3 -m unittest discover -s tests                # 682 tests: theme, GPU detection, noc JSON modes, root helper, Control Panel, agent skill
+python3 -m unittest discover -s tests                # 684 tests: theme, GPU detection, noc JSON modes, root helper, Control Panel, agent skill
 python3 scripts/render-theme.py --check              # committed theme outputs match palette.json
 
 # wallpaper iteration (venv at ~/workspace/scratch/zorin-img-venv: pillow+numpy)
@@ -669,7 +669,7 @@ tail -f /root/noctraos-build.log
   set up by `noc hermes setup` (the same step as `noc repair hermes`, which `noc doctor` offers for a half-finished one), by the Control
   Panel's Apps page ("Set up Hermes…": a summary of the size, the time and the cloud free tier, and a yes first), or by opening Hermes in the
   Start panel, which asks `[y/N]` in its terminal window before downloading anything. All three end in `noctraos-hermes install`, which
-  holds a lock (`$XDG_RUNTIME_DIR/noctraos-hermes-<uid>.lock`) so two windows never build at once, refuses under 7 GB free, and links the
+  holds a lock (`$XDG_RUNTIME_DIR/noctraos-hermes-<uid>.lock`, released before `launch` execs Hermes) so two windows never build at once, refuses under 7 GB free whenever the runtime or the app is missing, and links the
   NoctraOS agent skill (`noc-agent-skills install`) once Hermes exists. Until then `noctraos-hermes mode` prints `none`, `local` and `cloud`
   refuse, `noc status --json` has `hermes.installed: false, mode: null`, `noc doctor` shows `info` (never `warn`) when neither the runtime nor
   the app exist and the Overview/Privacy/checklist point at the Apps page (`waiting`, no skip button); the Welcome app shows only "Set up
