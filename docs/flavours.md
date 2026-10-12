@@ -82,8 +82,7 @@ check to enforce the header is planned, not written yet.
 Desktop detection: `desktop_is_gnome()` in `install/lib.sh` is a guard, not a selector. The flavour is
 selected from the flavour file (below), never from `XDG_CURRENT_DESKTOP`, which is unset over SSH.
 
-Flavour file: `/etc/noctraos/flavour` contains `zorin` or `kubuntu`. The ISO will write it (not yet: neither ISO
-script does); module 07 writes it once when `install.sh` was given `NOCTRAOS_FLAVOUR` and the file is missing. A machine
+Flavour file: `/etc/noctraos/flavour` contains `zorin` or `kubuntu`. The kubuntu ISO script writes it (`kubuntu`); the Zorin remaster does not yet; module 07 writes it once when `install.sh` was given `NOCTRAOS_FLAVOUR` and the file is missing. A machine
 with no file was installed before flavours existed, so it is `zorin`, and nothing is written for that default.
 `noctraos_flavour` in `install/lib.sh` resolves it (file, else `NOCTRAOS_FLAVOUR`, else `zorin`) and refuses a variable that
 contradicts the file or an unknown value; `install.sh` exports the result as `NOCTRAOS_FLAVOUR`. `bin/noc-selfupdate` reads
@@ -141,6 +140,6 @@ Taken from the repo and the VM runs. Not every item has been verified on a VM.
 | 06 desktop theme, 08 shell theme | shipped | report `NOT APPLIED`; the Plasma theme is not started |
 | 09 Super+Space and Start | shipped (GNOME Shell extensions) | report `NOT APPLIED`; plan is a KRunner runner and Kickoff |
 | Login and boot | shipped | SDDM greeter starts, and login reaches a Plasma session on the VM with virtio-vga-gl; the screen is not verified from the host |
-| ISO build | remaster script | no build; the VM was installed by hand |
+| ISO build | remaster script (`iso/build-noctraos-iso.sh`) | `iso/flavours/kubuntu.sh`: release (interactive Calamares) ISO only, built from the real kubuntu-26.04.1 ISO; no unattended or appliance build, no VM boot test of the result yet (see the pull request for what was run) |
 | Release pipeline and update channel | wired | not wired |
 | Control Panel | shipped | runs on GTK3; not verified on Plasma |
