@@ -68,7 +68,7 @@ shell:
     - |
       fail=0
       for f in boot.sh install.sh install/*.sh install/optional/*.sh install/desktop/*/*.sh bin/noc bin/noc-gpu bin/noc-privileged bin/noctraos-hermes bin/noctraos-control \
-               bin/noctraos-agent bin/noctraos-copyq bin/noctraos-search configs/nautilus-scripts/* configs/plasma/*.sh iso/*.sh iso/flavours/*.sh scripts/*.sh; do
+               bin/noctraos-agent bin/noctraos-copyq bin/noctraos-search configs/nautilus-scripts/* configs/plasma/*.sh iso/*.sh iso/flavours/*.sh iso/flavours/*/*.sh scripts/*.sh; do
         [ -f "$f" ] || continue
         bash -n "$f" || fail=1
         # firstboot-runner.sh is pinned to the Zorin heredoc text, so its inherited SC2164 stays
@@ -101,14 +101,17 @@ tests:
 
 # ---- release (tags vX.Y.Z only) ---------------------------------------------------------------
 
-# Where the builds live on the release runner: an ext4 work image on the big drive, the base Zorin
-# ISO in in/. Not in the checkout, so a re-run reuses the downloaded torf venv and the work image.
+# Where the builds live on the release runner: an ext4 work image on the big drive, the base ISOs
+# (Zorin-OS-18.1-Core-64-bit.iso, kubuntu-26.04.1-desktop-amd64.iso) in in/. Not in the checkout, so a re-run
+# reuses the downloaded torf venv and the work image. Every flavour of a release is built, published and put on the
+# site together (docs/flavours.md): RELEASE_FLAVOURS lists them.
 .release:
   tags: [noctraos-release]
   rules:
     - if: $CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/
   variables:
     RELEASE_BUILD_DIR: /run/media/dazeb/2tb/noctraos-release-ci
+    RELEASE_FLAVOURS: "zorin kubuntu"
     GIT_DEPTH: "0"          # release notes list the commits since the previous tag
   # One release at a time: the VM, its ssh port and the work image are shared.
   resource_group: noctraos-release
@@ -121,11 +124,24 @@ release-build:
   script:
     - iso/build-release.sh "$RELEASE_BUILD_DIR"
 
+# The kubuntu flavour (KDE Plasma preview): its own folder release/vX-kubuntu, its own bucket folder releases/vX/kubuntu.
+# It waits for the zorin build through the resource group (one VM at a time), not through `needs`, so a failure in one
+# flavour does not hide whether the other builds.
+release-build-kubuntu:
+  extends: .release
+  stage: release-build
+  needs: [shell, version, tests]
+  timeout: 3h
+  variables:
+    NOCTRAOS_FLAVOUR: kubuntu
+  script:
+    - iso/build-release.sh "$RELEASE_BUILD_DIR"
+
 release-publish:
   extends: .release
   stage: release-publish
-  needs: [release-build]
-  timeout: 3h             # three uploads and three downloads of 3 to 17 GB each
+  needs: [release-build, release-build-kubuntu]
+  timeout: 4h             # the release runner's maximum; per flavour, three uploads and three downloads of 3 to 17 GB each
   script:
     - iso/publish-release.sh "$RELEASE_BUILD_DIR"
 

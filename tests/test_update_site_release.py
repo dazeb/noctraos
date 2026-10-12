@@ -34,6 +34,21 @@ def fixture(directory):
     return root, release, old, contents
 
 
+def kubuntu_fixture(directory):
+    torrent = next(ROOT.glob("noctraos-*-amd64.iso.torrent"))
+    release = Path(directory) / "release-kubuntu"
+    release.mkdir()
+    contents = {"noctraos-9.8.7-kubuntu-amd64.iso": b"k" * 3_100_000, "noctraos-9.8.7-kubuntu.qcow2": b"Q" * 6000,
+                "noctraos-9.8.7-kubuntu.vmdk": b"V" * 8000}
+    for name, data in contents.items():
+        (release / name).write_bytes(data)
+    # a different torrent from the GNOME one, so the two magnets differ
+    data = torrent.read_bytes().replace(b"noctraos-", b"noctraoz-", 1)
+    (release / "noctraos-9.8.7-kubuntu-amd64.iso.torrent").write_bytes(data)
+    (release / "SHA256SUMS").write_text("".join(f"{hashlib.sha256(d).hexdigest()}  {n}\n" for n, d in contents.items()))
+    return release, contents
+
+
 class UpdateSiteTests(unittest.TestCase):
     def test_every_old_version_string_moves_and_hashes_follow(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -75,6 +90,50 @@ class UpdateSiteTests(unittest.TestCase):
             root, release, _, _ = fixture(directory)
             (release / "noctraos-9.8.7.vmdk").unlink()
             with self.assertRaises(FileNotFoundError):
+                MODULE.update(root, "9.8.7", release, None)
+
+    def test_kubuntu_section_links_its_own_folder_and_keeps_both_torrents(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root, release, old, _ = fixture(directory)
+            kubuntu, contents = kubuntu_fixture(directory)
+            MODULE.update(root, "9.8.7", release, None, kubuntu)
+            page = (root / "site/download.html").read_text()
+            section = page[page.index(MODULE.PLASMA_START):page.index(MODULE.PLASMA_END)]
+            self.assertIn("preview", section)
+            for name, data in contents.items():
+                self.assertIn(f"/releases/v9.8.7/kubuntu/{name}", section)
+                self.assertIn(f"SHA-256: {hashlib.sha256(data).hexdigest()}", section)
+            self.assertIn("/releases/v9.8.7/kubuntu/SHA256SUMS", section)
+            self.assertIn("ws=https%3A%2F%2Fdl.noctraos.dev%2Freleases%2Fv9.8.7%2Fkubuntu%2Fnoctraos-9.8.7-kubuntu-amd64.iso", section)
+            self.assertIn("urn:btih:" + MODULE.infohash(kubuntu / "noctraos-9.8.7-kubuntu-amd64.iso.torrent"), section)
+            # the GNOME magnet still points at the GNOME ISO, outside the section
+            rest = page.replace(section, "")
+            self.assertIn("urn:btih:" + MODULE.infohash(release / "noctraos-9.8.7-amd64.iso.torrent"), rest)
+            self.assertNotIn(old, page)
+            want = ["noctraos-9.8.7-amd64.iso.torrent", "noctraos-9.8.7-kubuntu-amd64.iso.torrent"]
+            self.assertEqual(sorted(p.name for p in root.glob("*.torrent")), want)
+            self.assertEqual(sorted(p.name for p in (root / "site").glob("*.torrent")), want)
+
+    def test_kubuntu_second_run_changes_nothing_and_a_gnome_only_run_empties_the_section(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root, release, _, _ = fixture(directory)
+            kubuntu, _ = kubuntu_fixture(directory)
+            MODULE.update(root, "9.8.7", release, None, kubuntu)
+            first = {rel: (root / rel).read_bytes() for rel in TRACKED}
+            MODULE.update(root, "9.8.7", release, None, kubuntu)
+            self.assertEqual(first, {rel: (root / rel).read_bytes() for rel in TRACKED})
+            MODULE.update(root, "9.8.7", release, None)
+            page = (root / "site/download.html").read_text()
+            self.assertIn(MODULE.PLASMA_START + "\n" + MODULE.PLASMA_END, page)
+            self.assertNotIn("kubuntu", page.lower().replace(MODULE.PLASMA_START.lower(), "").replace(MODULE.PLASMA_END.lower(), ""))
+            self.assertEqual([p.name for p in root.glob("*kubuntu*.torrent")], [])
+
+    def test_a_page_without_the_kubuntu_markers_fails_loudly(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root, release, _, _ = fixture(directory)
+            page = root / "site/download.html"
+            page.write_text(page.read_text().replace(MODULE.PLASMA_END, ""))
+            with self.assertRaises(ValueError):
                 MODULE.update(root, "9.8.7", release, None)
 
     def test_infohash_matches_the_published_magnet(self):

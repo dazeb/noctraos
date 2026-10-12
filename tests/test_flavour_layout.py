@@ -28,6 +28,8 @@ class FlavourLayoutTests(unittest.TestCase):
         self.assertTrue((ISO_FOLDER / "README.md").is_file(), "iso/flavours/README.md is missing")
         for path in sorted(ISO_FOLDER.glob("*.sh")):
             self.assertIn(path.stem, FLAVOUR_IDS, f"{path.name}: flavour scripts must be named by a known id")
+        for path in sorted(p for p in ISO_FOLDER.iterdir() if p.is_dir()):
+            self.assertIn(path.name, FLAVOUR_IDS, f"{path.name}/: a flavour's helper folder must be named by a known id")
 
 
 if __name__ == "__main__":

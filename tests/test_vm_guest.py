@@ -337,5 +337,14 @@ class BakeTests(unittest.TestCase):
         self.assertFalse(log.exists())
 
 
+
+class LocalVmTests(unittest.TestCase):
+    def test_the_release_vm_has_a_guest_agent_channel(self):
+        # Without it noc doctor reports the agent as unreachable (a `!!` row), which fails every release image build.
+        text = (Path(__file__).resolve().parents[1] / "iso/local-vm.sh").read_text()
+        self.assertIn("virtserialport,chardev=qga0,name=org.qemu.guest_agent.0", text)
+        self.assertIn("-device virtio-serial-pci", text)
+
+
 if __name__ == "__main__":
     unittest.main()

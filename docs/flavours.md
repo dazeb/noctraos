@@ -13,7 +13,7 @@ The base and the desktop are implementation choices. The product stays the same.
 | Flavour id | Base | Desktop | Status |
 |---|---|---|---|
 | `zorin` | Zorin OS 18.1 (Ubuntu 24.04) | GNOME | shipped (0.3.x, 0.4.0) |
-| `kubuntu` | Kubuntu 26.04 (Ubuntu 26.04) | KDE Plasma 6 | in progress; no release |
+| `kubuntu` | Kubuntu 26.04 (Ubuntu 26.04) | KDE Plasma 6 | preview from 0.5.0 (released beside zorin, labelled preview) |
 
 ## Vocabulary (use these words exactly)
 
@@ -141,6 +141,6 @@ Taken from the repo and the VM runs. Not every item has been verified on a VM.
 | 08 shell theme | shipped | written: Global Theme `dev.noctraos.desktop` (splash, previews, layout), wallpaper packages, SDDM login screen, lock-screen picture, About this System, NoctraOS logo on Kickoff (`configs/plasma/install-look.sh`, also baked into the ISO); unit-tested and the splash rendered offscreen with Qt 6, not run on a Plasma session yet; the AI-first Kickoff categories are not started |
 | 09 Super+Space and Start | shipped (GNOME Shell extensions) | report `NOT APPLIED`; plan is a KRunner runner and Kickoff |
 | Login and boot | shipped | SDDM greeter starts, and login reaches a Plasma session on the VM with virtio-vga-gl; the screen is not verified from the host |
-| ISO build | remaster script (`iso/build-noctraos-iso.sh`) | `iso/flavours/kubuntu.sh`: release (interactive Calamares, NoctraOS pictures and a six-slide slideshow) ISO only, built from the real kubuntu-26.04.1 ISO; the live session's Plymouth splash is still Kubuntu's; no unattended or appliance build, no VM boot test of the result yet (see the pull request for what was run) |
-| Release pipeline and update channel | wired | not wired |
+| ISO build | remaster script (`iso/build-noctraos-iso.sh`) | `iso/flavours/kubuntu.sh`: release (interactive Calamares, NoctraOS pictures and a six-slide slideshow) ISO only, built from the real kubuntu-26.04.1 ISO; the live session's Plymouth splash is still Kubuntu's; appliance build (`NOCTRAOS_UNATTENDED=1`): `iso/flavours/kubuntu/autoinstall.sh` installs the way Calamares does (2026-10-12, local KVM VM: it installed, rebooted into SDDM autologin and Plasma, and first-boot provisioning started); the release ISO's interactive install is not VM-tested yet |
+| Release pipeline and update channel | wired | release pipeline wired (`release-build-kubuntu`, `releases/vX/kubuntu/`, the site's preview section); update channel: the client reads `kubuntu/<channel>/`, but nothing publishes to it yet (the update jobs are zorin only) |
 | Control Panel | shipped | runs on GTK3; not verified on Plasma |

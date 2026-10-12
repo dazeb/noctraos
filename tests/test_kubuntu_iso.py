@@ -162,20 +162,15 @@ class FirstBootTests(unittest.TestCase):
 
 
 class RefusalTests(unittest.TestCase):
-    def test_an_unattended_build_is_not_applied(self):
-        r = subprocess.run(["bash", str(SCRIPT), "/nonexistent.iso"], capture_output=True, text=True,
-                           env={"PATH": "/usr/bin:/bin", "NOCTRAOS_UNATTENDED": "1"})
-        self.assertEqual(r.returncode, 2)
-        self.assertIn("NOT APPLIED", r.stderr)
-
-    def test_build_local_refuses_kubuntu_appliance_and_unknown_flavours(self):
+    def test_build_local_refuses_unknown_flavours(self):
         with tempfile.TemporaryDirectory() as tmp:
-            for flavour, target, code, text in (("kubuntu", "appliance", 2, "NOT APPLIED"), ("kubuntu", "both", 2, "NOT APPLIED"),
-                                                ("fedora", "release", 1, "unknown flavour")):
-                r = subprocess.run(["bash", str(ROOT / "iso/build-local.sh"), tmp, target], capture_output=True, text=True,
-                                   env={"PATH": "/usr/bin:/bin", "NOCTRAOS_FLAVOUR": flavour})
-                self.assertEqual(r.returncode, code, (flavour, target, r.stderr))
-                self.assertIn(text, r.stderr)
+            r = subprocess.run(["bash", str(ROOT / "iso/build-local.sh"), tmp, "release"], capture_output=True, text=True,
+                               env={"PATH": "/usr/bin:/bin", "NOCTRAOS_FLAVOUR": "fedora"})
+            self.assertEqual(r.returncode, 1, r.stderr)
+            self.assertIn("unknown flavour", r.stderr)
+
+    def test_the_release_iso_check_catches_the_autoinstall_entry(self):
+        self.assertIn("noctraos\\.autoinstall", (ROOT / "iso/build-local.sh").read_text())
 
     def test_sourcing_defines_functions_and_runs_nothing(self):
         r = sh("declare -F kubuntu_main kubuntu_rebrand >/dev/null")
@@ -185,6 +180,124 @@ class RefusalTests(unittest.TestCase):
         text = SCRIPT.read_text()
         for word in ("gdm", "gnome-shell", "ubiquity", "isolinux", "gsettings"):
             self.assertNotIn(word, re.sub(r"(?m)^\s*#.*$", "", text), word)
+
+
+@unittest.skipUnless(shutil.which("xorriso"), "needs xorriso")
+class ReleaseIsoCheckTests(unittest.TestCase):
+    """build-local.sh's release-ISO check, run on small real ISOs. The kubuntu ISO boots through GRUB only (no isolinux
+    menu): the check used to die there under set -e (xorriso exit 5) before judging anything."""
+
+    def check(self, files):
+        text = (ROOT / "iso/build-local.sh").read_text()
+        block = text[text.index('  echo "=== checking the release ISO"'):]
+        block = block[:block.index("\n", block.index('echo "release ISO checks passed')) + 1]
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = Path(tmp) / "tree"
+            for name, body in files.items():
+                (tree / name).parent.mkdir(parents=True, exist_ok=True)
+                (tree / name).write_text(body)
+            iso = Path(tmp) / "x.iso"
+            subprocess.run(["xorriso", "-as", "mkisofs", "-quiet", "-V", "NOCTRAOS_0_5_0", "-o", str(iso), str(tree)],
+                           check=True, capture_output=True)
+            block = block.replace("/tmp/", f"{tmp}/")
+            return subprocess.run(["bash", "-c", f'set -Eeuo pipefail; OUT="{iso}"; VERSION=0.5.0\n{block}'],
+                                  capture_output=True, text=True)
+
+    GRUB = 'menuentry "Try or Install NoctraOS" {\n}\n'
+
+    def test_a_grub_only_release_iso_passes(self):
+        r = self.check({"boot/grub/grub.cfg": self.GRUB})
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("release ISO checks passed", r.stdout)
+
+    def test_an_autoinstall_entry_in_grub_fails(self):
+        r = self.check({"boot/grub/grub.cfg": self.GRUB + 'menuentry "x" {\n linux /casper/vmlinuz noctraos.autoinstall\n}\n'})
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("unattended boot entry", r.stdout)
+
+    def test_an_unattended_isolinux_entry_fails(self):
+        r = self.check({"boot/grub/grub.cfg": self.GRUB, "isolinux/menuentries.cfg": "label unattended\n"})
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("unattended boot entry", r.stdout)
+
+    def test_no_grub_menu_fails(self):
+        r = self.check({"isolinux/menuentries.cfg": "label live\n"})
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("no /boot/grub/grub.cfg", r.stdout)
+
+
+class DefaultsTests(unittest.TestCase):
+    STATUS = ("Package: plasma-welcome\nStatus: install ok installed\nVersion: 6.6.5-0ubuntu0.1\n\n"
+              "Package: other\nVersion: 1:9.9-1\n")
+
+    def test_kde_welcome_is_marked_seen_and_the_kubuntu_links_go(self):
+        with Tree() as t:
+            (t.root / "var/lib/dpkg").mkdir(parents=True)
+            (t.root / "var/lib/dpkg/status").write_text(self.STATUS)
+            desk = t.root / "etc/skel/Desktop"
+            desk.mkdir(parents=True)
+            for name in ("org.kfocus.web.howtos.desktop", "org.kubuntu.web.home.desktop", "mine.desktop"):
+                (desk / name).write_text("[Desktop Entry]\n")
+            r = sh(f'kubuntu_defaults "{t.root}"')
+            self.assertEqual(r.returncode, 0, r.stderr)
+            self.assertEqual((t.root / "etc/xdg/plasma-welcomerc").read_text(),
+                             "[General]\nLastSeenVersion=6.6.5\nShowUpdatePage=false\n")
+            self.assertEqual(sorted(p.name for p in desk.iterdir()), ["mine.desktop"])
+
+    def test_no_plasma_welcome_version_fails_the_build(self):
+        with Tree() as t:
+            r = sh(f'kubuntu_defaults "{t.root}"')
+            self.assertNotEqual(r.returncode, 0)
+            self.assertFalse((t.root / "etc/xdg/plasma-welcomerc").exists())
+
+
+class ApplianceTests(unittest.TestCase):
+    """kubuntu_appliance: the unattended install that only the appliance ISO (the VM disks' source) carries."""
+
+    def test_appliance_adds_the_installer_its_service_and_the_default_boot_entry(self):
+        with Tree() as t:
+            r = sh(f'kubuntu_appliance "{t.root}" "{t.iso}" noctraos noctraos box')
+            self.assertEqual(r.returncode, 0, r.stderr)
+            script = t.root / "usr/local/sbin/noctraos-autoinstall"
+            self.assertTrue(script.is_file() and script.stat().st_mode & 0o111)
+            conf = t.root / "etc/noctraos/autoinstall.conf"
+            self.assertEqual(conf.stat().st_mode & 0o777, 0o600)
+            text = conf.read_text()
+            self.assertIn("AI_USER=noctraos", text)
+            self.assertIn("AI_HOSTNAME=box", text)
+            self.assertIn("AI_PASSWORD_CRYPT=", text)
+            # the password is stored as a SHA-512 crypt hash, quoted so that sourcing the file gives it back intact
+            got = subprocess.run(["bash", "-c", f'source "{conf}"; printf %s "$AI_PASSWORD_CRYPT"'], capture_output=True, text=True).stdout
+            self.assertTrue(got.startswith("$6$"), got)
+            check = subprocess.run(["openssl", "passwd", "-6", "-salt", got.split("$")[2], "noctraos"], capture_output=True, text=True)
+            self.assertEqual(check.stdout.strip(), got)
+            unit = (t.root / "etc/systemd/system/noctraos-autoinstall.service").read_text()
+            self.assertIn("ConditionKernelCommandLine=noctraos.autoinstall", unit)
+            self.assertTrue((t.root / "etc/systemd/system/multi-user.target.wants/noctraos-autoinstall.service").is_symlink())
+            cfg = (t.iso / "boot/grub/grub.cfg").read_text()
+            first = re.search(r'^menuentry "([^"]*)"', cfg, re.M)[1]
+            self.assertEqual(first, "Install NoctraOS (unattended, erases the disk)")
+            self.assertIn("noctraos.autoinstall noprompt systemd.unit=multi-user.target", cfg)
+            self.assertIn("set timeout=3", cfg)
+
+    def test_appliance_without_a_password_fails(self):
+        with Tree() as t:
+            r = sh(f'kubuntu_appliance "{t.root}" "{t.iso}" noctraos ""')
+            self.assertNotEqual(r.returncode, 0)
+            self.assertFalse((t.root / "etc/noctraos/autoinstall.conf").exists())
+
+    def test_the_autoinstall_script_mirrors_calamares(self):
+        text = (ROOT / "iso/flavours/kubuntu/autoinstall.sh").read_text()
+        r = subprocess.run(["bash", "-n", str(ROOT / "iso/flavours/kubuntu/autoinstall.sh")], capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        # the steps Kubuntu's Calamares runs (settings.conf), in the same order where it matters
+        for word in ("sfdisk", "unsquashfs" if "unsquashfs" in text else "filesystem.squashfs", "systemd-machine-id-setup",
+                     "useradd", "update-initramfs", "grub-install", "--uefi-secure-boot", "--removable", "update-grub",
+                     "ubuntu.sources", "cdrom.sources", "90-noctraos-autologin.conf", "systemctl reboot"):
+            self.assertIn(word, text, word)
+        self.assertLess(text.index("update-initramfs"), text.index("grub-install"))
+        # it removes itself from the installed system, so the VM disk never reinstalls itself
+        self.assertIn("noctraos-autoinstall", text[text.index("grub-install"):])
 
 
 if __name__ == "__main__":

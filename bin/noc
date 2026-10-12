@@ -19,7 +19,7 @@
 #   noc agent-skills  the NoctraOS skill for the coding agents: install | status [--json] | remove | on  (~/.agents/skills)
 set -uo pipefail
 
-VERSION="0.4.0"
+VERSION="0.5.0"
 OLLAMA_URL="${NOC_OLLAMA_URL:-http://127.0.0.1:11434}"
 DEFAULT_MODEL="qwen2.5-coder:7b"
 MODEL_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/noctraos/model"
@@ -434,6 +434,17 @@ SELFUPDATE=/usr/local/libexec/noctraos/noc-selfupdate
 # privileged helper, `sudo noc update`) always uses the installed, root-owned copy; the only exception is a test saying so on purpose
 # (NOC_TEST_HOOKS=1: CI runs the whole suite as root inside a container, where there is nothing to protect).
 test_hooks() { [ "$(id -u)" -ne 0 ] || [ -n "${NOC_TEST_HOOKS:-}" ]; }
+
+# noc_desktop — this machine's desktop, from its flavour (the same map as flavour_desktop in install/lib.sh):
+# /etc/noctraos/flavour, and a machine without that file predates flavours, so it is zorin (GNOME).
+noc_desktop() {
+  local file=/etc/noctraos/flavour
+  if test_hooks && [ -n "${NOCTRAOS_FLAVOUR_FILE:-}" ]; then file="$NOCTRAOS_FLAVOUR_FILE"; fi
+  case "$(cat "$file" 2>/dev/null)" in
+    kubuntu) printf 'plasma\n' ;;
+    *) printf 'gnome\n' ;;
+  esac
+}
 test_hooks && SELFUPDATE="${NOC_SELFUPDATE:-$SELFUPDATE}"
 step_noctraos() {
   if [ ! -x "$SELFUPDATE" ]; then
@@ -685,7 +696,11 @@ cmd_doctor() {
     chk fail vscode "VS Code" "missing"
   fi
 
-  if have noctraos-search \
+  # Super+Space is a GNOME Shell extension today; the Plasma version (a KRunner runner) is not written yet (docs/flavours.md).
+  # "Re-run the installer" would be wrong advice there: the installer prints NOT APPLIED for it.
+  if [ "$(noc_desktop)" = plasma ]; then
+    chk info search "Super+Space search" "not on KDE Plasma yet (planned)"
+  elif have noctraos-search \
      && [ -d /usr/share/gnome-shell/extensions/noctraos-search@noctraos.local ]; then
     chk ok search "Super+Space search" "installed"
   else

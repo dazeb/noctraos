@@ -21,9 +21,11 @@ def runner_text():
     return BUILD[start:BUILD.index("\nEOF\n", start)].replace("__NOCTRAOS_BRANCH__", "main") + "\n"
 
 
-def tarball(marker, with_install=True):
+def tarball(marker, with_install=True, commit=None):
     buf = io.BytesIO()
-    with tarfile.open(fileobj=buf, mode="w:gz") as t:
+    # GitHub's archive is `git archive` output: a pax global header whose comment is the commit
+    extra = {"format": tarfile.PAX_FORMAT, "pax_headers": {"comment": commit}} if commit else {}
+    with tarfile.open(fileobj=buf, mode="w:gz", **extra) as t:
         files = {"noctraos-main/VERSION": marker}
         if with_install:
             files["noctraos-main/install.sh"] = "#!/bin/sh\necho latest-provisioner\n"
@@ -45,7 +47,7 @@ class Runner:
         bindir = d / "bin"
         bindir.mkdir()
         # only the tools the runner needs: no git unless asked, so "git is missing" is real
-        for tool in ("bash", "tar", "gzip", "mkdir", "rm", "cp", "mv", "cat", "chmod", "dirname", "tee", "mktemp", "touch", "date", "sh"):
+        for tool in ("bash", "tar", "gzip", "mkdir", "rm", "cp", "mv", "cat", "chmod", "dirname", "tee", "mktemp", "touch", "date", "sh", "head", "grep", "cut"):
             path = shutil.which(tool)
             if path:
                 (bindir / tool).symlink_to(path)
@@ -85,6 +87,20 @@ class FirstBootFetchTests(unittest.TestCase):
         self.assertEqual((r.dest() / "VERSION").read_text(), "from-tarball")
         self.assertIn("latest-provisioner", out.stdout)                 # install.sh of the tarball is what ran
         self.assertIn("https://github.com/dazeb/noctraos/archive/refs/heads/main.tar.gz", r.calls.read_text())
+
+    def test_the_tarballs_commit_is_kept_for_the_release_check(self):
+        sha = "fa7cd8a67dcfc021caea92321c0d9f519e7f8670"
+        r = Runner(self, payload=tarball("from-tarball", commit=sha))
+        out = r.run()
+        self.assertIn("without git", out.stdout, out.stdout + out.stderr)
+        self.assertEqual((r.dest() / ".noctraos-commit").read_text().strip(), sha)
+        self.assertFalse(list(r.dest().parent.glob("*.tgz")) + list(Path(r.dest()).glob("*.tgz")))
+
+    def test_a_tarball_without_a_commit_writes_no_commit_file(self):
+        r = Runner(self)
+        out = r.run()
+        self.assertIn("without git", out.stdout, out.stdout + out.stderr)
+        self.assertFalse((r.dest() / ".noctraos-commit").exists())
 
     def test_git_still_wins_when_it_is_there(self):
         r = Runner(self, git=True)

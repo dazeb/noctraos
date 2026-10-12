@@ -2,12 +2,15 @@
 # build-release.sh — build every download of a release from the tagged commit, test it, and stop.
 # Publishing is a separate step (iso/publish-release.sh), so a build can be tried without going public.
 #
-#   iso/build-release.sh <build-dir>
+#   iso/build-release.sh <build-dir>                           flavour zorin
+#   NOCTRAOS_FLAVOUR=kubuntu iso/build-release.sh <build-dir>  flavour kubuntu
 #
-# <build-dir> is the iso/build-local.sh directory (it must hold in/Zorin-OS-18.1-Core-64-bit.iso).
-# Result: <build-dir>/release/v<VERSION>/ with
-#   noctraos-<v>-amd64.iso  noctraos-<v>.qcow2  noctraos-<v>.vmdk  noctraos-<v>-amd64.iso.torrent
+# <build-dir> is the iso/build-local.sh directory (it must hold the flavour's base ISO in in/: Zorin-OS-18.1-Core-64-bit.iso,
+# kubuntu-26.04.1-desktop-amd64.iso).
+# Result: <build-dir>/release/v<VERSION>/ (zorin) or <build-dir>/release/v<VERSION>-<flavour>/ with
+#   noctraos-<v><-flavour>-amd64.iso  noctraos-<v><-flavour>.qcow2  noctraos-<v><-flavour>.vmdk  noctraos-<v><-flavour>-amd64.iso.torrent
 #   SHA256SUMS  BUILD-INFO.txt  doctor.log
+# (zorin keeps the names without a flavour, which predate flavours; docs/flavours.md rule 8.)
 # Takes 45 to 90 minutes, nearly all of it first-boot provisioning inside the VM.
 #
 # What it refuses (each is a way to ship the wrong thing):
@@ -32,6 +35,13 @@ DIR="$(cd "${1:?usage: build-release.sh <build-dir>}" && pwd)"
 REPO_URL="${REPO_URL:-https://github.com/dazeb/noctraos.git}"
 VERSION="$(tr -d '[:space:]' < "$ROOT/VERSION")"
 TAG="${CI_COMMIT_TAG:-v$VERSION}"
+FLAVOUR="${NOCTRAOS_FLAVOUR:-zorin}"
+case "$FLAVOUR" in
+  zorin)   BASE_ISO="Zorin-OS-18.1-Core-64-bit.iso"; PART="" ;;
+  kubuntu) BASE_ISO="kubuntu-26.04.1-desktop-amd64.iso"; PART="-kubuntu" ;;
+  *) echo "unknown flavour: $FLAVOUR (zorin or kubuntu)" >&2; exit 1 ;;
+esac
+export NOCTRAOS_FLAVOUR="$FLAVOUR"
 # shellcheck source=iso/disks.sh
 source "$HERE/disks.sh"
 export VM_DIR="${VM_DIR:-$(fast_dir noctraos-release-vm)}" VM_SSH_PORT="${VM_SSH_PORT:-2225}"
@@ -41,7 +51,7 @@ VM="$HERE/local-vm.sh"
 source "$HERE/vm-image.sh"
 REHEARSAL="${RELEASE_REHEARSAL:-0}"
 BRANCH=main
-OUT="$DIR/release/v$VERSION"
+OUT="$DIR/release/v$VERSION$PART"
 if [ "$REHEARSAL" = 1 ]; then
   BRANCH="${REHEARSAL_BRANCH:?RELEASE_REHEARSAL=1 needs REHEARSAL_BRANCH (a branch on GitHub)}"
   OUT="$OUT-rehearsal"
@@ -51,7 +61,7 @@ fi
 for f in bin/noc bin/noc-gpu; do
   grep -q "^VERSION=\"$VERSION\"" "$ROOT/$f" || { echo "$f does not match VERSION $VERSION" >&2; exit 1; }
 done
-[ -f "$DIR/in/Zorin-OS-18.1-Core-64-bit.iso" ] || { echo "missing $DIR/in/Zorin-OS-18.1-Core-64-bit.iso (the base ISO)" >&2; exit 1; }
+[ -f "$DIR/in/$BASE_ISO" ] || { echo "missing $DIR/in/$BASE_ISO (the $FLAVOUR base ISO)" >&2; exit 1; }
 # Fail in seconds, not after a 20 minute ISO build: the VM disk and the build scratch need real room on a Linux filesystem.
 require_linux_fs "$VM_DIR" && require_linux_fs "$DIR" || exit 1
 require_free_gb "$VM_DIR" "${RELEASE_MIN_FREE_GB:-100}" && require_free_gb "$DIR" "${RELEASE_MIN_BUILD_FREE_GB:-60}" || exit 1
@@ -61,50 +71,51 @@ MAIN="$(git ls-remote "$REPO_URL" "refs/heads/$BRANCH" | cut -c1-40)"
 [ -n "$MAIN" ] || { echo "could not read $BRANCH from $REPO_URL" >&2; exit 1; }
 [ "$REHEARSAL" = 1 ] && SHA="$MAIN"   # a rehearsal builds what GitHub has on the branch
 [ "$SHA" = "$MAIN" ] || { echo "tag $TAG is ${SHA:0:7} but GitHub main is ${MAIN:0:7}. The build clones main: push/merge so main is the commit you tagged, then tag again." >&2; exit 1; }
-log "building ${TAG}$([ "$REHEARSAL" = 1 ] && echo " (REHEARSAL from $BRANCH)") @ ${SHA:0:7} into $OUT"
+log "building ${TAG} flavour $FLAVOUR$([ "$REHEARSAL" = 1 ] && echo " (REHEARSAL from $BRANCH)") @ ${SHA:0:7} into $OUT"
 
 rm -rf "$OUT"; mkdir -p "$OUT"
 "$VM" stop >/dev/null 2>&1 || true
 
 log "1/6 release ISO and appliance ISO"
-rm -f "$DIR"/out/noctraos-*-amd64.iso "$DIR"/out/noctraos-*-appliance-build.iso
+rm -f "$DIR/out/noctraos-$VERSION$PART-amd64.iso" "$DIR/out/noctraos-$VERSION$PART-appliance-build.iso"
 REPO_URL="$REPO_URL" NOCTRAOS_BRANCH="$BRANCH" "$HERE/build-local.sh" "$DIR" both
-ISO="$DIR/out/noctraos-$VERSION-amd64.iso"
-APPLIANCE="$DIR/out/noctraos-$VERSION-appliance-build.iso"
-[ -f "$ISO" ] && [ -f "$APPLIANCE" ] || { echo "build-local.sh did not write the expected ISOs for $VERSION" >&2; exit 1; }
+ISO="$DIR/out/noctraos-$VERSION$PART-amd64.iso"
+APPLIANCE="$DIR/out/noctraos-$VERSION$PART-appliance-build.iso"
+[ -f "$ISO" ] && [ -f "$APPLIANCE" ] || { echo "build-local.sh did not write the expected $FLAVOUR ISOs for $VERSION" >&2; exit 1; }
 
 log "2/6 provisioned VM disk"
-vm_image_build "$DIR" "$APPLIANCE" "$BRANCH" "$SHA" release
-cp "$DIR/release-doctor.log" "$OUT/doctor.log"
+vm_image_build "$DIR" "$APPLIANCE" "$BRANCH" "$SHA" "release$PART"
+cp "$DIR/release$PART-doctor.log" "$OUT/doctor.log"
 
 log "3/6 exporting the disks"
 # Both conversions compress on one core each (about 15 minutes apiece): run them side by side.
-qemu-img convert -O qcow2 -c "$VM_DIR/disk.qcow2" "$OUT/noctraos-$VERSION.qcow2" & QCOW_PID=$!
-qemu-img convert -O vmdk -o subformat=streamOptimized "$VM_DIR/disk.qcow2" "$OUT/noctraos-$VERSION.vmdk" & VMDK_PID=$!
+qemu-img convert -O qcow2 -c "$VM_DIR/disk.qcow2" "$OUT/noctraos-$VERSION$PART.qcow2" & QCOW_PID=$!
+qemu-img convert -O vmdk -o subformat=streamOptimized "$VM_DIR/disk.qcow2" "$OUT/noctraos-$VERSION$PART.vmdk" & VMDK_PID=$!
 # Wait for BOTH before judging: bailing out while one is still writing would leave it running into $OUT.
 EXPORT_FAILED=0
 wait "$QCOW_PID" || EXPORT_FAILED=1
 wait "$VMDK_PID" || EXPORT_FAILED=1
 [ "$EXPORT_FAILED" = 0 ] || { echo "exporting the disks failed" >&2; exit 1; }
 [ "${NOCTRAOS_KEEP_VM:-0}" = 1 ] || rm -rf "$VM_DIR"
-cp --reflink=auto "$ISO" "$OUT/noctraos-$VERSION-amd64.iso"
+cp --reflink=auto "$ISO" "$OUT/noctraos-$VERSION$PART-amd64.iso"
 
 log "4/6 torrent"
 VENV="$DIR/torf-venv"
 [ -x "$VENV/bin/python" ] || { python3 -m venv "$VENV" && "$VENV/bin/pip" install -q torf; }
-"$VENV/bin/python" "$ROOT/scripts/make-torrent.py" "$OUT/noctraos-$VERSION-amd64.iso" "$VERSION" "$OUT/noctraos-$VERSION-amd64.iso.torrent"
+"$VENV/bin/python" "$ROOT/scripts/make-torrent.py" "$OUT/noctraos-$VERSION$PART-amd64.iso" "$VERSION" "$OUT/noctraos-$VERSION$PART-amd64.iso.torrent" "$FLAVOUR"
 
 log "5/6 checksums"
-( cd "$OUT" && sha256sum "noctraos-$VERSION-amd64.iso" "noctraos-$VERSION.qcow2" "noctraos-$VERSION.vmdk" > SHA256SUMS && cat SHA256SUMS )
+( cd "$OUT" && sha256sum "noctraos-$VERSION$PART-amd64.iso" "noctraos-$VERSION$PART.qcow2" "noctraos-$VERSION$PART.vmdk" > SHA256SUMS && cat SHA256SUMS )
 {
   if [ "$REHEARSAL" = 1 ]; then echo "rehearsal: yes (branch $BRANCH): NOT a release, never publish"; else echo "release: $TAG"; fi
+  echo "flavour: $FLAVOUR"
   echo "commit:  $SHA"
   echo "built:   $(date -u +%Y-%m-%dT%H:%MZ)"
   echo "login:   noctraos / noctraos (the VM disks: autologin, passwordless sudo, trial use only)"
 } > "$OUT/BUILD-INFO.txt"
 
 log "6/6 boot test of the exported disk"
-"$HERE/boot-test-image.sh" "$OUT/noctraos-$VERSION.qcow2"
+"$HERE/boot-test-image.sh" "$OUT/noctraos-$VERSION$PART.qcow2"
 
 rm -f "$APPLIANCE"   # carries autologin and a throwaway password: it must never be left lying around as a release file
 log "done: $OUT"; ls -lh "$OUT"

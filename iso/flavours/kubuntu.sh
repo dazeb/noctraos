@@ -7,7 +7,8 @@
 #   - BIOS and UEFI both boot through GRUB (no isolinux); the kernel and initrd are casper/vmlinuz and casper/initrd
 #     (plain cpio, no .zstd name); there is one casper/filesystem.squashfs and no filesystem.size.
 #   - The installer is Calamares (not Ubiquity): branding is /etc/calamares/branding/<name>, settings in
-#     /etc/calamares/settings.conf. There is no preseed, so an unattended build is NOT APPLIED here.
+#     /etc/calamares/settings.conf. Calamares has no unattended mode, so the appliance build (NOCTRAOS_UNATTENDED=1, only
+#     ever used to make the VM disks, never published) installs with iso/flavours/kubuntu/autoinstall.sh instead.
 #   - The display manager is SDDM and the session is Plasma (Wayland). Autologin of the live user is the live image's own.
 #
 # What it does: extract the ISO tree, unpack the squashfs (owners kept), bake in the provisioner snapshot, the flavour file
@@ -23,6 +24,7 @@
 # Usage:  sudo iso/flavours/kubuntu.sh <kubuntu-live.iso> [out.iso]
 # Needs:  xorriso, squashfs-tools, git, update-alternatives, chroot, python3, ~25 GiB scratch (set WORK_BASE).
 # Knobs:  WORK_BASE (scratch), REPO_URL, NOCTRAOS_BRANCH (provisioner branch baked in and fetched at first boot).
+#         NOCTRAOS_UNATTENDED=1 with NOCTRAOS_USER, NOCTRAOS_PASSWORD, NOCTRAOS_HOSTNAME: the appliance ISO (see kubuntu_appliance).
 # Sourcing this file only defines the functions (tests/test_kubuntu_iso.py).
 
 KB_HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -169,6 +171,22 @@ kubuntu_look() { # kubuntu_look <squashfs-root>
 }
 
 # First-boot provisioning: the runner (shared text, iso/firstboot-runner.sh), its autostart, the flavour file and the snapshot.
+# Stock Kubuntu first-login extras that NoctraOS replaces: KDE's Welcome Center (NoctraOS has its own welcome) and the two
+# web-link icons on a new user's desktop. The Welcome Center is opened by the kded_plasma_welcome module when the user has
+# no plasma-welcomerc (General/LastSeenVersion empty), and again after a Plasma upgrade when General/ShowUpdatePage is on. The
+# system-wide default marks this image's Plasma as seen and turns the update page off. The live session is not affected:
+# casper writes the live user's own plasma-welcomerc (LiveEnvironment), which the module checks first.
+kubuntu_defaults() { # kubuntu_defaults <squashfs-root>
+  local root="$1" version
+  version="$(awk '/^Package: plasma-welcome$/ {f=1} f && /^Version:/ {print $2; exit} /^$/ {f=0}' "$root/var/lib/dpkg/status" 2>/dev/null)"
+  version="${version#*:}"; version="${version%%-*}"
+  [ -n "$version" ] || { echo "kubuntu: cannot read the plasma-welcome version from the image's dpkg status" >&2; return 1; }
+  mkdir -p "$root/etc/xdg"
+  printf '[General]\nLastSeenVersion=%s\nShowUpdatePage=false\n' "$version" > "$root/etc/xdg/plasma-welcomerc"
+  rm -f "$root/etc/skel/Desktop/org.kfocus.web.howtos.desktop" "$root/etc/skel/Desktop/org.kubuntu.web.home.desktop"
+  echo "  KDE Welcome Center off for installed systems (Plasma $version marked seen), Kubuntu desktop links removed"
+}
+
 kubuntu_firstboot() { # kubuntu_firstboot <squashfs-root> <branch>
   local root="$1" branch="$2" runner="$1/usr/local/sbin/noctraos-firstboot"
   mkdir -p "$root/usr/local/sbin" "$root/etc/skel/.config/autostart" "$root/etc/noctraos"
@@ -190,18 +208,44 @@ EOF
   chmod 644 "$root/etc/noctraos/flavour"
 }
 
+# The appliance ISO (NOCTRAOS_UNATTENDED=1): boots straight into kubuntu/autoinstall.sh, which erases the first disk and
+# installs with autologin and passwordless sudo for <user>. Only for building the VM disks (iso/build-release.sh); it carries
+# a password hash, so it is never published, and build-local.sh refuses a release ISO that has any of this.
+kubuntu_appliance() { # kubuntu_appliance <squashfs-root> <iso-tree> <user> <password> [hostname]
+  local root="$1" tree="$2" user="$3" password="$4" hostname="${5:-noctraos}" cfg="$2/boot/grub/grub.cfg" crypt entry
+  [ -n "$user" ] && [ -n "$password" ] || { echo "kubuntu: the appliance build needs NOCTRAOS_USER and NOCTRAOS_PASSWORD" >&2; return 1; }
+  crypt="$(openssl passwd -6 "$password")"
+  install -D -m 755 "$KB_HERE/kubuntu/autoinstall.sh" "$root/usr/local/sbin/noctraos-autoinstall"
+  mkdir -p "$root/etc/noctraos" "$root/etc/systemd/system/multi-user.target.wants"
+  printf 'AI_USER=%q\nAI_PASSWORD_CRYPT=%q\nAI_HOSTNAME=%q\nAI_FULLNAME=NoctraOS\nAI_LOCALE=en_US.UTF-8\nAI_TIMEZONE=Etc/UTC\n' \
+    "$user" "$crypt" "$hostname" > "$root/etc/noctraos/autoinstall.conf"
+  chmod 600 "$root/etc/noctraos/autoinstall.conf"
+  printf '%s\n' '[Unit]' 'Description=NoctraOS unattended install (appliance build only)' \
+    'ConditionKernelCommandLine=noctraos.autoinstall' 'After=local-fs.target systemd-udev-settle.service' '' \
+    '[Service]' 'Type=oneshot' 'ExecStart=/usr/local/sbin/noctraos-autoinstall' 'StandardOutput=journal+console' '' \
+    '[Install]' 'WantedBy=multi-user.target' > "$root/etc/systemd/system/noctraos-autoinstall.service"
+  ln -sf ../noctraos-autoinstall.service "$root/etc/systemd/system/multi-user.target.wants/noctraos-autoinstall.service"
+  # The default entry, first in the menu with a short timeout. multi-user.target: no live desktop, the install has the machine.
+  # noprompt: casper does not wait for "remove the installation medium" at the reboot.
+  entry='menuentry "Install NoctraOS (unattended, erases the disk)" {
+    set gfxpayload=keep
+    linux  /casper/vmlinuz noctraos.autoinstall noprompt systemd.unit=multi-user.target --- quiet
+    initrd /casper/initrd
+}'
+  kb_replace "$cfg" 's/^set timeout=[0-9]*/set timeout=3/' "GRUB timeout" || return 1
+  awk -v e="$entry" '!d && /^menuentry / { print e; print ""; d=1 } { print }' "$cfg" > "$cfg.new" && mv "$cfg.new" "$cfg"
+  grep -q 'noctraos.autoinstall' "$cfg" || { echo "kubuntu: the unattended boot entry was not added" >&2; return 1; }
+}
+
 kubuntu_main() {
   local src_iso="${1:?usage: kubuntu.sh <kubuntu-live.iso> [out.iso]}" out_iso="${2:-noctraos-kubuntu-amd64.iso}"
   local repo="${REPO_URL:-https://github.com/dazeb/noctraos.git}" branch="${NOCTRAOS_BRANCH:-main}" work_base="${WORK_BASE:-/var/tmp}"
   local work iso_tree sq_root comp sq_info version helper_gid helper_owner
   set -Eeuo pipefail
-  if [ "${NOCTRAOS_UNATTENDED:-0}" = 1 ]; then
-    echo "NOT APPLIED: the unattended build is not available on the kubuntu flavour (its installer is Calamares, not Ubiquity)." >&2
-    exit 2
-  fi
   step() { printf '\n\033[1;36m[noctraos-iso kubuntu]\033[0m %s\n' "$*"; }
   need() { command -v "$1" >/dev/null 2>&1 || { echo "missing dependency: $1" >&2; exit 1; }; }
   need xorriso; need unsquashfs; need mksquashfs; need git; need python3; need update-alternatives; need chroot
+  [ "${NOCTRAOS_UNATTENDED:-0}" != 1 ] || need openssl
   # shellcheck source=iso/bake-guest-tools.sh
   source "$KB_ISO_DIR/bake-guest-tools.sh"
   [ "$(id -u)" -eq 0 ] || { echo "run as root (squashfs device nodes need it)" >&2; exit 1; }
@@ -247,10 +291,15 @@ kubuntu_main() {
   kubuntu_calamares "$sq_root" "$version"
   kubuntu_boot_theme_squashfs "$sq_root"
   kubuntu_look "$sq_root"
+  kubuntu_defaults "$sq_root"
   bake_guest_tools "$sq_root"
   kubuntu_theme_grub "$iso_tree"
+  if [ "${NOCTRAOS_UNATTENDED:-0}" = 1 ]; then
+    step "appliance build: unattended install for ${NOCTRAOS_USER:-?} (never publish this ISO)"
+    kubuntu_appliance "$sq_root" "$iso_tree" "${NOCTRAOS_USER:-}" "${NOCTRAOS_PASSWORD:-}" "${NOCTRAOS_HOSTNAME:-noctraos}"
+  fi
   echo "NoctraOS $version 64bit (Kubuntu base)" > "$iso_tree/.disk/info"
-  chown -R root:root "$sq_root/opt/noctraos" "$sq_root/usr/local/sbin/noctraos-firstboot" "$sq_root/etc/noctraos" \
+  chown -R root:root "$sq_root/opt/noctraos" "$sq_root/usr/local/sbin" "$sq_root/etc/noctraos" \
     "$sq_root/etc/skel/.config/autostart"
 
   step "5/7 repacking squashfs ($comp — this is the long step)"

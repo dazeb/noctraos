@@ -249,6 +249,27 @@ class DoctorStatusTests(unittest.TestCase):
             extra["NOC_SELFUPDATE"] = str(e.bin / "selfupdate")
         return {r["id"]: r for r in json.loads(e.noc("doctor", "--json", **extra).stdout)}["noctraos-update"]
 
+    def search_row(self, flavour=None):
+        e = Env(self)
+        extra = {}
+        if flavour is not None:
+            (e.home / "flavour").write_text(flavour + "\n")
+            extra["NOCTRAOS_FLAVOUR_FILE"] = str(e.home / "flavour")
+        else:
+            extra["NOCTRAOS_FLAVOUR_FILE"] = str(e.home / "no-flavour-file")
+        return {r["id"]: r for r in json.loads(e.noc("doctor", "--json", **extra).stdout)}["search"]
+
+    def test_doctor_super_space_on_plasma_is_not_ported_yet_never_a_failure(self):
+        row = self.search_row("kubuntu")
+        self.assertEqual(row["status"], "info")
+        self.assertIn("KDE Plasma", row["detail"])
+        self.assertNotIn("re-run", row["detail"])
+
+    def test_doctor_super_space_on_gnome_still_fails_when_missing(self):
+        for flavour in ("zorin", None):     # no flavour file: installed before flavours existed, so zorin
+            with self.subTest(flavour=flavour):
+                self.assertEqual(self.search_row(flavour)["status"], "fail")
+
     def test_doctor_noctraos_update_rows(self):
         self.assertEqual(self.update_row()["status"], "info")   # no updater on this system yet
         ok = self.update_row('{"signing_key": true, "failed_migrations": [], "serial": 3, "channel": "stable"}')

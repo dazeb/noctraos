@@ -58,8 +58,11 @@ vm_image_finish() {
   fi
 
   log "checking the provisioned system"
-  # Either the fresh clone's HEAD, or, when first boot fell back to the snapshot baked into the ISO (no git or
-  # network then), the commit file the ISO build wrote next to it.
+  # Keep the first-boot log beside the doctor log: a failed check stops the VM hard, and the end of the log, still in the
+  # guest's page cache, is lost with it (the first kubuntu rehearsal lost the Hermes error that way).
+  vm_ssh 'cat ~/.local/share/noctraos-firstboot.log' > "$dir/$label-firstboot.log" 2>/dev/null || true
+  # Either the fresh clone's HEAD, or the commit file: written by the first-boot runner from GitHub's tarball (no git yet,
+  # the zorin base), or by the ISO build next to the baked snapshot (no network then).
   got="$(vm_ssh 'git -C ~/.local/share/noctraos rev-parse HEAD 2>/dev/null || cat ~/.local/share/noctraos/.noctraos-commit 2>/dev/null || true' | tr -d '[:space:]')"
   # The VM's first boot fetched $branch from GitHub. If that is not the commit the rest of the release (ISO,
   # BUILD-INFO, tag) is about, the disk holds other code: stop, and build again once the branch is quiet.

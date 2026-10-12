@@ -3,14 +3,15 @@
 # container, with the work directory on a big drive. About 2 minutes per ISO on NVMe.
 #
 #   iso/build-local.sh <dir> [release|appliance|both]       (default: release)
-#   NOCTRAOS_FLAVOUR=kubuntu iso/build-local.sh <dir>       the kubuntu flavour (default zorin); release only
+#   NOCTRAOS_FLAVOUR=kubuntu iso/build-local.sh <dir> [..]  the kubuntu flavour (default zorin)
 #
 # <dir> layout (created as needed):
 #   in/Zorin-OS-18.1-Core-64-bit.iso   the base ISO. Put it there once (the Proxmox node has a copy
 #                                      in /var/lib/vz/template/iso/). Flavour kubuntu: in/kubuntu-26.04.1-desktop-amd64.iso
 #                                      (cdimage.ubuntu.com/kubuntu/releases/26.04.1/release/, check it against SHA256SUMS).
 #   out/                               results: noctraos-<VERSION>-amd64.iso (+ .sha256) and, for
-#                                      `appliance`, noctraos-<VERSION>-appliance-build.iso
+#                                      `appliance`, noctraos-<VERSION>-appliance-build.iso; kubuntu: the same names
+#                                      with -kubuntu after the version
 #   work/                              scratch, removed when the build ends (ext4/xfs/btrfs/zfs drives)
 #   work.img                           only on a drive that is not a Linux filesystem: see below
 #
@@ -39,10 +40,6 @@ case "$FLAVOUR" in
 esac
 IMAGE="${BUILDER_IMAGE:-noctraos-iso-builder}"
 case "$WHAT" in release|appliance|both) ;; *) echo "unknown target: $WHAT" >&2; exit 1 ;; esac
-if [ "$FLAVOUR" = kubuntu ] && [ "$WHAT" != release ]; then
-  echo "NOT APPLIED: the $WHAT build is not available on the kubuntu flavour (its installer is Calamares; no unattended seed yet)" >&2
-  exit 2
-fi
 
 mkdir -p "$DIR/in" "$DIR/out" "$DIR/ctx"
 [ -f "$DIR/in/$BASE" ] || { echo "missing $DIR/in/$BASE (copy the base ISO there first)" >&2; exit 1; }
@@ -101,9 +98,12 @@ if [ "$WHAT" = release ] || [ "$WHAT" = both ]; then
   fail=0
   vol="$(xorriso -indev "$OUT" -report_system_area plain 2>&1 | sed -n "s/^Volume id *: '\(.*\)'/\1/p")"
   [ "$vol" = "NOCTRAOS_${VERSION//./_}" ] || { echo "FAIL: volume id is '$vol'"; fail=1; }
-  xorriso -osirrox on -indev "$OUT" -extract /boot/grub/grub.cfg /tmp/grub.cfg >/dev/null 2>&1
-  xorriso -osirrox on -indev "$OUT" -extract /isolinux/menuentries.cfg /tmp/menu.cfg >/dev/null 2>&1
-  grep -qiE 'unattended|noctraos\.seed' /tmp/grub.cfg /tmp/menu.cfg && { echo "FAIL: an unattended boot entry is in the release ISO"; fail=1; }
+  # The kubuntu ISO boots through GRUB only: it has no isolinux menu, and a failed extract must not end the run (set -e).
+  rm -f /tmp/grub.cfg /tmp/menu.cfg
+  xorriso -osirrox on -indev "$OUT" -extract /boot/grub/grub.cfg /tmp/grub.cfg >/dev/null 2>&1 || { echo "FAIL: no /boot/grub/grub.cfg in the release ISO"; fail=1; }
+  xorriso -osirrox on -indev "$OUT" -extract /isolinux/menuentries.cfg /tmp/menu.cfg >/dev/null 2>&1 || true
+  menus=(); for m in /tmp/grub.cfg /tmp/menu.cfg; do [ ! -f "$m" ] || menus+=("$m"); done
+  [ "${#menus[@]}" -eq 0 ] || ! grep -qiE 'unattended|noctraos\.seed|noctraos\.autoinstall' "${menus[@]}" || { echo "FAIL: an unattended boot entry is in the release ISO"; fail=1; }
   xorriso -indev "$OUT" -find /preseed -name 'noctraos.seed' 2>/dev/null | grep -q noctraos.seed && { echo "FAIL: the preseed seed is in the release ISO"; fail=1; }
   grep -q 'menuentry "Try or Install NoctraOS"' /tmp/grub.cfg || { echo "FAIL: default boot entry missing"; fail=1; }
   [ "$fail" -eq 0 ] || exit 1
@@ -113,7 +113,7 @@ fi
 if [ "$WHAT" = appliance ] || [ "$WHAT" = both ]; then
   echo "=== appliance ISO (unattended, user noctraos) $(date +%H:%M)"
   NOCTRAOS_UNATTENDED=1 NOCTRAOS_USER=noctraos NOCTRAOS_PASSWORD=noctraos NOCTRAOS_HOSTNAME=noctraos \
-    nice -n 10 bash "$BUILD" "$BASE" "/host/out/noctraos-$VERSION-appliance-build.iso"
+    nice -n 10 bash "$BUILD" "$BASE" "/host/out/noctraos-$VERSION${NAME_PART}-appliance-build.iso"
   rm -rf "$WORK_BASE"/noctraos-iso-build.*
 fi
 echo "=== ALL DONE $(date +%H:%M)"

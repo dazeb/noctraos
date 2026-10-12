@@ -7,7 +7,7 @@ summarise it; if they disagree with this file, this file wins.
 
 An **AI development workstation OS**, on an Ubuntu base. It ships as one product
 in flavours: Zorin OS 18.x with GNOME (`zorin`, shipped) and Kubuntu 26.04 with KDE
-Plasma (`kubuntu`, in progress). The name, version, features and commands are the
+Plasma (`kubuntu`, a preview from 0.5.0). The name, version, features and commands are the
 same in every flavour; see [flavours.md](flavours.md).
 
 It does what [Omarchy](https://omarchy.org) does for developers who live in a
@@ -125,7 +125,14 @@ some stock icons) are tracked in the coverage table in `theme-design.md`.
   version, feature set and command set. Flavours differ only in base and desktop:
   `zorin` (GNOME, Zorin OS 18.1) is the shipped one, and `kubuntu` (KDE Plasma,
   Kubuntu 26.04) ships only after its VM acceptance tests pass. Super+Space is the same
-  shortcut in every flavour. The rules for agents are in [flavours.md](flavours.md).
+  shortcut in every flavour.
+- **The KDE Plasma edition ships as a preview from 0.5.0** (decided 2026-10-12). Every
+  release builds and publishes both flavours from one tag. `kubuntu` gets its own
+  files and its own download-page section, labelled preview, with the parts that are
+  not ported yet listed (Super+Space, the Start panel). This happens once its appliance
+  installs unattended, provisions, and passes `noc doctor` and the boot test in a VM.
+  The GNOME edition stays the one the site recommends, and the Proxmox script offers
+  it only. The rules for agents are in [flavours.md](flavours.md).
 - **Autologin keyring prompt: fixed for every app.** Autologin never unlocks the
   account's keyring, so Hermes, browsers and VS Code asked for a password on first
   use. Setup now gives the account an unencrypted login keyring while it is empty

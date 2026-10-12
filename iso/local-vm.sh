@@ -21,6 +21,8 @@
 #  - `-usb -device usb-tablet` plus a QMP socket: clicks are QMP `input-send-event` with ABSOLUTE axes
 #    (0..32767). The HMP monitor's `mouse_move` is relative and a tablet ignores it.
 #  - Keys go through the HMP monitor (`sendkey`); screenshots through `screendump`.
+#  - A QEMU guest agent channel (org.qemu.guest_agent.0, socket qga.sock), like a Proxmox VM with the agent on: module 01b
+#    installs qemu-guest-agent, and without the channel `noc doctor` rightly reports it as unreachable, which fails a release image.
 #  - Needs /dev/kvm access (an ACL for your seat user is enough), qemu-system-x86_64, OVMF, and
 #    python3 with PIL or ffmpeg for `shot` (else it leaves the .ppm).
 set -euo pipefail
@@ -65,6 +67,8 @@ case "${1:-status}" in
       -device virtio-blk-pci,drive=d0,bootindex=1
       -netdev user,id=n0,hostfwd=tcp:127.0.0.1:"$VM_SSH_PORT"-:22 -device virtio-net-pci,netdev=n0
       -vga std -display none -usb -device usb-tablet -device usb-kbd
+      -device virtio-serial-pci -chardev socket,path="$VM_DIR/qga.sock",server=on,wait=off,id=qga0
+      -device virtserialport,chardev=qga0,name=org.qemu.guest_agent.0
       -monitor unix:"$MON",server,nowait -qmp unix:"$QMP",server,nowait
       -pidfile "$PID" -daemonize)
     # shellcheck disable=SC2054
