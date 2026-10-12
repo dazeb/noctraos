@@ -3,14 +3,15 @@
 # container, with the work directory on a big drive. About 2 minutes per ISO on NVMe.
 #
 #   iso/build-local.sh <dir> [release|appliance|both]       (default: release)
-#   NOCTRAOS_FLAVOUR=kubuntu iso/build-local.sh <dir>       the kubuntu flavour (default zorin); release only
+#   NOCTRAOS_FLAVOUR=kubuntu iso/build-local.sh <dir> [..]  the kubuntu flavour (default zorin)
 #
 # <dir> layout (created as needed):
 #   in/Zorin-OS-18.1-Core-64-bit.iso   the base ISO. Put it there once (the Proxmox node has a copy
 #                                      in /var/lib/vz/template/iso/). Flavour kubuntu: in/kubuntu-26.04.1-desktop-amd64.iso
 #                                      (cdimage.ubuntu.com/kubuntu/releases/26.04.1/release/, check it against SHA256SUMS).
 #   out/                               results: noctraos-<VERSION>-amd64.iso (+ .sha256) and, for
-#                                      `appliance`, noctraos-<VERSION>-appliance-build.iso
+#                                      `appliance`, noctraos-<VERSION>-appliance-build.iso; kubuntu: the same names
+#                                      with -kubuntu after the version
 #   work/                              scratch, removed when the build ends (ext4/xfs/btrfs/zfs drives)
 #   work.img                           only on a drive that is not a Linux filesystem: see below
 #
@@ -39,10 +40,6 @@ case "$FLAVOUR" in
 esac
 IMAGE="${BUILDER_IMAGE:-noctraos-iso-builder}"
 case "$WHAT" in release|appliance|both) ;; *) echo "unknown target: $WHAT" >&2; exit 1 ;; esac
-if [ "$FLAVOUR" = kubuntu ] && [ "$WHAT" != release ]; then
-  echo "NOT APPLIED: the $WHAT build is not available on the kubuntu flavour (its installer is Calamares; no unattended seed yet)" >&2
-  exit 2
-fi
 
 mkdir -p "$DIR/in" "$DIR/out" "$DIR/ctx"
 [ -f "$DIR/in/$BASE" ] || { echo "missing $DIR/in/$BASE (copy the base ISO there first)" >&2; exit 1; }
@@ -113,7 +110,7 @@ fi
 if [ "$WHAT" = appliance ] || [ "$WHAT" = both ]; then
   echo "=== appliance ISO (unattended, user noctraos) $(date +%H:%M)"
   NOCTRAOS_UNATTENDED=1 NOCTRAOS_USER=noctraos NOCTRAOS_PASSWORD=noctraos NOCTRAOS_HOSTNAME=noctraos \
-    nice -n 10 bash "$BUILD" "$BASE" "/host/out/noctraos-$VERSION-appliance-build.iso"
+    nice -n 10 bash "$BUILD" "$BASE" "/host/out/noctraos-$VERSION${NAME_PART}-appliance-build.iso"
   rm -rf "$WORK_BASE"/noctraos-iso-build.*
 fi
 echo "=== ALL DONE $(date +%H:%M)"
