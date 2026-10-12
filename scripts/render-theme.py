@@ -70,7 +70,63 @@ def render(root):
                 "terminal.integrated.fontFamily": palette["font"],
                 "git.enableSmartCommit": True, "extensions.autoCheckUpdates": True}
     outputs[root / "configs/vscode/settings.json"] = json.dumps(settings, indent=2) + "\n"
+    outputs.update(render_plasma(root, palette))
     return outputs
+
+
+def rgb(color):
+    """'#e68e0d' -> '230,142,13', the form KDE colour schemes and Konsole use."""
+    return ",".join(str(int(color[i:i + 2], 16)) for i in (1, 3, 5))
+
+
+def render_plasma(root, palette):
+    """The KDE colour scheme, the Konsole colour scheme and the Konsole profile (flavour kubuntu), from the same palette."""
+    c = palette["colors"]
+    plasma = root / "configs/plasma"
+
+    def colors(section, bg, alt, fg):
+        return (f"[Colors:{section}]\nBackgroundAlternate={rgb(c[alt])}\nBackgroundNormal={rgb(c[bg])}\n"
+                f"DecorationFocus={rgb(c['accent'])}\nDecorationHover={rgb(c['accent'])}\n"
+                f"ForegroundActive={rgb(c['accent'])}\nForegroundInactive={rgb(c['muted'])}\n"
+                f"ForegroundLink={rgb(c['accent'])}\nForegroundNegative={rgb(c['red'])}\n"
+                f"ForegroundNeutral={rgb(c['yellow'])}\nForegroundNormal={rgb(c[fg])}\n"
+                f"ForegroundPositive={rgb(c['green'])}\nForegroundVisited={rgb(c['muted'])}\n\n")
+
+    scheme = "[ColorEffects:Disabled]\nChangeSelectionColor=\nColor=56,56,56\nColorAmount=0\nColorEffect=0\n"
+    scheme += "ContrastAmount=0.65\nContrastEffect=1\nEnable=\nIntensityAmount=0.1\nIntensityEffect=2\n\n"
+    scheme += "[ColorEffects:Inactive]\nChangeSelectionColor=true\nColor=112,111,110\nColorAmount=0.025\n"
+    scheme += "ColorEffect=2\nContrastAmount=0.1\nContrastEffect=2\nEnable=false\nIntensityAmount=0\nIntensityEffect=0\n\n"
+    scheme += colors("Button", "raised", "selection", "foreground")
+    scheme += colors("Complementary", "panel", "background", "foreground")
+    scheme += colors("Header", "panel", "background", "foreground")
+    selection = colors("Selection", "accent", "accent", "panel")
+    selection = selection.replace(f"ForegroundActive={rgb(c['accent'])}", f"ForegroundActive={rgb(c['panel'])}")
+    selection = selection.replace(f"ForegroundInactive={rgb(c['muted'])}", f"ForegroundInactive={rgb(c['panel'])}")
+    selection = selection.replace(f"ForegroundLink={rgb(c['accent'])}", f"ForegroundLink={rgb(c['panel'])}")
+    scheme += selection
+    scheme += colors("Tooltip", "raised", "selection", "foreground")
+    scheme += colors("View", "background", "raised", "foreground")
+    scheme += colors("Window", "background", "raised", "foreground")
+    scheme += "[General]\nColorScheme=NoctraOSDark\nName=NoctraOS Dark\nshadeSortColumn=true\n\n"
+    scheme += f"[KDE]\ncontrast=4\n\n[WM]\nactiveBackground={rgb(c['panel'])}\nactiveBlend={rgb(c['foreground'])}\n"
+    scheme += f"activeForeground={rgb(c['foreground'])}\ninactiveBackground={rgb(c['panel'])}\n"
+    scheme += f"inactiveBlend={rgb(c['muted'])}\ninactiveForeground={rgb(c['muted'])}\n"
+
+    term = palette["terminal"]
+    names = ["", "Intense"]
+    konsole = f"[Background]\nColor={rgb(c['background'])}\n\n[BackgroundIntense]\nColor={rgb(c['raised'])}\n\n"
+    konsole += f"[BackgroundFaint]\nColor={rgb(c['background'])}\n\n"
+    for index, color in enumerate(term):
+        konsole += f"[Color{index % 8}{names[index // 8]}]\nColor={rgb(color)}\n\n"
+    konsole += f"[Foreground]\nColor={rgb(c['foreground'])}\n\n[ForegroundIntense]\nColor={rgb(term[15])}\n\n"
+    konsole += f"[ForegroundFaint]\nColor={rgb(c['muted'])}\n\n[General]\nDescription=NoctraOS\nOpacity=1\n"
+
+    profile = ("[Appearance]\nColorScheme=NoctraOS\n"
+               f"Font={palette['font']},11,-1,5,50,0,0,0,0,0\n\n[General]\nName=NoctraOS\nParent=FALLBACK/\n\n"
+               "[Scrolling]\nHistorySize=10000\n")
+    return {plasma / "NoctraOSDark.colors": scheme,
+            plasma / "konsole/NoctraOS.colorscheme": konsole,
+            plasma / "konsole/NoctraOS.profile": profile}
 
 
 def main():

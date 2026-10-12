@@ -69,6 +69,9 @@ install/
                             08_shell_theme (NoctraOS-Dark shell + GTK themes, white menu icons, terminal/app palette),
                             09_super_search (Super+Space search, Start panel: the three GNOME Shell extensions, search app,
                             schemas, help page, index timer, welcome/branding autostart)
+  desktop/plasma/           Plasma-only modules (flavour kubuntu): 01_desktop_packages, 04_desktop_apps (KDE apps), 05_mouse_ergonomics and
+                            07_nautilus_skel (Dolphin right-click actions via bin/noctraos-fileaction), 06_desktop_theme (colour scheme, Konsole
+                            profile, wallpapers, Agents menu, panel layout through configs/plasma/apply-layout.sh); 08 and 09 not written yet
   07_persistence.sh         /etc/skel defaults, noc + Control Panel install (retires the old noc-menu)
   10_boot_theme.sh          Plymouth splash + GRUB theme for non-ISO installs
                             (update-alternatives, update-initramfs, update-grub)

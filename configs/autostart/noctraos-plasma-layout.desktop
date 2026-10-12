@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=NoctraOS panel layout
+Comment=Applies the NoctraOS panel layout once per account
+Exec=/usr/local/share/noctraos/plasma/apply-layout.sh
+OnlyShowIn=KDE;
+NoDisplay=true
+X-KDE-autostart-after=panel
