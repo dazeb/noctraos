@@ -3,6 +3,7 @@
 Nothing here needs KDE: the files are parsed, the action runner is driven with stand-in scripts, and each module is run on a
 machine without plasmashell to prove it says NOT APPLIED instead of reporting success."""
 import configparser
+import json
 import os
 import re
 import subprocess
@@ -79,6 +80,123 @@ class LayoutScriptTests(unittest.TestCase):
 
     def test_the_session_run_also_activates_the_colour_scheme(self):
         self.assertIn("plasma-apply-colorscheme NoctraOSDark", (ROOT / "configs/plasma/apply-layout.sh").read_text())
+
+
+LNF = ROOT / "assets/plasma/look-and-feel/dev.noctraos.desktop"
+MARKER = "# Written by NoctraOS (configs/plasma/install-look.sh)."
+
+
+def snapshot(root):
+    return {str(p.relative_to(root)): p.read_bytes() for p in sorted(root.rglob("*")) if p.is_file()}
+
+
+class LookTests(unittest.TestCase):
+    """The system-wide look (configs/plasma/install-look.sh), installed into a scratch root as the ISO build does."""
+
+    def install(self, root):
+        result = subprocess.run(["bash", str(ROOT / "configs/plasma/install-look.sh"), str(root)],
+                                capture_output=True, text=True, env={**os.environ, "XDG_CONFIG_HOME": str(root / "xdg")})
+        self.assertEqual(result.returncode, 0, result.stderr)
+        return result.stdout
+
+    def scratch_root(self, tmp, breeze=True):
+        root = Path(tmp) / "root"
+        if breeze:
+            (root / "usr/share/sddm/themes/breeze").mkdir(parents=True)
+            (root / "usr/share/sddm/themes/breeze/metadata.desktop").write_text("[SddmGreeterTheme]\n")
+        (root / "usr/share/applications").mkdir(parents=True)
+        (root / "usr/share/applications/code.desktop").write_text("[Desktop Entry]\n")
+        return root
+
+    def test_everything_lands_and_a_second_run_changes_nothing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.scratch_root(tmp)
+            self.install(root)
+            first = snapshot(root)
+            out = self.install(root)
+            self.assertEqual(snapshot(root), first)
+            self.assertNotIn("kept (not ours)", out)
+            share = root / "usr/local/share"
+            lnf = share / "plasma/look-and-feel/dev.noctraos.desktop"
+            for rel in ("metadata.json", "contents/defaults", "contents/splash/Splash.qml",
+                        "contents/splash/images/lockup.png", "contents/previews/preview.png"):
+                self.assertTrue((lnf / rel).is_file(), rel)
+            layout = (lnf / "contents/layouts/org.kde.plasma.desktop-layout.js").read_text()
+            self.assertIn("applications:code.desktop", layout)
+            self.assertIn('writeConfig("icon", "noctraos-logo")', layout)
+            wallpapers = sorted(p.name for p in (share / "wallpapers").iterdir())
+            self.assertEqual(len(wallpapers), len(list((ROOT / "assets/wallpapers").glob("*.jpg"))))
+            for name in wallpapers:
+                meta = json.loads((share / "wallpapers" / name / "metadata.json").read_text())
+                self.assertEqual(meta["KPlugin"]["Id"], name)
+                self.assertTrue((share / "wallpapers" / name / "contents/images/3840x2160.jpg").is_file())
+            self.assertTrue((share / "color-schemes/NoctraOSDark.colors").is_file())
+            self.assertTrue((share / "icons/hicolor/scalable/apps/noctraos-logo.svg").is_file())
+            sddm = parse(root / "usr/share/sddm/themes/breeze/theme.conf.user")
+            for key in ("background", "logo"):
+                self.assertTrue((root / sddm["General"][key].lstrip("/")).is_file(), key)
+            self.assertEqual(parse(root / "etc/sddm.conf.d/30-noctraos.conf")["Theme"]["Current"], "breeze")
+            self.assertLess("30-noctraos.conf", "kde_settings.conf")      # System Settings' own choice sorts later and wins
+            splash = parse(root / "etc/xdg/ksplashrc")["KSplash"]
+            self.assertEqual((splash["Engine"], splash["Theme"]), ("KSplashQML", "dev.noctraos.desktop"))
+            lock = (root / "etc/xdg/kscreenlockerrc").read_text()
+            self.assertIn("Image=file:///usr/local/share/noctraos/plasma/login/background.jpg", lock)
+            about = parse(root / "etc/skel/.config/kcm-about-distrorc")["General"]
+            self.assertEqual(about["Name"], "NoctraOS")
+            self.assertEqual(about["Version"], (ROOT / "VERSION").read_text().strip())
+            self.assertTrue((root / about["LogoPath"].lstrip("/")).is_file())
+
+    def test_a_file_someone_else_wrote_is_kept(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.scratch_root(tmp)
+            own = root / "usr/share/sddm/themes/breeze/theme.conf.user"
+            own.write_text("[General]\nbackground=/home/me/cat.jpg\n")
+            (root / "etc/xdg").mkdir(parents=True)
+            (root / "etc/xdg/ksplashrc").write_text("[KSplash]\nTheme=Mine\n")
+            out = self.install(root)
+            self.assertEqual(own.read_text(), "[General]\nbackground=/home/me/cat.jpg\n")
+            self.assertEqual((root / "etc/xdg/ksplashrc").read_text(), "[KSplash]\nTheme=Mine\n")
+            self.assertIn("kept (not ours): /usr/share/sddm/themes/breeze/theme.conf.user", out)
+            self.assertIn("kept (not ours): /etc/xdg/ksplashrc", out)
+
+    def test_without_sddm_breeze_the_login_screen_is_not_applied(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.scratch_root(tmp, breeze=False)
+            out = self.install(root)
+            self.assertIn("NOT APPLIED: login screen", out)
+            self.assertFalse((root / "etc/sddm.conf.d").exists())
+
+    def test_global_theme_package_is_consistent(self):
+        meta = json.loads((LNF / "metadata.json").read_text())
+        self.assertEqual(meta["KPackageStructure"], "Plasma/LookAndFeel")
+        self.assertEqual(meta["KPlugin"]["Id"], LNF.name)
+        defaults = (LNF / "contents/defaults").read_text()
+        self.assertIn("ColorScheme=NoctraOSDark", defaults)
+        self.assertIn(f"Theme={LNF.name}", defaults)
+        # the wallpaper the theme names is one of the packages install-look.sh builds
+        wallpaper = re.search(r"(?m)^\[Wallpaper\]\nImage=(\S+)", defaults).group(1)
+        titles = {"NoctraOS-" + "".join(w.capitalize() for w in p.stem.removeprefix("noctraos-").removesuffix("-2160p").split("-"))
+                  for p in (ROOT / "assets/wallpapers").glob("*.jpg")}
+        self.assertIn(wallpaper, titles)
+        splash = (LNF / "contents/splash/Splash.qml").read_text()
+        for image in re.findall(r'source: "([^"]+)"', splash):
+            self.assertTrue((LNF / "contents/splash" / image).is_file(), image)
+        self.assertIn("property int stage", splash)                     # ksplashqml drives the splash through it
+
+    def test_rendered_artwork_is_committed_at_the_sizes_plasma_and_calamares_use(self):
+        sizes = {
+            "assets/boot/calamares/icon.png": (512, 512),
+            "assets/boot/calamares/welcome.png": (800, 300),
+            "assets/plasma/look-and-feel/dev.noctraos.desktop/contents/previews/preview.png": (640, 360),
+        }
+        for rel, size in sizes.items():
+            data = (ROOT / rel).read_bytes()
+            self.assertEqual(data[:8], b"\x89PNG\r\n\x1a\n", rel)
+            self.assertEqual((int.from_bytes(data[16:20], "big"), int.from_bytes(data[20:24], "big")), size, rel)
+        for slide in sorted((ROOT / "assets/boot/calamares").glob("slide-*.png")):
+            data = slide.read_bytes()
+            width, height = int.from_bytes(data[16:20], "big"), int.from_bytes(data[20:24], "big")
+            self.assertAlmostEqual(width / height, 16 / 9, places=2, msg=slide.name)
 
 
 class PackageInstallTests(unittest.TestCase):

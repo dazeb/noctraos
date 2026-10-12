@@ -12,7 +12,10 @@ panel.alignment = "center";
 panel.lengthMode = "fill";
 panel.floating = true;
 
-panel.addWidget("org.kde.plasma.kickoff");
+// The Start button carries the NoctraOS logo (installed under that icon name by install/desktop/plasma/06 and 08).
+var kickoff = panel.addWidget("org.kde.plasma.kickoff");
+kickoff.currentConfigGroup = ["General"];
+kickoff.writeConfig("icon", "noctraos-logo");
 var tasks = panel.addWidget("org.kde.plasma.icontasks");
 tasks.currentConfigGroup = ["General"];
 tasks.writeConfig("launchers", [
