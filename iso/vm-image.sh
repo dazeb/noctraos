@@ -71,6 +71,9 @@ vm_image_finish() {
     echo "FAIL: the VM provisioned ${got:0:7} but this build is ${sha:0:7} ($branch moved during the build?); no image written" >&2
     return 1
   fi
+  # Keep the first-boot log beside the doctor log: a failed check stops the VM hard, and the end of the log, still in the
+  # guest's page cache, is lost with it (the first kubuntu rehearsal lost the Hermes error that way).
+  vm_ssh 'cat ~/.local/share/noctraos-firstboot.log' > "$dir/$label-firstboot.log" 2>/dev/null || true
   # `noc doctor` always exits 0 and flags problems with "!!", so the log is what gets checked
   vm_ssh 'noc doctor' | tee "$dir/$label-doctor.log"
   # The Flatpak security row is advisory about the distribution's patch state (Ubuntu 24.04 ships Flatpak 1.14

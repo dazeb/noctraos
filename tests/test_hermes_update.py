@@ -28,7 +28,9 @@ HERMES_STUB = r'''#!/usr/bin/env bash
 case "$1" in
   --version) [ -f "$HERMES_HOME/hermes-agent/VERSION" ] || exit 1
              echo "Hermes Agent v$(cat "$HERMES_HOME/hermes-agent/VERSION") (2026.9.24) · upstream abc" ;;
-  desktop) mkdir -p "$HERMES_HOME/hermes-agent/apps/desktop/release/linux-unpacked"
+  desktop) n="$(cat "$HERMES_HOME/.desktop-builds" 2>/dev/null || echo 0)"; echo $((n + 1)) > "$HERMES_HOME/.desktop-builds"
+           [ "$n" -ge "${DESKTOP_FAILS:-0}" ] || { echo "stub: Electron download failed" >&2; exit 1; }
+           mkdir -p "$HERMES_HOME/hermes-agent/apps/desktop/release/linux-unpacked"
            printf '#!/bin/sh\n' > "$HERMES_HOME/hermes-agent/apps/desktop/release/linux-unpacked/hermes"
            chmod +x "$HERMES_HOME/hermes-agent/apps/desktop/release/linux-unpacked/hermes" ;;
   *) exit 0 ;;
@@ -120,6 +122,38 @@ class InstallTests(HermesBox):
         self.hermes("install")
         self.assertEqual(self.installs(), [])
         self.assertEqual(self.version(), "0.21.5")
+
+
+class DesktopBuildTests(HermesBox):
+    def runtime_without_app(self):
+        self.install_version("0.21.7")
+        app = self.hh / "hermes-agent/apps/desktop/release/linux-unpacked/hermes"
+        app.unlink()
+
+    def builds(self):
+        return int((self.hh / ".desktop-builds").read_text())
+
+    def test_one_failed_desktop_build_is_retried(self):
+        self.runtime_without_app()
+        r = self.hermes("install", DESKTOP_FAILS="1", NOCTRAOS_HERMES_RETRY_DELAY="0")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertEqual(self.builds(), 2)
+        self.assertIn("trying once more", r.stdout)
+        self.assertEqual(subprocess.run(["bash", str(HERMES), "ready"], env=self.env).returncode, 0)
+
+    def test_two_failed_desktop_builds_fail_the_install(self):
+        self.runtime_without_app()
+        r = self.hermes("install", DESKTOP_FAILS="2", NOCTRAOS_HERMES_RETRY_DELAY="0")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertEqual(self.builds(), 2)
+        self.assertIn("desktop build failed", r.stdout)
+
+    def test_a_good_build_runs_once(self):
+        self.runtime_without_app()
+        r = self.hermes("install", NOCTRAOS_HERMES_RETRY_DELAY="0")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertEqual(self.builds(), 1)
+        self.assertNotIn("trying once more", r.stdout)
 
 
 class UpdateTests(HermesBox):
