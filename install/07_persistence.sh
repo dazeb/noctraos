@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 # desktops: any
-# Pending the flavour split (docs/flavours.md): the Nautilus skel scripts belong to the GNOME desktop code.
 # Module 07: persistence — /etc/skel defaults for new users + noc management CLI.
 set -Eeuo pipefail
 source "$REPO_ROOT/install/lib.sh"
@@ -14,7 +13,7 @@ sudo mkdir -p \
   /etc/skel/.config/autostart \
   /etc/skel/.config/Code/User \
   /etc/skel/.continue \
-  /etc/skel/.local/share/nautilus/scripts
+  /etc/skel/.local/share
 
 sudo install -m 644 "$REPO_ROOT/configs/mise/config.toml" \
   /etc/skel/.config/mise/config.toml
@@ -22,9 +21,6 @@ sudo install -m 644 "$REPO_ROOT/configs/vscode/continue_config.yaml" \
   /etc/skel/.continue/config.yaml
 sudo install -m 644 "$REPO_ROOT/configs/vscode/settings.json" \
   /etc/skel/.config/Code/User/settings.json
-for old in Open_in_VSCodium Ask_AI_to_Explain Open_Terminal_Here Open_in_VS_Code; do
-  sudo rm -f "/etc/skel/.local/share/nautilus/scripts/$old"
-done
 sudo install -m 644 "$REPO_ROOT/configs/copyq/copyq.conf" \
   /etc/skel/.config/copyq/copyq.conf
 sudo install -m 644 "$REPO_ROOT/configs/theme/herdr.toml" \
@@ -38,10 +34,8 @@ sudo install -m 644 "$REPO_ROOT/configs/autostart/copyq.desktop" \
   /etc/skel/.config/autostart/copyq.desktop
 sudo python3 "$REPO_ROOT/scripts/seed-password-store.py" /etc/skel >/dev/null \
   || warn "Could not seed the keyring-free password store for new users"
-for src in "$REPO_ROOT/configs/nautilus-scripts/"*; do
-  [ -f "$src" ] || continue
-  sudo install -m 755 "$src" "/etc/skel/.local/share/nautilus/scripts/$(basename "$src")"
-done
+# Right-click actions are the desktop's (Nautilus scripts on GNOME); the flavour's desktop module installs them.
+run_desktop_module 07_nautilus_skel.sh
 sudo chmod -R go+rX /etc/skel/.config /etc/skel/.continue /etc/skel/.local
 # ...except the keyring directory, which stays private to the account.
 [ -d /etc/skel/.local/share/keyrings ] && sudo chmod -R go-rwx /etc/skel/.local/share/keyrings
@@ -140,5 +134,5 @@ fi
 # or ~/.config/noctraos/no-agent-skills, is respected. Other accounts catch up through migrations/user/0002.
 as_user /usr/local/bin/noc-agent-skills install || warn "Could not install the NoctraOS agent skill (noc agent-skills install retries)"
 
-log "Persistence complete: new users inherit mise, Continue and Nautilus script defaults."
+log "Persistence complete: new users inherit mise, Continue and the desktop defaults."
 log "Manage the workstation with: noc (CLI) or the NoctraOS Control Panel (GUI)."

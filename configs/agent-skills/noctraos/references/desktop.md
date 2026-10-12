@@ -9,7 +9,7 @@ One overlay reaches applications, files and folders, clipboard history, the web,
 - `extensions/noctraos-search@noctraos.local` - the overlay; `search/` - the app (`core.py` file index in SQLite, CopyQ bridge, `browsers.py`, `preferences.py`, settings window `noctraos-search --settings`); a systemd user timer refreshes the index (units in `configs/systemd/`); `configs/gsettings/` holds the schemas.
 - **Indexes the home folder, not `/`** (`roots` defaults to `['~']`; `/` floods results with system paths). A user's saved `roots` is kept.
 - **Browser history is opt-in**, offered after first use via a "Finish setup" notice in the overlay (**Set up** / **Not now**, reversible in Search settings). History is copied to `~/.cache/noctraos-search/history` (mode 0700) and searched locally; nothing is uploaded.
-- Installed by `install/09_super_search.sh`; also baked into the ISO.
+- Installed by `install/desktop/gnome/09_super_search.sh`; also baked into the ISO.
 
 ## Start panel, dock, top bar
 

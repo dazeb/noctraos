@@ -94,11 +94,13 @@ migration for one flavour prints `NOT APPLIED on the <flavour> flavour` on the o
 
 Taken from the repo and the VM runs. Not every item has been verified on a VM.
 
-- **Desktop-only today:** `05_mouse_ergonomics`, `06_desktop_theme`, `08_shell_theme`, `09_super_search`,
-  `branding/setup-branding.py`, and the three GNOME Shell extensions under `extensions/`.
-- **Core modules that still contain GNOME-coupled lines** (split or guard them before a Plasma release):
-  `01_system` (2 lines), `04_workstation_apps` (2), `04c_app_policy` (6, including Zorin package removals),
-  `07_persistence` (5). `lib.sh` has the one allowed desktop guard.
+- **Desktop-only, now in `install/desktop/gnome/`:** `01_desktop_packages`, `04_desktop_apps`, `05_mouse_ergonomics`,
+  `06_desktop_theme`, `07_nautilus_skel`, `08_shell_theme`, `09_super_search`. `install.sh` runs them with
+  `run_desktop_module`; a flavour without that file prints `NOT APPLIED`. Still at the top level because update bundles
+  and the ISO bake list them: `branding/setup-branding.py` and the three GNOME Shell extensions under `extensions/`.
+- **Core modules that still contain GNOME/Zorin-coupled lines** (split or guard them before a Plasma release):
+  `04_gui_apps` (the gnome-keyring restart) and `04c_app_policy` (Zorin package removals and launcher hides). The ISO
+  remaster is still `iso/build-noctraos-iso.sh`, not yet `iso/flavours/zorin.sh`. `lib.sh` has the one allowed desktop guard.
 
 ## Rules for agents
 

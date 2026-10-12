@@ -19,10 +19,10 @@ Orchestrator: logging, `TARGET_USER` resolution, flags `--skip-gui`, `--only <mo
 | `02_mise` | mise, Node LTS, Herdr, Starship, lazygit, lazydocker |
 | `04_gui_apps`, `04_workstation_apps` | VS Code + extensions, Mission Center, CopyQ; the Flatpak/apt workstation set |
 | `04c_app_policy`, `04d_appmanager` | app policy; AppImage manager |
-| `05_mouse_ergonomics` | Nautilus right-click scripts |
-| `06_desktop_theme` | gsettings, wallpapers, Agents menu, AI-first menu |
-| `08_shell_theme` | NoctraOS-Dark shell + GTK themes |
-| `09_super_search` | Shell extensions, search app, schemas, help page, index timer, autostarts |
+| `desktop/gnome/05_mouse_ergonomics` | Nautilus right-click scripts |
+| `desktop/gnome/06_desktop_theme` | gsettings, wallpapers, Agents menu, AI-first menu |
+| `desktop/gnome/08_shell_theme` | NoctraOS-Dark shell + GTK themes |
+| `desktop/gnome/09_super_search` | Shell extensions, search app, schemas, help page, index timer, autostarts |
 | `10_boot_theme` | Plymouth + GRUB for non-ISO installs |
 | `07_persistence` | `/etc/skel` defaults, `noc` + Control Panel + privileged helper + updater, root-owned snapshot |
 | `11_hermes` | Hermes Desktop (last; 25+ min) |
