@@ -151,13 +151,18 @@ echo "======================================================"
 
 # A fresh install has no git yet (module 01 installs it), so the latest code also comes as a tarball: curl is always there.
 fetch_tarball() {
-  local tmp
+  local tmp sha
   tmp="$(mktemp -d)" || return 1
-  if curl -fsSL --max-time 300 "${REPO_URL%.git}/archive/refs/heads/$REPO_BRANCH.tar.gz" | tar -xz -C "$tmp" --strip-components=1 \
+  if curl -fsSL --max-time 300 "${REPO_URL%.git}/archive/refs/heads/$REPO_BRANCH.tar.gz" | tee "$tmp.tgz" | tar -xz -C "$tmp" --strip-components=1 \
      && [ -f "$tmp/install.sh" ]; then
+    # GitHub's tarball is a `git archive`: its pax header names the commit. Keep it, as the baked snapshot does, so a
+    # release build can tell which code provisioned the machine.
+    sha="$(gzip -dc "$tmp.tgz" 2>/dev/null | head -c 1024 | grep -ao 'comment=[0-9a-f]\{40\}' | cut -d= -f2)"
+    [ -z "$sha" ] || echo "$sha" > "$tmp/.noctraos-commit"
+    rm -f "$tmp.tgz"
     chmod 755 "$tmp" && mv "$tmp" "$DEST"
   else
-    rm -rf "$tmp"
+    rm -rf "$tmp" "$tmp.tgz"
     return 1
   fi
 }
