@@ -71,7 +71,9 @@ install/
                             schemas, help page, index timer, welcome/branding autostart)
   desktop/plasma/           Plasma-only modules (flavour kubuntu): 01_desktop_packages, 04_desktop_apps (KDE apps), 05_mouse_ergonomics and
                             07_nautilus_skel (Dolphin right-click actions via bin/noctraos-fileaction), 06_desktop_theme (colour scheme, Konsole
-                            profile, wallpapers, Agents menu, panel layout through configs/plasma/apply-layout.sh); 08 and 09 not written yet
+                            profile, wallpapers, Agents menu, panel layout through configs/plasma/apply-layout.sh), 08_shell_theme (runs
+                            configs/plasma/install-look.sh /: Global Theme dev.noctraos.desktop, wallpaper packages, SDDM login screen, splash,
+                            lock screen, About this System; the kubuntu ISO runs the same script on the squashfs); 09 not written yet
   07_persistence.sh         /etc/skel defaults, noc + Control Panel install (retires the old noc-menu)
   10_boot_theme.sh          Plymouth splash + GRUB theme for non-ISO installs
                             (update-alternatives, update-initramfs, update-grub)
@@ -126,6 +128,9 @@ site/                       project website (static, deployed via wrangler.jsonc
                             every page head carries canonical, Open Graph, Twitter and JSON-LD metadata; `script.js` also holds the screenshot lightbox (a
                             progressive enhancement of the `figure.shot > a` links, native `<dialog>`; tests/test_site_lightbox.py drives it in headless Chrome); social cards live in
                             site/img/social/ (1200x630), favicons/manifest/robots.txt/sitemap.xml/.well-known/security.txt in site/
+scripts/render-kubuntu-branding.py  renders the kubuntu artwork (headless Chrome + Pillow): assets/boot/calamares (installer logo, welcome,
+                            six slides), assets/plasma/login (SDDM background + logo) and the Global Theme's splash lockup and previews;
+                            `calamares|login|splash|previews` renders one group; commit the outputs
 scripts/render-social.py    renders the OG cards, the X promo images (assets/promo/x/) and the favicons with headless Chrome,
                             from assets/social/fonts (local woff2); rerun it when a page title or a screenshot changes
 docs/launch/                launch copy: x-posts.md (the thread, standalone posts, alt text, length-checked)

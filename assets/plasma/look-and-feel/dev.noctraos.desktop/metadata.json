@@ -1,0 +1,19 @@
+{
+    "KPackageStructure": "Plasma/LookAndFeel",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Email": "admin@noctraos.dev",
+                "Name": "NoctraOS"
+            }
+        ],
+        "Category": "",
+        "Description": "The NoctraOS look: dark canvas, amber accent, NoctraOS splash and lock screen",
+        "Id": "dev.noctraos.desktop",
+        "License": "MIT",
+        "Name": "NoctraOS",
+        "Website": "https://noctraos.dev/"
+    },
+    "Keywords": "Desktop;Workspace;Appearance;Look and Feel;NoctraOS;",
+    "X-Plasma-APIVersion": "2"
+}

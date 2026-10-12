@@ -138,9 +138,9 @@ Taken from the repo and the VM runs. Not every item has been verified on a VM.
 | 03 Ollama, 11 Hermes | shipped | 03 and 11 not run |
 | 05 mouse ergonomics | shipped (Nautilus scripts) | written (Dolphin right-click actions through `noctraos-fileaction`); not run on a Plasma session yet |
 | 06 desktop theme | shipped | written: colour scheme, Konsole profile, wallpapers, Agents section, panel layout (applied from the session); not run on a Plasma session yet |
-| 08 shell theme | shipped | reports `NOT APPLIED`; the SDDM theme and the AI-first Kickoff categories are not started |
+| 08 shell theme | shipped | written: Global Theme `dev.noctraos.desktop` (splash, previews, layout), wallpaper packages, SDDM login screen, lock-screen picture, About this System, NoctraOS logo on Kickoff (`configs/plasma/install-look.sh`, also baked into the ISO); unit-tested and the splash rendered offscreen with Qt 6, not run on a Plasma session yet; the AI-first Kickoff categories are not started |
 | 09 Super+Space and Start | shipped (GNOME Shell extensions) | report `NOT APPLIED`; plan is a KRunner runner and Kickoff |
 | Login and boot | shipped | SDDM greeter starts, and login reaches a Plasma session on the VM with virtio-vga-gl; the screen is not verified from the host |
-| ISO build | remaster script (`iso/build-noctraos-iso.sh`) | `iso/flavours/kubuntu.sh`: release (interactive Calamares) ISO only, built from the real kubuntu-26.04.1 ISO; no unattended or appliance build, no VM boot test of the result yet (see the pull request for what was run) |
+| ISO build | remaster script (`iso/build-noctraos-iso.sh`) | `iso/flavours/kubuntu.sh`: release (interactive Calamares, NoctraOS pictures and a six-slide slideshow) ISO only, built from the real kubuntu-26.04.1 ISO; the live session's Plymouth splash is still Kubuntu's; no unattended or appliance build, no VM boot test of the result yet (see the pull request for what was run) |
 | Release pipeline and update channel | wired | not wired |
 | Control Panel | shipped | runs on GTK3; not verified on Plasma |

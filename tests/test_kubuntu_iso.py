@@ -80,6 +80,35 @@ class CalamaresTests(unittest.TestCase):
             # Kubuntu's own branding is left in place
             self.assertTrue((t.root / "etc/calamares/branding/kubuntu/branding.desc").is_file())
 
+    def test_our_pictures_and_slideshow_replace_kubuntus(self):
+        with Tree() as t:
+            r = sh(f'kubuntu_calamares "{t.root}" 0.5.0')
+            self.assertEqual(r.returncode, 0, r.stderr)
+            dst = t.root / "etc/calamares/branding/noctraos"
+            art = ROOT / "assets/boot/calamares"
+            for name in ("logo.png", "icon.png", "welcome.png"):
+                self.assertEqual((dst / name).read_bytes(), (art / name).read_bytes(), name)
+            self.assertEqual((dst / "welcome-oem.png").read_bytes(), (art / "welcome.png").read_bytes())
+            slides = sorted(p.name for p in art.glob("slide-*.png"))
+            self.assertGreaterEqual(len(slides), 3)
+            show = (dst / "show.qml").read_text()
+            self.assertEqual(re.findall(r'source: "(slide-\d+\.png)"', show), slides)
+            for name in slides:
+                self.assertTrue((dst / name).is_file(), name)
+            self.assertNotIn("Kubuntu", show)
+            self.assertEqual(show.count("{"), show.count("}"))
+            # every picture branding.desc names is one we ship
+            desc = (dst / "branding.desc").read_text()
+            for name in re.findall(r':\s+"?([\w-]+\.png)"?', desc):
+                self.assertTrue((dst / name).is_file(), name)
+            self.assertRegex(desc, r"(?m)^\s*version:\s+0\.5\.0$")
+
+    def test_the_plasma_look_is_baked_into_the_squashfs(self):
+        text = SCRIPT.read_text()
+        self.assertIn('configs/plasma/install-look.sh" "$1"', text)
+        main = text[text.index("kubuntu_main()"):]
+        self.assertIn('kubuntu_look "$sq_root"', main)
+
 
 class GrubTests(unittest.TestCase):
     def test_entries_are_renamed_and_the_theme_is_hooked_in(self):

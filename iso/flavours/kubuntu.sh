@@ -12,11 +12,13 @@
 #
 # What it does: extract the ISO tree, unpack the squashfs (owners kept), bake in the provisioner snapshot, the flavour file
 # (/etc/noctraos/flavour = kubuntu), the first-boot runner and its autostart, qemu-guest-agent, the NoctraOS names (os-release,
-# Calamares, GRUB entries), the GRUB menu theme and the installed system's Plymouth/GRUB theme; repack with the original
-# compressor and write a new ISO that replays the original BIOS+UEFI boot equipment.
+# Calamares, GRUB entries), the GRUB menu theme and the installed system's Plymouth/GRUB theme, the installer's artwork and
+# slideshow (assets/boot/calamares), and the Plasma look the first login shows (configs/plasma/install-look.sh: login screen,
+# splash, lock screen, Global Theme, wallpapers); repack with the original compressor and write a new ISO that replays the
+# original BIOS+UEFI boot equipment.
 #
-# Not done yet (the Plasma desktop is phase 4, the live splash is not planned): the Plasma look and layout, Super+Space, the
-# live session's Plymouth splash (stays Kubuntu's), Calamares logo/welcome pictures (stay Kubuntu's; the slideshow is ours).
+# Not done yet (the Plasma desktop is phase 4, the live splash is not planned): the panel layout before provisioning,
+# Super+Space, the live session's Plymouth splash (stays Kubuntu's).
 #
 # Usage:  sudo iso/flavours/kubuntu.sh <kubuntu-live.iso> [out.iso]
 # Needs:  xorriso, squashfs-tools, git, update-alternatives, chroot, python3, ~25 GiB scratch (set WORK_BASE).
@@ -91,46 +93,52 @@ kubuntu_rebrand() { # kubuntu_rebrand <squashfs-root> <version>
   chroot "$root" gtk-update-icon-cache -f -t /usr/share/icons/hicolor >/dev/null 2>&1 || true
 }
 
-# Calamares: a branding of our own (copy of Kubuntu's, with our names and a one-slide show), selected in settings.conf.
+# Calamares: a branding of our own (Kubuntu's branding.desc with our names, our pictures and slideshow), selected in
+# settings.conf. The pictures are rendered by scripts/render-kubuntu-branding.py.
+KB_CALAMARES_ART="$KB_BOOT_ASSETS/calamares"
 kubuntu_calamares() { # kubuntu_calamares <squashfs-root> <version>
-  local root="$1" version="$2" src="$1/etc/calamares/branding/kubuntu" dst="$1/etc/calamares/branding/noctraos" f
+  local root="$1" version="$2" src="$1/etc/calamares/branding/kubuntu" dst="$1/etc/calamares/branding/noctraos" f slides=""
   [ -f "$src/branding.desc" ] || { echo "kubuntu: Calamares branding 'kubuntu' not found (installer changed?)" >&2; return 1; }
   rm -rf "$dst"
   mkdir -p "$dst"
-  for f in branding.desc logo.png icon.png welcome.png welcome-oem.png; do
-    [ -f "$src/$f" ] && cp "$src/$f" "$dst/$f"
+  cp "$src/branding.desc" "$dst/branding.desc"
+  for f in logo.png icon.png welcome.png; do
+    install -m 644 "$KB_CALAMARES_ART/$f" "$dst/$f"
   done
+  install -m 644 "$KB_CALAMARES_ART/welcome.png" "$dst/welcome-oem.png"
+  for f in "$KB_CALAMARES_ART"/slide-*.png; do
+    install -m 644 "$f" "$dst/$(basename "$f")"
+    # The same slide element Kubuntu's own show.qml uses, one per picture.
+    slides+="    Slide {
+        Image {
+            anchors.centerIn: parent
+            anchors.verticalCenterOffset: - parent.y / 3.6
+            height: parent.masterHeight * 0.95
+            width: parent.masterWidth * 0.95
+            fillMode: Image.PreserveAspectFit
+            smooth: true
+            source: \"$(basename "$f")\"
+        }
+    }
+"
+  done
+  [ -n "$slides" ] || { echo "kubuntu: no slides in $KB_CALAMARES_ART" >&2; return 1; }
   f="$dst/branding.desc"
   kb_replace "$f" 's|^componentName:.*|componentName: noctraos|' "branding componentName" || return 1
   kb_replace "$f" "s#^\\( *\\)\\(productName\\|shortProductName\\|versionedName\\|bootloaderEntryName\\):\\( *\\)Kubuntu\$#\\1\\2:\\3NoctraOS#" "branding names" || return 1
   kb_replace "$f" "s|^\\( *\\)shortVersionedName:\\( *\\)Kubuntu .*|\\1shortVersionedName:\\2NoctraOS $version|" "branding versioned name" || return 1
+  kb_replace "$f" "s|^\\( *\\)version:\\( *\\)[0-9].*|\\1version:\\2$version|" "branding version" || return 1
   kb_replace "$f" 's|^\( *\)productUrl:.*|\1productUrl:          https://noctraos.dev/|' "branding productUrl" || return 1
   kb_replace "$f" 's|^\( *\)supportUrl:.*|\1supportUrl:          https://github.com/dazeb/noctraos/issues|' "branding supportUrl" || return 1
   kb_replace "$f" 's|^\( *\)SidebarBackground:.*|\1SidebarBackground:    "#1a1a1a"|' "branding sidebar" || return 1
   kb_replace "$f" 's|^\( *\)SidebarTextCurrent:.*|\1SidebarTextCurrent:   "#e68e0d"|' "branding sidebar text" || return 1
-  cat > "$dst/show.qml" <<'QML'
-import QtQuick 2.0;
-import calamares.slideshow 1.0;
-
-Presentation
-{
-    id: presentation
-
-    Slide {
-        Rectangle {
-            anchors.fill: parent
-            color: "#121212"
-            Text {
-                anchors.centerIn: parent
-                horizontalAlignment: Text.AlignHCenter
-                color: "#bebebe"
-                font.pixelSize: 22
-                text: "Installing NoctraOS\n\nThe AI workstation sets itself up after you first sign in."
-            }
-        }
-    }
-}
-QML
+  {
+    printf '%s\n' 'import QtQuick 2.0;' 'import calamares.slideshow 1.0;' '' 'Presentation' '{' '    id: presentation' '' \
+      '    Timer {' '        interval: 12000' '        running: true' '        repeat: true' \
+      '        onTriggered: presentation.goToNextSlide()' '    }'
+    printf '%s' "$slides"
+    printf '}\n'
+  } > "$dst/show.qml"
   kb_replace "$root/etc/calamares/settings.conf" 's|^branding: kubuntu$|branding: noctraos|' "Calamares settings branding" || return 1
 }
 
@@ -152,6 +160,12 @@ kubuntu_boot_theme_squashfs() { # kubuntu_boot_theme_squashfs <squashfs-root>
   grep -q '^GRUB_THEME=' "$root/etc/default/grub" || printf 'GRUB_THEME=\n' >> "$root/etc/default/grub"
   sed -i -e 's|^GRUB_THEME=.*|GRUB_THEME=/usr/share/grub/themes/noctraos/theme.txt|' \
          -e 's|^GRUB_DISTRIBUTOR=.*|GRUB_DISTRIBUTOR=NoctraOS|' "$root/etc/default/grub"
+}
+
+# The Plasma look of the installed system (login screen, splash, lock screen, Global Theme, wallpapers, About), so the
+# first login already shows it; the provisioner's Plasma module 08 runs the same script again.
+kubuntu_look() { # kubuntu_look <squashfs-root>
+  bash "$KB_REPO_ROOT/configs/plasma/install-look.sh" "$1"
 }
 
 # First-boot provisioning: the runner (shared text, iso/firstboot-runner.sh), its autostart, the flavour file and the snapshot.
@@ -230,6 +244,7 @@ kubuntu_main() {
   kubuntu_rebrand "$sq_root" "$version"
   kubuntu_calamares "$sq_root" "$version"
   kubuntu_boot_theme_squashfs "$sq_root"
+  kubuntu_look "$sq_root"
   bake_guest_tools "$sq_root"
   kubuntu_theme_grub "$iso_tree"
   echo "NoctraOS $version 64bit (Kubuntu base)" > "$iso_tree/.disk/info"
