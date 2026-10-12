@@ -182,6 +182,50 @@ class RefusalTests(unittest.TestCase):
             self.assertNotIn(word, re.sub(r"(?m)^\s*#.*$", "", text), word)
 
 
+@unittest.skipUnless(shutil.which("xorriso"), "needs xorriso")
+class ReleaseIsoCheckTests(unittest.TestCase):
+    """build-local.sh's release-ISO check, run on small real ISOs. The kubuntu ISO boots through GRUB only (no isolinux
+    menu): the check used to die there under set -e (xorriso exit 5) before judging anything."""
+
+    def check(self, files):
+        text = (ROOT / "iso/build-local.sh").read_text()
+        block = text[text.index('  echo "=== checking the release ISO"'):]
+        block = block[:block.index("\n", block.index('echo "release ISO checks passed')) + 1]
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = Path(tmp) / "tree"
+            for name, body in files.items():
+                (tree / name).parent.mkdir(parents=True, exist_ok=True)
+                (tree / name).write_text(body)
+            iso = Path(tmp) / "x.iso"
+            subprocess.run(["xorriso", "-as", "mkisofs", "-quiet", "-V", "NOCTRAOS_0_5_0", "-o", str(iso), str(tree)],
+                           check=True, capture_output=True)
+            block = block.replace("/tmp/", f"{tmp}/")
+            return subprocess.run(["bash", "-c", f'set -Eeuo pipefail; OUT="{iso}"; VERSION=0.5.0\n{block}'],
+                                  capture_output=True, text=True)
+
+    GRUB = 'menuentry "Try or Install NoctraOS" {\n}\n'
+
+    def test_a_grub_only_release_iso_passes(self):
+        r = self.check({"boot/grub/grub.cfg": self.GRUB})
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("release ISO checks passed", r.stdout)
+
+    def test_an_autoinstall_entry_in_grub_fails(self):
+        r = self.check({"boot/grub/grub.cfg": self.GRUB + 'menuentry "x" {\n linux /casper/vmlinuz noctraos.autoinstall\n}\n'})
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("unattended boot entry", r.stdout)
+
+    def test_an_unattended_isolinux_entry_fails(self):
+        r = self.check({"boot/grub/grub.cfg": self.GRUB, "isolinux/menuentries.cfg": "label unattended\n"})
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("unattended boot entry", r.stdout)
+
+    def test_no_grub_menu_fails(self):
+        r = self.check({"isolinux/menuentries.cfg": "label live\n"})
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("no /boot/grub/grub.cfg", r.stdout)
+
+
 class DefaultsTests(unittest.TestCase):
     STATUS = ("Package: plasma-welcome\nStatus: install ok installed\nVersion: 6.6.5-0ubuntu0.1\n\n"
               "Package: other\nVersion: 1:9.9-1\n")
