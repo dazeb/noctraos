@@ -166,8 +166,10 @@ assets/boot/                boot-chain artwork: plymouth/noctraos (two-step them
                             (outputs are committed; JetBrains Mono, OFL)
 iso/strip-census.sh         sourced by the build script: removes Zorin's census (installer checkbox, cron jobs)
 iso/rebrand-labels.sh       sourced by the build script: user-facing Zorin names (About, sessions, banner, launchers, live user)
-iso/build-release.sh        release build: ISOs -> VM -> provisioned disk -> qcow2/vmdk/torrent/SHA256SUMS -> boot test (RELEASE_REHEARSAL=1 to try it)
-iso/publish-release.sh      upload to dl.noctraos.dev, verify through the public hostname, create the GitHub release; never overwrites a version
+iso/build-release.sh        release build: ISOs -> VM -> provisioned disk -> qcow2/vmdk/torrent/SHA256SUMS -> boot test (RELEASE_REHEARSAL=1 to try it);
+                            NOCTRAOS_FLAVOUR=kubuntu builds the kubuntu flavour into release/vX-kubuntu (names noctraos-<v>-kubuntu-*)
+iso/publish-release.sh      upload to dl.noctraos.dev, verify through the public hostname, create the GitHub release; never overwrites a version;
+                            RELEASE_FLAVOURS="zorin kubuntu" (the CI's value) checks every flavour before any upload, kubuntu goes to releases/vX/kubuntu/
 iso/renew-update-channels.sh, setup-update-renewal.sh   weekly systemd user timer that re-signs the update manifests before
                             they expire (30 days); `setup-update-renewal.sh status` shows the real expiry of each channel
 iso/ci-publish-update.sh    what the GitLab update jobs run: nightly from an update-* (or v*) tag, only for commits in GitHub main; promote/widen the
@@ -178,7 +180,7 @@ iso/publish-update.sh       rolling updates for installed systems: build/promote
                             both stores, read back and verified (docs/updates.md); needs ~/secrets/noctraos-update-signing
 iso/vm-image.sh, r2-env.sh, boot-test-image.sh   shared by nightly and release: the VM provisioning, rclone env, exported-disk boot test
 iso/setup-release-runner.sh doctor|install|status|remove the GitLab runner (user service, tag noctraos-release, protected refs) that runs the above
-scripts/update-site-release.py, release-site-pr.sh, make-torrent.py   rewrite the site for a release, open+merge the PR, wait for the deploy
+scripts/update-site-release.py, release-site-pr.sh, make-torrent.py   rewrite the site for a release, open+merge the PR, wait for the deploy; --kubuntu <dir> writes the download page's KDE Plasma (preview) section between its markers
 iso/bake-guest-tools.sh     sourced by the build script: installs qemu-guest-agent into the squashfs (chroot apt, best effort), so a Proxmox/KVM VM
                             answers its host from the first boot, before login; the provisioner's 01b covers every other hypervisor
 iso/bake-shell.sh           sourced by the build script: copies the Shell extensions, search app, schemas and the two setup
@@ -186,8 +188,11 @@ iso/bake-shell.sh           sourced by the build script: copies the Shell extens
 iso/boot-theme.sh           sourced by the build script: themes the extracted ISO
                             tree, the live initrd and the squashfs
 iso/initrd-theme.py         swaps the Plymouth theme inside casper/initrd.zstd
-iso/flavours/kubuntu.sh     Kubuntu 26.04.1 remaster (flavour kubuntu; release ISO only, Calamares, GRUB-only boot; writes /etc/noctraos/flavour);
-                            `NOCTRAOS_FLAVOUR=kubuntu iso/build-local.sh <dir>`; iso/firstboot-runner.sh is the first-boot text it shares
+iso/flavours/kubuntu.sh     Kubuntu 26.04.1 remaster (flavour kubuntu; Calamares, GRUB-only boot; writes /etc/noctraos/flavour);
+                            `NOCTRAOS_FLAVOUR=kubuntu iso/build-local.sh <dir> [release|appliance|both]`; iso/firstboot-runner.sh is the first-boot text it shares
+iso/flavours/kubuntu/autoinstall.sh   the kubuntu appliance's unattended install (Calamares has no unattended mode): mirrors Calamares'
+                            steps (partition, copy the squashfs, users, SDDM autologin, initramfs, GRUB with --removable, apt sources, purge the live
+                            packages), then reboots. Baked only into the appliance ISO (boot entry `noctraos.autoinstall`); build-local.sh fails a release ISO that has it
 iso/build-noctraos-iso.sh   ISO remaster pipeline (runs on the Proxmox node);
                             NOCTRAOS_UNATTENDED=1 + NOCTRAOS_USER/PASSWORD/…
                             bake an unattended-install seed and boot entries
@@ -362,10 +367,10 @@ iso/vm-sysprep.sh           run inside a fully provisioned VM before exporting i
 
 ```bash
 # static checks (docker shellcheck — not installed on this host)
-bash -n boot.sh install.sh install/*.sh install/optional/*.sh install/desktop/*/*.sh iso/flavours/*.sh iso/firstboot-runner.sh bin/noc bin/noc-gpu bin/noc-privileged bin/noctraos-control bin/noctraos-agent \
+bash -n boot.sh install.sh install/*.sh install/optional/*.sh install/desktop/*/*.sh iso/flavours/*.sh iso/flavours/*/*.sh iso/firstboot-runner.sh bin/noc bin/noc-gpu bin/noc-privileged bin/noctraos-control bin/noctraos-agent \
   bin/noctraos-copyq bin/noctraos-hermes bin/noctraos-search configs/nautilus-scripts/*     # other bin/ files are Python
 docker run --rm -v "$PWD:/mnt" koalaman/shellcheck:stable --severity=warning \
-  boot.sh install.sh install/*.sh install/optional/*.sh install/desktop/*/*.sh iso/flavours/*.sh iso/firstboot-runner.sh bin/noc bin/noc-gpu bin/noc-privileged bin/noctraos-control bin/noctraos-agent \
+  boot.sh install.sh install/*.sh install/optional/*.sh install/desktop/*/*.sh iso/flavours/*.sh iso/flavours/*/*.sh iso/firstboot-runner.sh bin/noc bin/noc-gpu bin/noc-privileged bin/noctraos-control bin/noctraos-agent \
   bin/noctraos-copyq bin/noctraos-hermes configs/nautilus-scripts/*     # same list as CI (CI excludes SC2164 for iso/firstboot-runner.sh only: its text is pinned to the Zorin heredoc)
 python3 -m unittest discover -s tests  # 677 tests: theme, GPU detection, noc JSON modes, root helper, Control Panel, agent skill
 python3 scripts/render-theme.py --check              # committed theme outputs match palette.json

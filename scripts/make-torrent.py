@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """Write the ISO torrent for a release (needs `torf`; iso/build-release.sh installs it in a throwaway venv).
 
-    scripts/make-torrent.py <iso> <version> <out.torrent>
+    scripts/make-torrent.py <iso> <version> <out.torrent> [flavour]
 
 Same shape as every release so far: 4 MiB pieces, the four public trackers, and the ISO on
-dl.noctraos.dev as the web seed (so the torrent works before anyone is seeding).
+dl.noctraos.dev as the web seed (so the torrent works before anyone is seeding). The torrent is named after the ISO;
+a flavour other than zorin is served from its own folder, releases/v<version>/<flavour>/ (docs/flavours.md rule 8).
 """
+import os
 import sys
 
 import torf
@@ -15,13 +17,15 @@ TRACKERS = [["http://tracker.opentrackr.org:1337/announce"], ["udp://tracker.ope
 
 
 def main():
-    if len(sys.argv) != 4:
+    if len(sys.argv) not in (4, 5):
         sys.exit(__doc__)
-    iso, version, out = sys.argv[1:]
-    name = f"noctraos-{version}-amd64.iso"
+    iso, version, out = sys.argv[1:4]
+    flavour = sys.argv[4] if len(sys.argv) == 5 else "zorin"
+    name = os.path.basename(iso)
+    folder = f"v{version}" if flavour == "zorin" else f"v{version}/{flavour}"
     torrent = torf.Torrent(path=iso, trackers=TRACKERS, piece_size=4 * 1024 * 1024, private=False,
                            comment=f"Noctra OS {version} amd64 installer ISO - https://noctraos.dev",
-                           webseeds=[f"https://dl.noctraos.dev/releases/v{version}/{name}"],
+                           webseeds=[f"https://dl.noctraos.dev/releases/{folder}/{name}"],
                            created_by="noctraos release pipeline")
     torrent.name = name
     torrent.generate()

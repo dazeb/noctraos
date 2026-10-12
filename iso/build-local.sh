@@ -100,7 +100,7 @@ if [ "$WHAT" = release ] || [ "$WHAT" = both ]; then
   [ "$vol" = "NOCTRAOS_${VERSION//./_}" ] || { echo "FAIL: volume id is '$vol'"; fail=1; }
   xorriso -osirrox on -indev "$OUT" -extract /boot/grub/grub.cfg /tmp/grub.cfg >/dev/null 2>&1
   xorriso -osirrox on -indev "$OUT" -extract /isolinux/menuentries.cfg /tmp/menu.cfg >/dev/null 2>&1
-  grep -qiE 'unattended|noctraos\.seed' /tmp/grub.cfg /tmp/menu.cfg && { echo "FAIL: an unattended boot entry is in the release ISO"; fail=1; }
+  grep -qiE 'unattended|noctraos\.seed|noctraos\.autoinstall' /tmp/grub.cfg /tmp/menu.cfg && { echo "FAIL: an unattended boot entry is in the release ISO"; fail=1; }
   xorriso -indev "$OUT" -find /preseed -name 'noctraos.seed' 2>/dev/null | grep -q noctraos.seed && { echo "FAIL: the preseed seed is in the release ISO"; fail=1; }
   grep -q 'menuentry "Try or Install NoctraOS"' /tmp/grub.cfg || { echo "FAIL: default boot entry missing"; fail=1; }
   [ "$fail" -eq 0 ] || exit 1

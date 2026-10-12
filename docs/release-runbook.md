@@ -44,13 +44,20 @@ git push gitlab origin/main:refs/heads/main vX.Y.Z    # GitLab must have the com
 
 | job | what it does | public? |
 |---|---|---|
-| `release-build` | release ISO + appliance ISO (`iso/build-local.sh both`), unattended install in a KVM VM, first-boot provisioning, `noc doctor` must be clean, sysprep, qcow2 + vmdk export, torrent, `SHA256SUMS`, then a boot test of the exported disk (ssh, autologin session, new host key). 45 to 90 minutes. | no |
-| `release-publish` | uploads to `dl.noctraos.dev/releases/vX.Y.Z/` (SHA256SUMS last), streams every file back through the public hostname and compares SHA-256, creates the GitHub release (links + checksums). Refuses a version already in the bucket. | **yes** |
+| `release-build`, `release-build-kubuntu` | per flavour (zorin, then kubuntu, one VM at a time through the resource group): release ISO + appliance ISO (`iso/build-local.sh both`), unattended install in a KVM VM, first-boot provisioning, `noc doctor` must be clean, sysprep, qcow2 + vmdk export, torrent, `SHA256SUMS`, then a boot test of the exported disk (ssh, autologin session, new host key). 45 to 90 minutes. | no |
+| `release-publish` | checks every flavour first, then uploads zorin to `dl.noctraos.dev/releases/vX.Y.Z/` and kubuntu to `releases/vX.Y.Z/kubuntu/` (each SHA256SUMS last), streams every file back through the public hostname and compares SHA-256, creates one GitHub release with a section per flavour (links + checksums). Refuses a version already in the bucket. | **yes** |
 | `release-site` | PR to GitHub `main` that updates `site/download.html`, `site/index.html`, the sitemap, `proxmox-install.sh`, the social cards and the torrent, merges it (Cloudflare then deploys the site from `main`) and waits until `noctraos.dev/download` shows the version. | yes |
 
 Everything is in `.gitlab-ci.yml`; the work is done by `iso/build-release.sh`, `iso/publish-release.sh` and
 `scripts/release-site-pr.sh` (each also runs by hand: `iso/build-release.sh <build-dir>`). Outputs stay on the
-runner in `<build-dir>/release/vX.Y.Z/` (default `/run/media/dazeb/2tb/noctraos-release-ci`).
+runner in `<build-dir>/release/vX.Y.Z/` and `<build-dir>/release/vX.Y.Z-kubuntu/` (default `/run/media/dazeb/2tb/noctraos-release-ci`).
+
+**Flavours** (docs/flavours.md): the CI sets `RELEASE_FLAVOURS="zorin kubuntu"`. By hand, build each with
+`NOCTRAOS_FLAVOUR=<flavour> iso/build-release.sh <build-dir>`, then run `RELEASE_FLAVOURS="zorin kubuntu" iso/publish-release.sh <build-dir>`
+and the same variable for `scripts/release-site-pr.sh`. Without it, both default to zorin only. The download page's KDE Plasma section
+is written by `scripts/update-site-release.py --kubuntu <dir>` between its two markers. A zorin-only run empties it, so the page
+never links files the release does not have. The kubuntu appliance installs through `iso/flavours/kubuntu/autoinstall.sh`, because
+Calamares has no unattended mode.
 
 - **A failed job:** fix the cause and use *Retry* on that job; earlier stages are not repeated. `release-publish`
   and `release-site` are safe to retry (they stop if the release is already published or the site already shows it).
@@ -66,7 +73,8 @@ runner in `<build-dir>/release/vX.Y.Z/` (default `/run/media/dazeb/2tb/noctraos-
   `noctraos-release`, ref-protected, locked to this project; `v*` tags are protected so only maintainers can start a
   release. The checks (`shell`, `version`, `tests`) still run on the TrueNAS Docker runner.
 - Needs on the runner: Docker, KVM, qemu + OVMF, google-chrome, `gh` logged in, ssh push to GitHub,
-  `~/secrets/cloudflare-r2.env`, and `in/Zorin-OS-18.1-Core-64-bit.iso` in the build dir.
+  `~/secrets/cloudflare-r2.env`, and `in/Zorin-OS-18.1-Core-64-bit.iso` and `in/kubuntu-26.04.1-desktop-amd64.iso` in the build dir
+  (a hardlink of the copy in `noctraos-build/in/` is enough).
 
 The numbered sections below are the same steps by hand: still the way to recover from a half-finished release.
 

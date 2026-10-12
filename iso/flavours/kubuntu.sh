@@ -8,7 +8,7 @@
 #     (plain cpio, no .zstd name); there is one casper/filesystem.squashfs and no filesystem.size.
 #   - The installer is Calamares (not Ubiquity): branding is /etc/calamares/branding/<name>, settings in
 #     /etc/calamares/settings.conf. Calamares has no unattended mode, so the appliance build (NOCTRAOS_UNATTENDED=1, only
-#     ever used to make the VM disks, never published) installs with iso/flavours/kubuntu-autoinstall.sh instead.
+#     ever used to make the VM disks, never published) installs with iso/flavours/kubuntu/autoinstall.sh instead.
 #   - The display manager is SDDM and the session is Plasma (Wayland). Autologin of the live user is the live image's own.
 #
 # What it does: extract the ISO tree, unpack the squashfs (owners kept), bake in the provisioner snapshot, the flavour file
@@ -192,14 +192,14 @@ EOF
   chmod 644 "$root/etc/noctraos/flavour"
 }
 
-# The appliance ISO (NOCTRAOS_UNATTENDED=1): boots straight into kubuntu-autoinstall.sh, which erases the first disk and
+# The appliance ISO (NOCTRAOS_UNATTENDED=1): boots straight into kubuntu/autoinstall.sh, which erases the first disk and
 # installs with autologin and passwordless sudo for <user>. Only for building the VM disks (iso/build-release.sh); it carries
 # a password hash, so it is never published, and build-local.sh refuses a release ISO that has any of this.
 kubuntu_appliance() { # kubuntu_appliance <squashfs-root> <iso-tree> <user> <password> [hostname]
   local root="$1" tree="$2" user="$3" password="$4" hostname="${5:-noctraos}" cfg="$2/boot/grub/grub.cfg" crypt entry
   [ -n "$user" ] && [ -n "$password" ] || { echo "kubuntu: the appliance build needs NOCTRAOS_USER and NOCTRAOS_PASSWORD" >&2; return 1; }
   crypt="$(openssl passwd -6 "$password")"
-  install -D -m 755 "$KB_HERE/kubuntu-autoinstall.sh" "$root/usr/local/sbin/noctraos-autoinstall"
+  install -D -m 755 "$KB_HERE/kubuntu/autoinstall.sh" "$root/usr/local/sbin/noctraos-autoinstall"
   mkdir -p "$root/etc/noctraos" "$root/etc/systemd/system/multi-user.target.wants"
   printf 'AI_USER=%q\nAI_PASSWORD_CRYPT=%q\nAI_HOSTNAME=%q\nAI_FULLNAME=NoctraOS\nAI_LOCALE=en_US.UTF-8\nAI_TIMEZONE=Etc/UTC\n' \
     "$user" "$crypt" "$hostname" > "$root/etc/noctraos/autoinstall.conf"

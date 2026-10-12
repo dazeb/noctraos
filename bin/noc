@@ -19,7 +19,7 @@
 #   noc agent-skills  the NoctraOS skill for the coding agents: install | status [--json] | remove | on  (~/.agents/skills)
 set -uo pipefail
 
-VERSION="0.4.0"
+VERSION="0.5.0"
 OLLAMA_URL="${NOC_OLLAMA_URL:-http://127.0.0.1:11434}"
 DEFAULT_MODEL="qwen2.5-coder:7b"
 MODEL_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/noctraos/model"

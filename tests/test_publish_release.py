@@ -11,6 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "iso/publish-release.sh"
 VERSION = (ROOT / "VERSION").read_text().strip()
 NAMES = [f"noctraos-{VERSION}-amd64.iso", f"noctraos-{VERSION}.qcow2", f"noctraos-{VERSION}.vmdk"]
+KNAMES = [f"noctraos-{VERSION}-kubuntu-amd64.iso", f"noctraos-{VERSION}-kubuntu.qcow2", f"noctraos-{VERSION}-kubuntu.vmdk"]
 
 RCLONE = r'''#!/usr/bin/env bash
 # stub: lsf prints $STUB_REMOTE_LISTING (or fails), cat prints $STUB_REMOTE/<name>, copyto logs
@@ -25,7 +26,8 @@ CURL = r'''#!/usr/bin/env bash
 # STUB_CURL_DROP=1 makes the FIRST download of each file stop half-way and fail with 92, like a dropped stream.
 out=""; args=("$@")
 for ((i=0; i<${#args[@]}; i++)); do [ "${args[i]}" = "-o" ] && out="${args[i+1]}"; done
-src="$STUB_REL/$(basename "${@: -1}")"
+# the kubuntu flavour is served from releases/vX/kubuntu/ and built into release/vX-kubuntu
+case "${@: -1}" in */kubuntu/*) src="$STUB_REL-kubuntu/$(basename "${@: -1}")" ;; *) src="$STUB_REL/$(basename "${@: -1}")" ;; esac
 if [ -z "$out" ]; then cat "$src"; exit 0; fi
 # STUB_CORRUPT=<file name>: the CDN serves other bytes of the same size for that file
 if [ "$(basename "$src")" = "${STUB_CORRUPT:-}" ]; then tr 'a-z' 'b-za' < "$src" > "$out"; exit 0; fi
@@ -40,20 +42,31 @@ tail -c +$((have + 1)) "$src" >> "$out"
 GH = r'''#!/usr/bin/env bash
 [ "$1 $2" = "release view" ] && exit 1
 echo "gh $*" >> "$STUB_LOG"
+args=("$@")
+for ((i=0; i<${#args[@]}; i++)); do [ "${args[i]}" = "--notes-file" ] && cp "${args[i+1]}" "$STUB_LOG.notes"; done
+true
 '''
 
 
-def run(listing, remote_files=None, lsf_fail=False, edit=None, drop=False, corrupt="", extra_env=None):
+def build(rel, names):
+    rel.mkdir(parents=True)
+    for name in names:
+        (rel / name).write_bytes(name.encode() * 3)
+    (rel / f"{names[0]}.torrent").write_bytes(b"t")
+    (rel / "BUILD-INFO.txt").write_text("login: noctraos\n")
+    (rel / "SHA256SUMS").write_text("".join(
+        f"{__import__('hashlib').sha256((rel / n).read_bytes()).hexdigest()}  {n}\n" for n in names))
+
+
+def run(listing, remote_files=None, lsf_fail=False, edit=None, drop=False, corrupt="", extra_env=None,
+        flavours=("zorin",), notes=None):
     with tempfile.TemporaryDirectory() as directory:
         d = Path(directory)
         rel = d / "build/release" / f"v{VERSION}"
-        rel.mkdir(parents=True)
-        for name in NAMES:
-            (rel / name).write_bytes(name.encode() * 3)
-        (rel / f"noctraos-{VERSION}-amd64.iso.torrent").write_bytes(b"t")
-        (rel / "BUILD-INFO.txt").write_text("login: noctraos\n")
-        (rel / "SHA256SUMS").write_text("".join(
-            f"{__import__('hashlib').sha256((rel / n).read_bytes()).hexdigest()}  {n}\n" for n in NAMES))
+        if "zorin" in flavours:
+            build(rel, NAMES)
+        if "kubuntu" in flavours:
+            build(d / "build/release" / f"v{VERSION}-kubuntu", KNAMES)
         remote = d / "remote"
         remote.mkdir()
         for name, data in (remote_files or {}).items():
@@ -70,9 +83,12 @@ def run(listing, remote_files=None, lsf_fail=False, edit=None, drop=False, corru
                "R2_SECRET_ACCESS_KEY": "x", "R2_ENDPOINT": "x", "R2_BUCKET": "b", "STUB_LISTING": str(d / "listing"),
                "STUB_REMOTE": str(remote), "STUB_LOG": str(d / "log"), "STUB_REL": str(rel),
                "STUB_LSF_FAIL": "1" if lsf_fail else "", "STUB_CURL_DROP": "1" if drop else "", "STUB_CORRUPT": corrupt,
-               "VERIFY_RETRY_DELAY": "0", **(extra_env or {})}
+               "VERIFY_RETRY_DELAY": "0", "RELEASE_FLAVOURS": "zorin kubuntu" if notes is not None else "zorin",
+               **(extra_env or {})}
         result = subprocess.run(["bash", str(SCRIPT), str(d / "build")], capture_output=True, text=True, env=env)
         log = (d / "log").read_text().splitlines() if (d / "log").exists() else []
+        if notes is not None and (d / "log.notes").exists():
+            notes.append((d / "log.notes").read_text())
         return result, log
 
 
@@ -157,6 +173,46 @@ class PublishTests(unittest.TestCase):
         result, log = run("", edit=lambda rel: (rel / "BUILD-INFO.txt").write_text("rehearsal: yes\n"))
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("rehearsal", result.stderr)
+        self.assertEqual(log, [])
+
+
+class FlavourTests(unittest.TestCase):
+    """RELEASE_FLAVOURS="zorin kubuntu": each flavour in its own bucket folder (docs/flavours.md rule 8), one GitHub release."""
+
+    def test_both_flavours_go_to_their_own_folders_each_with_its_checksums_last(self):
+        notes = []
+        result, log = run("", flavours=("zorin", "kubuntu"), notes=notes)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        uploads = [line for line in log if not line.startswith("gh ")]
+        zorin = [u for u in uploads if "/kubuntu/" not in u]
+        kubuntu = [u for u in uploads if "/kubuntu/" in u]
+        self.assertEqual([Path(u).name for u in zorin], NAMES + ["SHA256SUMS"])
+        self.assertEqual([Path(u).name for u in kubuntu], KNAMES + ["SHA256SUMS"])
+        self.assertTrue(all(u.endswith(f"releases/v{VERSION}/{Path(u).name}") for u in zorin), zorin)
+        self.assertTrue(all(u.endswith(f"releases/v{VERSION}/kubuntu/{Path(u).name}") for u in kubuntu), kubuntu)
+        self.assertEqual(result.stdout.count("OK  noctraos-"), 6)
+        self.assertEqual(sum(line.startswith("gh release create") for line in log), 1)
+        self.assertIn("KDE Plasma preview", notes[0])
+        self.assertIn(f"/releases/v{VERSION}/kubuntu/{KNAMES[0]}", notes[0])
+        self.assertIn(f"/releases/v{VERSION}/{NAMES[0]})", notes[0])
+
+    def test_a_missing_flavour_stops_before_anything_is_uploaded(self):
+        result, log = run("", flavours=("zorin",), notes=[])
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("kubuntu", result.stderr)
+        self.assertEqual(log, [])
+
+    def test_a_kubuntu_rehearsal_cannot_be_published_and_blocks_zorin_too(self):
+        def edit(rel):
+            (rel.parent / f"v{VERSION}-kubuntu" / "BUILD-INFO.txt").write_text("rehearsal: yes\n")
+        result, log = run("", flavours=("zorin", "kubuntu"), notes=[], edit=edit)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("rehearsal", result.stderr)
+        self.assertEqual(log, [])
+
+    def test_an_unknown_flavour_is_refused(self):
+        result, log = run("", extra_env={"RELEASE_FLAVOURS": "zorin gentoo"})
+        self.assertNotEqual(result.returncode, 0)
         self.assertEqual(log, [])
 
 

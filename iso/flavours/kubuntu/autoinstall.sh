@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# kubuntu-autoinstall.sh — the unattended install of the kubuntu APPLIANCE ISO (flavour kubuntu). Never in a release ISO.
+# kubuntu/autoinstall.sh — the unattended install of the kubuntu APPLIANCE ISO (flavour kubuntu). Never in a release ISO.
 #
 # Calamares has no unattended mode, so the appliance build (iso/flavours/kubuntu.sh with NOCTRAOS_UNATTENDED=1) bakes
 # this script into the live system as /usr/local/sbin/noctraos-autoinstall, started by noctraos-autoinstall.service only
