@@ -171,6 +171,22 @@ kubuntu_look() { # kubuntu_look <squashfs-root>
 }
 
 # First-boot provisioning: the runner (shared text, iso/firstboot-runner.sh), its autostart, the flavour file and the snapshot.
+# Stock Kubuntu first-login extras that NoctraOS replaces: KDE's Welcome Center (NoctraOS has its own welcome) and the two
+# web-link icons on a new user's desktop. The Welcome Center is opened by the kded_plasma_welcome module when the user has
+# no plasma-welcomerc (General/LastSeenVersion empty), and again after a Plasma upgrade when General/ShowUpdatePage is on. The
+# system-wide default marks this image's Plasma as seen and turns the update page off. The live session is not affected:
+# casper writes the live user's own plasma-welcomerc (LiveEnvironment), which the module checks first.
+kubuntu_defaults() { # kubuntu_defaults <squashfs-root>
+  local root="$1" version
+  version="$(awk '/^Package: plasma-welcome$/ {f=1} f && /^Version:/ {print $2; exit} /^$/ {f=0}' "$root/var/lib/dpkg/status" 2>/dev/null)"
+  version="${version#*:}"; version="${version%%-*}"
+  [ -n "$version" ] || { echo "kubuntu: cannot read the plasma-welcome version from the image's dpkg status" >&2; return 1; }
+  mkdir -p "$root/etc/xdg"
+  printf '[General]\nLastSeenVersion=%s\nShowUpdatePage=false\n' "$version" > "$root/etc/xdg/plasma-welcomerc"
+  rm -f "$root/etc/skel/Desktop/org.kfocus.web.howtos.desktop" "$root/etc/skel/Desktop/org.kubuntu.web.home.desktop"
+  echo "  KDE Welcome Center off for installed systems (Plasma $version marked seen), Kubuntu desktop links removed"
+}
+
 kubuntu_firstboot() { # kubuntu_firstboot <squashfs-root> <branch>
   local root="$1" branch="$2" runner="$1/usr/local/sbin/noctraos-firstboot"
   mkdir -p "$root/usr/local/sbin" "$root/etc/skel/.config/autostart" "$root/etc/noctraos"
@@ -275,6 +291,7 @@ kubuntu_main() {
   kubuntu_calamares "$sq_root" "$version"
   kubuntu_boot_theme_squashfs "$sq_root"
   kubuntu_look "$sq_root"
+  kubuntu_defaults "$sq_root"
   bake_guest_tools "$sq_root"
   kubuntu_theme_grub "$iso_tree"
   if [ "${NOCTRAOS_UNATTENDED:-0}" = 1 ]; then

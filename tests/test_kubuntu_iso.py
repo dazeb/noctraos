@@ -182,6 +182,31 @@ class RefusalTests(unittest.TestCase):
             self.assertNotIn(word, re.sub(r"(?m)^\s*#.*$", "", text), word)
 
 
+class DefaultsTests(unittest.TestCase):
+    STATUS = ("Package: plasma-welcome\nStatus: install ok installed\nVersion: 6.6.5-0ubuntu0.1\n\n"
+              "Package: other\nVersion: 1:9.9-1\n")
+
+    def test_kde_welcome_is_marked_seen_and_the_kubuntu_links_go(self):
+        with Tree() as t:
+            (t.root / "var/lib/dpkg").mkdir(parents=True)
+            (t.root / "var/lib/dpkg/status").write_text(self.STATUS)
+            desk = t.root / "etc/skel/Desktop"
+            desk.mkdir(parents=True)
+            for name in ("org.kfocus.web.howtos.desktop", "org.kubuntu.web.home.desktop", "mine.desktop"):
+                (desk / name).write_text("[Desktop Entry]\n")
+            r = sh(f'kubuntu_defaults "{t.root}"')
+            self.assertEqual(r.returncode, 0, r.stderr)
+            self.assertEqual((t.root / "etc/xdg/plasma-welcomerc").read_text(),
+                             "[General]\nLastSeenVersion=6.6.5\nShowUpdatePage=false\n")
+            self.assertEqual(sorted(p.name for p in desk.iterdir()), ["mine.desktop"])
+
+    def test_no_plasma_welcome_version_fails_the_build(self):
+        with Tree() as t:
+            r = sh(f'kubuntu_defaults "{t.root}"')
+            self.assertNotEqual(r.returncode, 0)
+            self.assertFalse((t.root / "etc/xdg/plasma-welcomerc").exists())
+
+
 class ApplianceTests(unittest.TestCase):
     """kubuntu_appliance: the unattended install that only the appliance ISO (the VM disks' source) carries."""
 
