@@ -24,6 +24,6 @@ for package in "${APT_APPS[@]}"; do
 done
 if [ "${#missing[@]}" -gt 0 ]; then
   log "Installing KDE apps: ${missing[*]}"
-  sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "${missing[@]}" \
+  sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -o Dpkg::Options::=--force-confold "${missing[@]}" \
     || warn "Some KDE apps failed to install: ${missing[*]}"
 fi

@@ -59,6 +59,36 @@ class PlasmaFilesTests(unittest.TestCase):
             self.assertTrue((ROOT / "configs/applications" / name).exists(), name)
 
 
+class LayoutScriptTests(unittest.TestCase):
+    def printed(self, *launchers):
+        with tempfile.TemporaryDirectory() as tmp:
+            for name in launchers:
+                (Path(tmp) / name).write_text("[Desktop Entry]\n")
+            env = {**os.environ, "NOCTRAOS_APP_DIRS": tmp, "NOCTRAOS_PLASMA_DIR": str(ROOT / "configs/plasma"),
+                   "XDG_CONFIG_HOME": tmp}
+            result = subprocess.run([str(ROOT / "configs/plasma/apply-layout.sh"), "--print-script"],
+                                    capture_output=True, text=True, env=env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        return result.stdout
+
+    def test_the_vscode_pin_follows_the_launcher_the_machine_has(self):
+        self.assertIn("applications:com.microsoft.VSCode.desktop", self.printed("com.microsoft.VSCode.desktop"))
+        self.assertIn("applications:code.desktop", self.printed("code.desktop"))
+        self.assertIn("applications:code.desktop", self.printed())          # none yet: the older name
+        self.assertNotIn("@VSCODE_LAUNCHER@", self.printed("com.microsoft.VSCode.desktop"))
+
+    def test_the_session_run_also_activates_the_colour_scheme(self):
+        self.assertIn("plasma-apply-colorscheme NoctraOSDark", (ROOT / "configs/plasma/apply-layout.sh").read_text())
+
+
+class PackageInstallTests(unittest.TestCase):
+    def test_package_installs_keep_the_existing_conffiles(self):
+        # a half-configured package with a changed conffile (gnome-menus on a machine that once ran the GNOME flavour)
+        # must not stop apt at dpkg's prompt, which has no stdin here
+        for name in ("01_desktop_packages.sh", "04_desktop_apps.sh"):
+            self.assertIn("--force-confold", (PLASMA / name).read_text(), name)
+
+
 class FileActionTests(unittest.TestCase):
     def run_action(self, *args):
         with tempfile.TemporaryDirectory() as tmp:

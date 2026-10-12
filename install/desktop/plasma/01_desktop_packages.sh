@@ -23,6 +23,6 @@ for p in dolphin konsole kdialog zenity libnotify-bin; do
 done
 if [ "${#missing[@]}" -gt 0 ]; then
   log "Installing: ${missing[*]}"
-  sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "${missing[@]}" \
+  sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -o Dpkg::Options::=--force-confold "${missing[@]}" \
     || warn "Some Plasma base packages failed to install: ${missing[*]}"
 fi

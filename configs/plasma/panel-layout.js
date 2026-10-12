@@ -1,5 +1,6 @@
 // NoctraOS Plasma layout v1 (flavour kubuntu): one bottom panel with the Application Launcher, pinned apps, the system tray
-// and the clock. Applied once per account by apply-layout.sh through plasmashell's scripting D-Bus API.
+// and the clock. Applied once per account by apply-layout.sh through plasmashell's scripting D-Bus API, which first
+// replaces @VSCODE_LAUNCHER@ with the VS Code launcher this machine has (the file name differs between packages).
 var existing = panels();
 for (var i = 0; i < existing.length; i++) {
     existing[i].remove();
@@ -17,7 +18,7 @@ tasks.currentConfigGroup = ["General"];
 tasks.writeConfig("launchers", [
     "applications:org.kde.dolphin.desktop",
     "applications:org.kde.konsole.desktop",
-    "applications:code.desktop",
+    "applications:@VSCODE_LAUNCHER@",
     "applications:noctraos-hermes.desktop",
     "applications:noctraos-control.desktop"
 ]);
