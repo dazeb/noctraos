@@ -208,7 +208,9 @@ kubuntu_main() {
   [ -f "$src_iso" ] || { echo "no such ISO: $src_iso" >&2; exit 1; }
   work="$(mktemp -d "$work_base/noctraos-iso-build.XXXXXXXX")"
   iso_tree="$work/iso"; sq_root="$work/squashfs-root"
-  trap 'echo "work dir kept for inspection: $work (remove with rm -rf)"' EXIT
+  # $work is local to this function, so the trap must expand it now, not when it runs after the function returns
+  # shellcheck disable=SC2064
+  trap "echo \"work dir kept for inspection: $work (remove with rm -rf)\"" EXIT
   mkdir -p "$iso_tree" "$sq_root"
 
   step "1/7 extracting ISO tree"
