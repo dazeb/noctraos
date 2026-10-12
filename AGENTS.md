@@ -354,11 +354,11 @@ iso/vm-sysprep.sh           run inside a fully provisioned VM before exporting i
 
 ```bash
 # static checks (docker shellcheck — not installed on this host)
-bash -n boot.sh install.sh install/*.sh install/optional/*.sh install/desktop/*/*.sh bin/noc bin/noc-gpu bin/noc-privileged bin/noctraos-control bin/noctraos-agent \
+bash -n boot.sh install.sh install/*.sh install/optional/*.sh install/desktop/*/*.sh iso/flavours/*.sh iso/firstboot-runner.sh bin/noc bin/noc-gpu bin/noc-privileged bin/noctraos-control bin/noctraos-agent \
   bin/noctraos-copyq bin/noctraos-hermes bin/noctraos-search configs/nautilus-scripts/*     # other bin/ files are Python
 docker run --rm -v "$PWD:/mnt" koalaman/shellcheck:stable --severity=warning \
-  boot.sh install.sh install/*.sh install/optional/*.sh install/desktop/*/*.sh bin/noc bin/noc-gpu bin/noc-privileged bin/noctraos-control bin/noctraos-agent \
-  bin/noctraos-copyq bin/noctraos-hermes configs/nautilus-scripts/*     # same list as CI
+  boot.sh install.sh install/*.sh install/optional/*.sh install/desktop/*/*.sh iso/flavours/*.sh iso/firstboot-runner.sh bin/noc bin/noc-gpu bin/noc-privileged bin/noctraos-control bin/noctraos-agent \
+  bin/noctraos-copyq bin/noctraos-hermes configs/nautilus-scripts/*     # same list as CI (CI excludes SC2164 for iso/firstboot-runner.sh only: its text is pinned to the Zorin heredoc)
 python3 -m unittest discover -s tests  # 677 tests: theme, GPU detection, noc JSON modes, root helper, Control Panel, agent skill
 python3 scripts/render-theme.py --check              # committed theme outputs match palette.json
 
