@@ -56,12 +56,16 @@ class RealBundleTests(Sandbox):
         gsettings = bin_dir / "gsettings"
         gsettings.write_text('#!/bin/sh\nf="$FAKE_FAVORITES"\ncase "$1" in get) cat "$f" ;; set) printf "%s\\n" "$4" > "$f" ;; esac\n')
         gsettings.chmod(0o755)
+        agent_skills = bin_dir / "noc-agent-skills"        # migration 0002 needs the tool; a stub is enough here
+        agent_skills.write_text("#!/bin/sh\nexit 0\n")
+        agent_skills.chmod(0o755)
         (self.tmp / "apps").mkdir()
         (self.tmp / "apps/noctraos-control.desktop").write_text("[Desktop Entry]\n")
         (self.tmp / "favorites").write_text("['org.gnome.Nautilus.desktop']\n")
         (self.home / ".local/state/noctraos").mkdir(parents=True)
         self.env.update(PATH=f"{bin_dir}:{os.environ['PATH']}", FAKE_FAVORITES=str(self.tmp / "favorites"), HOME=str(self.home),
-                        NOCTRAOS_APPLICATIONS_DIR=str(self.tmp / "apps"))
+                        NOCTRAOS_APPLICATIONS_DIR=str(self.tmp / "apps"),
+                        NOCTRAOS_AGENT_SKILLS_TOOL=str(agent_skills))
 
     def test_a_bundle_of_this_repository_is_applied_and_its_migrations_run(self):
         self.fake_desktop()
