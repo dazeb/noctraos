@@ -144,3 +144,15 @@ desktop_is_gnome() {
     *) return 1 ;;         # a set desktop without GNOME (KDE, XFCE) wins
   esac
 }
+
+# desktop_is_plasma — success only when KDE Plasma is available as the desktop: plasmashell must exist AND
+# XDG_CURRENT_DESKTOP, when set, must name KDE. Plasma-only modules (install/desktop/plasma/) use it to skip honestly
+# (NOT APPLIED) on any other desktop, where nothing they write is read.
+desktop_is_plasma() {
+  have plasmashell || return 1
+  case "${XDG_CURRENT_DESKTOP:-}" in
+    "") return 0 ;;        # unset (SSH, headless): plasmashell on PATH decides
+    *KDE*) return 0 ;;
+    *) return 1 ;;
+  esac
+}

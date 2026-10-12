@@ -136,8 +136,9 @@ Taken from the repo and the VM runs. Not every item has been verified on a VM.
 |---|---|---|
 | Core provisioner: 00, 01, 02, 04, 04b, 04c, 04d, 07, 10 | shipped | ran on a 26.04.1 VM with return code 0; 01, 04b, 04c and 07 still contain GNOME-coupled lines |
 | 03 Ollama, 11 Hermes | shipped | 03 and 11 not run |
-| 05 mouse ergonomics | shipped (Nautilus scripts) | ran with return code 0, but it writes Nautilus scripts Dolphin never reads. It needs the `NOT APPLIED` guard |
-| 06 desktop theme, 08 shell theme | shipped | report `NOT APPLIED`; the Plasma theme is not started |
+| 05 mouse ergonomics | shipped (Nautilus scripts) | written (Dolphin right-click actions through `noctraos-fileaction`); not run on a Plasma session yet |
+| 06 desktop theme | shipped | written: colour scheme, Konsole profile, wallpapers, Agents section, panel layout (applied from the session); not run on a Plasma session yet |
+| 08 shell theme | shipped | reports `NOT APPLIED`; the SDDM theme and the AI-first Kickoff categories are not started |
 | 09 Super+Space and Start | shipped (GNOME Shell extensions) | report `NOT APPLIED`; plan is a KRunner runner and Kickoff |
 | Login and boot | shipped | SDDM greeter starts, and login reaches a Plasma session on the VM with virtio-vga-gl; the screen is not verified from the host |
 | ISO build | remaster script (`iso/build-noctraos-iso.sh`) | `iso/flavours/kubuntu.sh`: release (interactive Calamares) ISO only, built from the real kubuntu-26.04.1 ISO; no unattended or appliance build, no VM boot test of the result yet (see the pull request for what was run) |

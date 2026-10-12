@@ -40,9 +40,32 @@ with_bus() {
   fi
 }
 
+# KDE Plasma keeps the wallpaper elsewhere than gsettings: plasma-apply-wallpaperimage sets it, and the
+# desktop containment's config names the current image. Everything else about `noc bg` is the same on both.
+bg_is_plasma() {
+  command -v plasma-apply-wallpaperimage >/dev/null 2>&1 || return 1
+  case "${XDG_CURRENT_DESKTOP:-}" in *GNOME*) return 1 ;; esac
+  return 0
+}
+
 current_bg() {
+  if bg_is_plasma; then
+    local rc="${XDG_CONFIG_HOME:-$HOME/.config}/plasma-org.kde.plasma.desktop-appletsrc"
+    sed -n 's#^Image=file://##p; s#^Image=\(/.*\)$#\1#p' "$rc" 2>/dev/null | head -n 1
+    return 0
+  fi
   with_bus gsettings get org.gnome.desktop.background picture-uri-dark 2>/dev/null \
     | tr -d "'"
+}
+
+set_bg() {
+  local f="$1"
+  if bg_is_plasma; then
+    with_bus plasma-apply-wallpaperimage "$f" >/dev/null
+  else
+    with_bus gsettings set org.gnome.desktop.background picture-uri "file://$f"
+    with_bus gsettings set org.gnome.desktop.background picture-uri-dark "file://$f"
+  fi
 }
 
 cmd_bg() {
@@ -66,8 +89,7 @@ cmd_bg() {
       [ -z "$f" ] && { echo "usage: noc bg set <filename-or-path>"; exit 1; }
       [ -f "$f" ] || f="$WALLPAPER_DIR/$(basename "$f")"
       [ -f "$f" ] || { bad "no such wallpaper: $2"; exit 1; }
-      with_bus gsettings set org.gnome.desktop.background picture-uri "file://$f"
-      with_bus gsettings set org.gnome.desktop.background picture-uri-dark "file://$f"
+      set_bg "$f"
       info "background set: $(basename "$f")"
       ;;
     next)
