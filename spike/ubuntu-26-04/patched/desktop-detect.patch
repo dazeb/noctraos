@@ -1,0 +1,63 @@
+--- a/install/06_desktop_theme.sh
++++ b/install/06_desktop_theme.sh
+@@ -4,6 +4,11 @@
+ set -Eeuo pipefail
+ source "$REPO_ROOT/install/lib.sh"
+ 
++if ! desktop_is_gnome; then
++  warn "NOT APPLIED on this desktop: GNOME gsettings theme settings"
++  exit 0
++fi
++
+ gs() { as_user gsettings set "$@" 2>/dev/null || warn "gsettings failed: $*"; }
+ 
+ log "Window buttons to the right (Minimize, Maximize, Close)..."
+--- a/install/08_shell_theme.sh
++++ b/install/08_shell_theme.sh
+@@ -4,6 +4,11 @@
+ set -Eeuo pipefail
+ source "$REPO_ROOT/install/lib.sh"
+ 
++if ! desktop_is_gnome; then
++  warn "NOT APPLIED: GNOME shell and GTK theme (Plasma theme port pending)"
++  exit 0
++fi
++
+ BASE_THEME="/usr/share/themes/ZorinBlue-Dark"
+ BASE_GTK_THEME="/usr/share/themes/ZorinPurple-Dark"
+ THEME_NAME="NoctraOS-Dark"
+--- a/install/09_super_search.sh
++++ b/install/09_super_search.sh
+@@ -6,6 +6,11 @@
+ set -Eeuo pipefail
+ source "$REPO_ROOT/install/lib.sh"
+ 
++if ! desktop_is_gnome; then
++  warn "NOT APPLIED: Super+Space search and the Start button need GNOME Shell (this desktop is $(desktop_name)); see spike/ubuntu-26-04/README.md"
++  exit 0
++fi
++
+ SEARCH_UUID="noctraos-search@noctraos.local"
+ BRANDING_UUID="noctraos-branding@noctraos.local"
+ START_UUID="noctraos-start@noctraos.local"
+--- a/install/lib.sh
++++ b/install/lib.sh
+@@ -47,3 +47,18 @@
+   done
+   return 1
+ }
++
++# desktop_name — the session desktop for messages ("KDE", "GNOME", "unknown").
++desktop_name() { printf '%s' "${XDG_CURRENT_DESKTOP:-${DESKTOP_SESSION:-unknown}}"; }
++
++# desktop_is_gnome — success only when GNOME Shell is available as the desktop:
++# the gnome-shell binary must exist AND (XDG_CURRENT_DESKTOP names GNOME, or the
++# binary is present). GNOME-only modules (06, 08, 09) use it to skip honestly
++# instead of reporting success on KDE Plasma, where nothing they write is read.
++desktop_is_gnome() {
++  have gnome-shell || return 1
++  case "${XDG_CURRENT_DESKTOP:-}" in
++    *GNOME*) return 0 ;;
++  esac
++  [ -x "$(command -v gnome-shell)" ]
++}
