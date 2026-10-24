@@ -112,9 +112,11 @@ Calamares has no unattended mode.
   workstation (Docker, KVM, the R2 and GitHub credentials, the 2 TB drive are there), a systemd *user* service, tag
   `noctraos-release`, ref-protected, locked to this project; `v*` tags are protected so only maintainers can start a
   release. The checks (`shell`, `version`, `tests`) still run on the TrueNAS Docker runner.
-  **Open (2026-10-24):** that Docker runner (id 6) is stale and offline, so the `shell`, `version` and `tests` jobs of a
-  push sit pending and never go green; the release runner (id 7) is online. Until the Docker runner is fixed or replaced, run
-  the equivalent checks locally (`bash -n`, shellcheck in Docker, the unit suite, ideally as root in a container) and say so.
+  **Replaced (2026-10-24):** the old Docker runner (id 6) was gone, so push pipelines sat in `stuck_pending_no_matching_runners`.
+  Runner 8, a project runner (untagged jobs, not protected, locked to this project), now runs as the `noctraos-runner` container on the
+  TrueNAS (192.168.8.111; config in `/mnt/pool0/noctraos-runner/config`, unprivileged, `ubuntu:24.04`, one job, 1.5 GB limit, the NAS has
+  little spare RAM). Pipeline 154 went green on it (`shell`, `version`, `tests`). If it goes stale again, create a new project runner
+  and write its token into that `config.toml`.
 - **Open before the next Kubuntu release (2026-10-24):** rebuild the kubuntu ISO from `main` and run one interactive Calamares
   install of it; the first-boot fix is only verified on an installed system. Kubuntu update 1 is on `kubuntu/nightly` only; promoting
   it to stable (`iso/publish-update.sh stable --flavour kubuntu --from nightly --rollout 10`) is waiting for a decision. The other
