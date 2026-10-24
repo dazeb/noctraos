@@ -591,6 +591,39 @@ check_flatpak_security() {
   fi
 }
 
+# Node2Shell (CVE-2026-111497, 2026-10-21): an out-of-bounds write in the Brotli decoder bundled with Node.js. It is
+# reachable wherever code decodes Brotli it did not make (Express 5 request bodies, server-side fetch(), node:zlib). Fixed in
+# 22.23.4, 24.22.1 and 26.12.1; 20.x and older get no fix. Both Node runtimes NoctraOS puts on a machine are checked: the
+# mise one (what the agent launchers use) and Hermes' own under ~/.hermes/node (NOC_HERMES_NODE overrides it for tests).
+node_brotli_status() { # node_brotli_status <vX.Y.Z>  ->  fixed | vulnerable | eol
+  local v="${1#v}" fixed
+  case "$v" in
+    22.*) fixed="22.23.4" ;;
+    24.*) fixed="24.22.1" ;;
+    26.*) fixed="26.12.1" ;;
+    *)    echo eol; return ;;
+  esac
+  [ "$(printf '%s\n%s\n' "$fixed" "$v" | sort -V | head -n 1)" = "$fixed" ] && echo fixed || echo vulnerable
+}
+check_node_security() { # check_node_security <mise-node-version-or-empty>
+  local mise_v="$1" hermes_bin="${NOC_HERMES_NODE:-$HOME/.hermes/node/bin/node}" hermes_v="" bad="" ok="" label v
+  [ -x "$hermes_bin" ] && hermes_v="$("$hermes_bin" --version 2>/dev/null || true)"
+  for label in mise hermes; do
+    [ "$label" = mise ] && v="$mise_v" || v="$hermes_v"
+    [ -n "$v" ] || continue
+    case "$(node_brotli_status "$v")" in
+      fixed)      ok="$ok${ok:+, }$label $v" ;;
+      vulnerable) bad="$bad${bad:+; }$label Node $v has the Brotli bug (CVE-2026-111497)" ;;
+      eol)        bad="$bad${bad:+; }$label Node $v is end-of-life and has no fix for CVE-2026-111497" ;;
+    esac
+  done
+  if [ -n "$bad" ]; then
+    chk warn node-security "Node.js security" "$bad; run: noc update (mise); Hermes brings its own Node (noc apps update hermes), then run noc doctor again"
+  elif [ -n "$ok" ]; then
+    chk ok node-security "Node.js security" "$ok (has the Brotli fix)"
+  fi
+}
+
 # The NoctraOS update layer: a signing key must be installed and no migration may be stuck.
 check_noctraos_update() {
   local st
@@ -675,6 +708,7 @@ cmd_doctor() {
     py_v="$(mise exec -- python --version 2>/dev/null || true)"
     go_v="$(mise exec -- go version 2>/dev/null | awk '{print $3}' || true)"
     [ -n "$node_v" ] && chk ok node "Node.js" "$node_v (mise)"   || chk fail node "Node.js" "not resolving via mise"
+    check_node_security "$node_v"
     # Python and Go are not part of the install (nothing in NoctraOS uses them; people add the ones they want with mise).
     [ -n "$py_v" ]   && chk ok python "Python" "$py_v"           || chk info python "Python" "not installed (optional: mise use -g python)"
     [ -n "$go_v" ]   && chk ok go "Go" "$go_v"                   || chk info go "Go" "not installed (optional: mise use -g go)"

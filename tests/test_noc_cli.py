@@ -384,6 +384,46 @@ class DoctorStatusTests(unittest.TestCase):
             self.assertEqual(rows[language]["status"], "info", language)
             self.assertIn("mise use -g", rows[language]["detail"])
 
+    def node_security_row(self, mise_node, hermes_node=None):
+        """The node-security row for a mise Node and, optionally, a Hermes-owned Node (a stub that prints its version)."""
+        e = Env(self, ollama=False)
+        e.stub("mise", f'case "$*" in --version) echo 2026.1.0 ;; "exec -- node --version") echo {mise_node} ;; esac')
+        extra = {}
+        if hermes_node:
+            fake = e.home / "hermes-node"
+            fake.write_text(f'#!/bin/sh\necho {hermes_node}\n')
+            fake.chmod(0o755)
+            extra["NOC_HERMES_NODE"] = str(fake)
+        return {r["id"]: r for r in json.loads(e.noc("doctor", "--json", **extra).stdout)}["node-security"]
+
+    def test_doctor_node_with_the_brotli_fix_is_ok(self):
+        # Node2Shell, CVE-2026-111497: fixed in 22.23.4, 24.22.1 and 26.12.1.
+        for version in ("v22.23.4", "v22.24.0", "v24.22.1", "v24.23.0", "v26.12.1", "v26.13.0"):
+            with self.subTest(version=version):
+                self.assertEqual(self.node_security_row(version)["status"], "ok")
+
+    def test_doctor_node_without_the_brotli_fix_warns_and_says_how_to_update(self):
+        for version in ("v22.23.3", "v24.22.0", "v24.1.0", "v26.7.0", "v26.12.0"):
+            with self.subTest(version=version):
+                row = self.node_security_row(version)
+                self.assertEqual(row["status"], "warn")
+                self.assertIn("CVE-2026-111497", row["detail"])
+                self.assertIn("noc update", row["detail"])
+
+    def test_doctor_end_of_life_node_warns_that_no_fix_exists(self):
+        for version in ("v20.20.2", "v18.20.8", "v25.9.0"):
+            with self.subTest(version=version):
+                row = self.node_security_row(version)
+                self.assertEqual(row["status"], "warn")
+                self.assertIn("end-of-life", row["detail"])
+
+    def test_doctor_checks_hermes_own_node_as_well(self):
+        row = self.node_security_row("v24.22.1", hermes_node="v26.7.0")
+        self.assertEqual(row["status"], "warn")
+        self.assertIn("hermes Node v26.7.0", row["detail"])
+        self.assertNotIn("mise Node", row["detail"])          # the mise one is fine and not blamed
+        self.assertEqual(self.node_security_row("v24.22.1", hermes_node="v26.12.1")["status"], "ok")
+
     def test_doctor_still_fails_a_machine_without_node_and_shows_languages_that_are_there(self):
         rows = self.doctor_languages('case "$*" in --version) echo 2026.1.0 ;; "exec -- python --version") echo Python 3.12.3 ;; '
                                      '"exec -- go version") echo go version go1.27.1 linux/amd64 ;; esac')

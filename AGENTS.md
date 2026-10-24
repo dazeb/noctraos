@@ -898,7 +898,11 @@ What the first 0.4.0 run taught us, all fixed:
   `flatpak-security` (Flatpak 1.18.4, 2026-09-28, fixed six CVEs, two of them root file overwrite/delete; Ubuntu
   24.04 listed CVE-2026-97024 as "needs evaluation", so the row passes on version >= 1.18.4 OR the CVE named in
   the package changelog, `NOC_FLATPAK_CHANGELOG` overrides the path in tests), and `capabilities` per model in
-  `noc models list --json`, shown in the Control Panel's installed list. Not done, needs design first:
+  `noc models list --json`, shown in the Control Panel's installed list.
+  Node2Shell (CVE-2026-111497, 2026-10-21, Brotli decoder bundled with Node.js; fixed in 22.23.4, 24.22.1, 26.12.1, nothing for 20.x and older) and
+  PHP2Shell (CVE-2026-109618/109619, PHP before 8.5.12, 8.4.27, 8.3.36, 8.2.35): NoctraOS ships no PHP. Node comes from mise (`node = "lts"`, patched by
+  `noc update`'s mise step) and Hermes brings its own under `~/.hermes/node`, which `mise up` never touches; `noc doctor` row `node-security`
+  checks both (`NOC_HERMES_NODE` overrides the Hermes path in tests). Images and installs from before 2026-10-21 are exposed until updated. Not done, needs design first:
   push-to-talk dictation for Super+Space (Qwen3.8-Omni-Flash exists but only as a paid API, so wait for open
   weights); a "pause and ask" step before an agent sends files off the device or installs something;
   folder-scoped, revocable agent permissions plus a log of what left the device (PixelLeak, 2026-09-29:
