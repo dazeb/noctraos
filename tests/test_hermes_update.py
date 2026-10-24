@@ -208,6 +208,13 @@ class OptionalInstallTests(HermesBox):
         self.assertEqual(self.installs(), [])
         self.assertEqual(self.hermes("install").returncode, 0)           # once it has finished, the next one runs
 
+    def test_an_install_lock_that_cannot_be_created_is_said_and_does_not_stop_the_install(self):
+        r = self.hermes("install", XDG_RUNTIME_DIR=str(self.tmp / "no-such-dir"))
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("could not create the install lock", r.stdout)
+        self.assertNotIn("Bad file descriptor", r.stdout + r.stderr)
+        self.assertEqual(len(self.installs()), 1)
+
     def launch_in_a_terminal(self, answer):
         """`noctraos-hermes` as the Start menu runs it inside a terminal window: stdout is a terminal, stdin takes the answer."""
         master, slave = pty.openpty()
