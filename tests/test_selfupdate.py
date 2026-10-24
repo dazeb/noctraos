@@ -5,13 +5,13 @@ import hashlib
 import io
 import json
 import os
-from pathlib import Path
 import shutil
 import subprocess
 import sys
 import tarfile
 import tempfile
 import unittest
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 CLIENT = ROOT / "bin/noc-selfupdate"
@@ -20,7 +20,7 @@ HAVE_SSH_KEYGEN = shutil.which("ssh-keygen") is not None
 
 
 def sh(*argv, cwd=None, env=None, input=None):
-    return subprocess.run([str(a) for a in argv], capture_output=True, text=True, cwd=cwd, env=env, input=input)
+    return subprocess.run([str(a) for a in argv], capture_output=True, text=True, cwd=cwd, env=env, input=input, check=False)
 
 
 @unittest.skipUnless(HAVE_SSH_KEYGEN, "ssh-keygen is needed to sign and verify")
@@ -134,6 +134,40 @@ class FlavourTests(Sandbox):
 
     def set_flavour(self, value):
         (self.machine / "etc/noctraos/flavour").write_text(value + "\n")
+
+    def test_filtered_updates_apply_idempotently_and_rollback_for_each_flavour(self):
+        self.commit({"install/desktop/gnome/09_super_search.sh": "#!/bin/sh\necho gnome\n",
+                     "install/desktop/plasma/09_super_search.sh": "#!/bin/sh\necho plasma\n",
+                     "extensions/example/extension.js": "gnome\n", "branding/setup-branding.py": "gnome\n",
+                     "configs/plasma/apply-search.sh": "#!/bin/sh\necho plasma\n",
+                     "bin/noctraos-search-plasma": "#!/bin/sh\necho plasma\n", "search/krunner.py": "plasma\n",
+                     "configs/gsettings/org.gnome.shell.extensions.noctraos-search.gschema.xml": "shared\n",
+                     "configs/nautilus-scripts/Open Terminal Here": "#!/bin/sh\necho shared\n"})
+        for flavour, desktop, other in (("zorin", "gnome", "plasma"), ("kubuntu", "plasma", "gnome")):
+            with self.subTest(flavour=flavour):
+                self.set_flavour(flavour)
+                self.publish(flavour=flavour)
+                r = self.client("apply")
+                self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+                self.assertTrue(self.snap(f"install/desktop/{desktop}/09_super_search.sh").is_file())
+                self.assertFalse(self.snap(f"install/desktop/{other}").exists())
+                self.assertTrue(self.snap("configs/gsettings/org.gnome.shell.extensions.noctraos-search.gschema.xml").is_file())
+                self.assertTrue(self.snap("configs/nautilus-scripts/Open Terminal Here").is_file())
+                self.assertEqual(self.snap("extensions/example/extension.js").exists(), flavour == "zorin")
+                self.assertEqual(self.snap("search/krunner.py").exists(), flavour == "kubuntu")
+                self.assertEqual(self.client("apply").returncode, 0)
+                self.assertEqual(self.check()["status"], "current")
+                old_serial = self.state()["serial"]
+                old_noc = self.snap("bin/noc").read_bytes()
+                self.commit({"bin/noc": f"#!/bin/sh\necho {flavour} new\n"})
+                self.publish(flavour=flavour)
+                self.assertEqual(self.client("apply").returncode, 0)
+                self.assertNotEqual(self.snap("bin/noc").read_bytes(), old_noc)
+                r = self.client("rollback")
+                self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+                self.assertEqual(self.snap("bin/noc").read_bytes(), old_noc)
+                self.assertEqual(self.state()["serial"], old_serial)
+                self.assertFalse(self.snap(f"install/desktop/{other}").exists())
 
     def over_http(self):
         """A missing manifest reads as "nothing published" (HTTP 404) only over HTTP; a file:// mirror reads as unreachable."""
@@ -511,7 +545,7 @@ class HttpTests(Sandbox):
         import threading
 
         class Forbidden(http.server.BaseHTTPRequestHandler):
-            def do_GET(self):  # noqa: N802
+            def do_GET(self):
                 self.send_error(403)
 
             def log_message(self, *a):
@@ -572,6 +606,21 @@ class ConfigTests(Sandbox):
 
 
 class BuildTests(unittest.TestCase):
+    def test_items_pathspecs_and_archive_filter_agree_for_every_tracked_path(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("make_update", MAKE)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        all_files = sh("git", "-C", ROOT, "ls-tree", "-r", "--name-only", "HEAD", "--", *mod.ITEMS).stdout.splitlines()
+        for flavour in ("zorin", "kubuntu"):
+            with self.subTest(flavour=flavour):
+                r = sh(sys.executable, MAKE, "items", "--flavour", flavour)
+                self.assertEqual(r.returncode, 0, r.stderr)
+                empty = sh("git", "-C", ROOT, "hash-object", "-t", "tree", "--stdin", input="").stdout.strip()
+                carried = sh("git", "-C", ROOT, "diff", "--name-only", empty, "HEAD", "--", *r.stdout.splitlines())
+                self.assertEqual(carried.returncode, 0, carried.stderr)
+                self.assertEqual(set(carried.stdout.splitlines()), {p for p in all_files if mod.carries_path(p, flavour)})
+
     def test_the_three_item_lists_agree(self):
         """The bundle, the client's allowlist and module 07's snapshot must name the same top-level items."""
         client = _list_from(CLIENT.read_text(), "BUNDLE_ITEMS")
@@ -586,17 +635,32 @@ class BuildTests(unittest.TestCase):
         if not HAVE_SSH_KEYGEN:
             self.skipTest("no ssh-keygen")
         with tempfile.TemporaryDirectory() as d:
-            for n in ("a", "b"):
-                r = sh(sys.executable, MAKE, "bundle", "--ref", "HEAD", "--serial", "1", "--out", Path(d) / n)
-                self.assertEqual(r.returncode, 0, r.stderr)
-            self.assertEqual((Path(d) / "a/bundles/noctraos-1.tar.gz").read_bytes(),
-                             (Path(d) / "b/bundles/noctraos-1.tar.gz").read_bytes())
-            with tarfile.open(Path(d) / "a/bundles/noctraos-1.tar.gz") as t:
-                names = t.getnames()
-                self.assertIn(".update.json", names)
-                self.assertIn("bin/noc", names)
-                self.assertFalse([n for n in names if n.startswith(("assets/promo", "assets/social", "tests", "docs"))])
-                self.assertTrue(all(m.isfile() or m.isdir() for m in t.getmembers()))
+            for flavour in ("zorin", "kubuntu"):
+                with self.subTest(flavour=flavour):
+                    prefix = "" if flavour == "zorin" else "kubuntu/"
+                    for n in ("a", "b"):
+                        r = sh(sys.executable, MAKE, "bundle", "--ref", "HEAD", "--serial", "1", "--flavour", flavour,
+                               "--out", Path(d) / n)
+                        self.assertEqual(r.returncode, 0, r.stderr)
+                    path = prefix + "bundles/noctraos-1.tar.gz"
+                    self.assertEqual((Path(d) / "a" / path).read_bytes(), (Path(d) / "b" / path).read_bytes())
+                    with tarfile.open(Path(d) / "a" / path) as t:
+                        names = t.getnames()
+                        self.assertIn(".update.json", names)
+                        self.assertIn("bin/noc", names)
+                        self.assertFalse([n for n in names if n.startswith(("assets/promo", "assets/social", "tests", "docs"))])
+                        self.assertTrue(all(m.isfile() or m.isdir() for m in t.getmembers()))
+                        roots = {n.split('/')[0] for n in names}
+                        self.assertEqual(roots - {".update.json"}, set(_list_from(MAKE.read_text(), "ITEMS")))
+                        desktop = "gnome" if flavour == "zorin" else "plasma"
+                        other = "plasma" if flavour == "zorin" else "gnome"
+                        self.assertTrue(any(n.startswith(f"install/desktop/{desktop}/") for n in names))
+                        self.assertFalse(any(n.startswith(f"install/desktop/{other}") for n in names))
+                        if flavour == "kubuntu":
+                            self.assertFalse(any(n.startswith(("extensions/", "branding/")) for n in names))
+                            self.assertIn("configs/gsettings/org.gnome.shell.extensions.noctraos-search.gschema.xml", names)
+                        else:
+                            self.assertFalse(any(n.startswith(("configs/plasma", "assets/plasma")) for n in names))
 
 
 def _list_from(text, name):

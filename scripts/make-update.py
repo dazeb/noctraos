@@ -38,6 +38,32 @@ FLAVOURS = ('zorin', 'kubuntu')
 ITEMS = ['VERSION', 'install.sh', 'install', 'bin', 'configs', 'scripts', 'assets', 'help', 'extensions', 'branding',
          'search', 'control', 'migrations']
 EXCLUDE_PREFIXES = ('assets/promo/', 'assets/social/')   # module 07 removes them from the snapshot too
+FLAVOUR_EXCLUDES = {
+    'zorin': ('install/desktop/plasma', 'configs/plasma', 'assets/plasma', 'assets/boot/calamares',
+              'configs/autostart/noctraos-plasma-layout.desktop', 'configs/autostart/noctraos-plasma-search.desktop',
+              'bin/noctraos-search-plasma', 'bin/noctraos-fileaction', 'search/krunner.py',
+              'scripts/render-kubuntu-branding.py'),
+    'kubuntu': ('install/desktop/gnome', 'extensions', 'branding', 'assets/icons/noctraos-theme',
+                'configs/autostart/noctraos-branding.desktop', 'configs/autostart/noctraos-search-setup.desktop',
+                'configs/gsettings/org.gnome.shell.extensions.noctraos-start.gschema.xml',
+                'configs/gsettings/90_noctraos-updates.gschema.override', 'configs/xdg/gnome-applications.menu',
+                'configs/theme/gnome-shell.css', 'configs/theme/gnome-shell.css.in', 'configs/theme/shell-remap.json',
+                'configs/theme/index.theme', 'configs/ownership/zorin-18.1-core.tsv'),
+}
+
+
+def excluded_paths(flavour):
+    return tuple(p.rstrip('/') for p in EXCLUDE_PREFIXES) + FLAVOUR_EXCLUDES[flavour]
+
+
+def bundle_items(flavour):
+    """Git pathspecs for the same files build_bundle carries, including deletions in a nightly diff."""
+    return ITEMS + [f':(exclude){p}' for p in excluded_paths(flavour)]
+
+
+def carries_path(path, flavour):
+    # Empty top-level directories remain valid snapshot roots for old clients and rollback.
+    return path in ITEMS or not any(path == p or path.startswith(p + '/') for p in excluded_paths(flavour))
 
 
 def flavour_prefix(flavour):
@@ -46,7 +72,7 @@ def flavour_prefix(flavour):
 
 
 def git(*args, check=True):
-    r = subprocess.run(['git', '-C', ROOT, *args], capture_output=True)
+    r = subprocess.run(['git', '-C', ROOT, *args], capture_output=True, check=False)
     if check and r.returncode != 0:
         sys.exit(f'git {" ".join(args)}: {r.stderr.decode().strip()}')
     return r.stdout
@@ -56,7 +82,7 @@ def build_bundle(ref, serial, out, flavour='zorin'):
     commit = git('rev-parse', '--verify', f'{ref}^{{commit}}').decode().strip()
     version = git('show', f'{commit}:VERSION').decode().strip()
     present = [i for i in ITEMS
-               if subprocess.run(['git', '-C', ROOT, 'cat-file', '-e', f'{commit}:{i}'], capture_output=True).returncode == 0]
+               if subprocess.run(['git', '-C', ROOT, 'cat-file', '-e', f'{commit}:{i}'], capture_output=True, check=False).returncode == 0]
     for needed in ('VERSION', 'install.sh', 'install', 'bin'):
         if needed not in present:
             sys.exit(f'{ref} has no {needed}: not a NoctraOS tree')
@@ -67,7 +93,7 @@ def build_bundle(ref, serial, out, flavour='zorin'):
             tarfile.open(fileobj=io.BytesIO(raw)) as src:
         members = sorted(src.getmembers(), key=lambda m: m.name)
         for m in members:
-            if m.name.startswith(EXCLUDE_PREFIXES) or m.name in ('assets/promo', 'assets/social'):
+            if not carries_path(m.name.rstrip('/'), flavour):
                 continue
             if not (m.isfile() or m.isdir()):
                 sys.exit(f'{m.name} is a {"symlink" if m.issym() else "special file"}: bundles hold plain files only')
@@ -104,7 +130,7 @@ def sign(path, key):
     sig = path + '.sig'
     if os.path.exists(sig):
         os.unlink(sig)
-    r = subprocess.run(['ssh-keygen', '-Y', 'sign', '-f', key, '-n', NAMESPACE, path], capture_output=True, text=True)
+    r = subprocess.run(['ssh-keygen', '-Y', 'sign', '-f', key, '-n', NAMESPACE, path], capture_output=True, text=True, check=False)
     if r.returncode != 0 or not os.path.exists(sig):
         sys.exit(f'ssh-keygen -Y sign failed: {r.stderr.strip()}')
 
@@ -112,10 +138,13 @@ def sign(path, key):
 def build_manifest(args):
     if bool(args.bundle_json) == bool(args.from_manifest):
         sys.exit('give exactly one of --bundle-json and --from-manifest')
-    src = json.load(open(args.bundle_json or args.from_manifest))
+    with open(args.bundle_json or args.from_manifest) as source:
+        src = json.load(source)
     flavour = src.get('flavour', 'zorin')   # sources made before flavours are zorin's
     if flavour not in FLAVOURS:
         sys.exit(f'unknown flavour "{flavour}" in the source')
+    if args.flavour and args.flavour != flavour:
+        sys.exit(f'source is for {flavour}, not {args.flavour}')
     if args.from_manifest:
         bundle = dict(src['bundle'])
         serial, version, commit = src['serial'], src['version'], src.get('commit', '')
@@ -126,6 +155,8 @@ def build_manifest(args):
         bundle = {k: src[k] for k in ('path', 'sha256', 'size')}
         serial, version, commit = src['serial'], src['version'], src['commit']
         notes, relogin, reboot = args.notes or '', args.relogin, args.reboot
+    if bundle['path'] != f'{flavour_prefix(flavour)}bundles/noctraos-{serial}.tar.gz':
+        sys.exit(f'bundle path does not match the {flavour} flavour and serial {serial}')
     if not 0 <= args.rollout <= 100:
         sys.exit('--rollout is a percentage, 0 to 100')
     issued = now()
@@ -148,7 +179,8 @@ def next_serial(paths):
     best = 0
     for p in paths:
         try:
-            best = max(best, int(json.load(open(p))['serial']))
+            with open(p) as source:
+                best = max(best, int(json.load(source)['serial']))
         except (OSError, ValueError, KeyError, TypeError):
             continue
     return best + 1
@@ -165,6 +197,7 @@ def main(argv=None):
     m = sub.add_parser('manifest')
     m.add_argument('--bundle-json')
     m.add_argument('--from-manifest')
+    m.add_argument('--flavour', choices=FLAVOURS)
     m.add_argument('--channel', choices=('stable', 'nightly'), required=True)
     m.add_argument('--rollout', type=int, default=100)
     m.add_argument('--expires-days', type=int, default=30)
@@ -175,7 +208,8 @@ def main(argv=None):
     m.add_argument('--out', required=True)
     s = sub.add_parser('serial')
     s.add_argument('manifests', nargs='*')
-    sub.add_parser('items', help='print the top-level paths a bundle carries, one per line')
+    items = sub.add_parser('items', help='print git pathspecs for carried files, one per line')
+    items.add_argument('--flavour', choices=FLAVOURS, default='zorin')
     args = p.parse_args(argv)
     if args.cmd == 'bundle':
         if args.serial < 1:
@@ -185,7 +219,7 @@ def main(argv=None):
     elif args.cmd == 'manifest':
         print(build_manifest(args))
     elif args.cmd == 'items':
-        print('\n'.join(ITEMS))
+        print('\n'.join(bundle_items(args.flavour)))
     else:
         print(next_serial(args.manifests))
     return 0

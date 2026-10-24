@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=NoctraOS search setup
+Comment=Adds Super+Space to KRunner once per account
+Exec=/usr/local/share/noctraos/plasma/apply-search.sh
+OnlyShowIn=KDE;
+NoDisplay=true
+X-KDE-autostart-after=panel

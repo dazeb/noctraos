@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# The KRunner bridge (flavour kubuntu) needs the system Python's PyGObject: a mise-managed python3 is
+# first on PATH in a real session and has no gi module (see AGENTS.md).
+exec /usr/bin/python3 /usr/local/share/noctraos-search/krunner.py "$@"

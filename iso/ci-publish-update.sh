@@ -5,15 +5,18 @@
 #   iso/ci-publish-update.sh promote PCT        move the update this pipeline built from nightly to the stable channel at PCT percent
 #   iso/ci-publish-update.sh widen PCT          raise the stable channel's rollout to PCT percent (same update, same bundle)
 #
+# NOCTRAOS_FLAVOUR (default zorin) picks the flavour's own serials, bundles and channels: a kubuntu machine reads
+# <mirror>/kubuntu/<channel>/, so promoting and widening are per flavour too (docs/flavours.md).
+#
 # What it adds to publish-update.sh, because a job can be started by anyone who can push a protected tag:
 #   * the commit must already be in the history of GitHub main (the public repository): an update ships merged, reviewed code;
 #   * the notes come from the tag message (its first line); `Relogin: yes` and `Reboot: yes` lines in the message set the flags the
 #     Updates page shows ("sign out and back in", "restart"). A tag without a message is described by its version;
 #   * promote/widen refuse to act on anything but the update this pipeline built (a newer nightly or stable stays alone), and
 #     never lower a rollout: a re-run of an old job cannot undo a wider rollout.
-# A bundle is never replaced (publish-update.sh stops if one with that serial differs), so a retry of `nightly` is safe only
-# because the serial moves on: retry the pipeline from a fresh tag when an update was published and was wrong.
-# Environment (tests set these): UPDATE_MAIN_URL, UPDATE_PUBLIC_BASE, PUBLISH_UPDATE, UPDATE_REPO.
+# A bundle is never replaced. A retry of the newest nightly commit reuses its serial and repairs incomplete mirrors;
+# changed code gets the next serial.
+# Environment (tests set these): UPDATE_MAIN_URL, UPDATE_PUBLIC_BASE, PUBLISH_UPDATE, UPDATE_REPO, NOCTRAOS_FLAVOUR.
 set -Eeuo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -24,6 +27,13 @@ PUBLISH="${PUBLISH_UPDATE:-$HERE/publish-update.sh}"
 die() { echo "ci-publish-update: $*" >&2; exit 1; }
 log() { printf '=== %s\n' "$*"; }
 g() { git -C "$REPO" "$@"; }
+
+FLAVOUR="${NOCTRAOS_FLAVOUR:-zorin}"
+case "$FLAVOUR" in
+  zorin) PREFIX="" ;;
+  kubuntu) PREFIX="$FLAVOUR/" ;;
+  *) die "flavour must be zorin or kubuntu, not $FLAVOUR" ;;
+esac
 
 MODE="${1:-}"
 ARG="${2:-}"
@@ -44,7 +54,7 @@ require_in_main() {
 
 # The channel's public manifest field, '' when the channel has no manifest yet.
 public_field() {
-  curl -fsS --connect-timeout 20 "$PUBLIC_BASE/$1/manifest.json" 2>/dev/null | jq -r "$2 // empty" 2>/dev/null || true
+  curl -fsS --connect-timeout 20 "$PUBLIC_BASE/${PREFIX}$1/manifest.json" 2>/dev/null | jq -r "$2 // empty" 2>/dev/null || true
 }
 
 case "$MODE" in
@@ -61,23 +71,23 @@ case "$MODE" in
     flags=()
     grep -qiE '^relogin:[[:space:]]*(yes|true)[[:space:]]*$' <<<"$body" && flags+=(--relogin)
     grep -qiE '^reboot:[[:space:]]*(yes|true)[[:space:]]*$' <<<"$body" && flags+=(--reboot)
-    log "publishing ${commit:0:7} on the nightly channel: $notes ${flags[*]:-}"
-    bash "$PUBLISH" nightly --ref "$commit" --notes "$notes" "${flags[@]}" ;;
+    log "publishing ${commit:0:7} on the $FLAVOUR nightly channel: $notes ${flags[*]:-}"
+    bash "$PUBLISH" nightly --ref "$commit" --notes "$notes" --flavour "$FLAVOUR" "${flags[@]}" ;;
 
   promote|widen)
     [[ "$ARG" =~ ^([1-9][0-9]?|100)$ ]] || die "$MODE needs a rollout percentage, 1 to 100"
     commit="$(resolve_commit "")"
     from=nightly; [ "$MODE" = widen ] && from=stable
     have="$(public_field "$from" .commit)"
-    [ -n "$have" ] || die "the $from channel has no update to $MODE"
+    [ -n "$have" ] || die "the $FLAVOUR $from channel has no update to $MODE"
     [ "$have" = "$commit" ] \
-      || die "the $from channel now holds ${have:0:7}, not this pipeline's ${commit:0:7}: a newer update exists, $MODE that pipeline instead"
+      || die "the $FLAVOUR $from channel now holds ${have:0:7}, not this pipeline's ${commit:0:7}: a newer update exists, $MODE that pipeline instead"
     current="$(public_field stable .rollout.percent)"
     if [ -n "$current" ] && [ "$(public_field stable .commit)" = "$commit" ] && [ "$current" -ge "$ARG" ]; then
-      log "stable already serves this update to $current%: nothing to do"; exit 0
+      log "$FLAVOUR stable already serves this update to $current%: nothing to do"; exit 0
     fi
-    log "stable: ${commit:0:7} to $ARG% (from $from)"
-    bash "$PUBLISH" stable --from "$from" --rollout "$ARG" ;;
+    log "$FLAVOUR stable: ${commit:0:7} to $ARG% (from $from)"
+    bash "$PUBLISH" stable --from "$from" --rollout "$ARG" --flavour "$FLAVOUR" ;;
 
   *) die "usage: ci-publish-update.sh nightly [REF] | promote PCT | widen PCT" ;;
 esac

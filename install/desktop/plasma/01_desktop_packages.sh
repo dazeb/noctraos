@@ -12,7 +12,7 @@ if ! desktop_is_plasma; then
 fi
 
 missing=()
-for p in dolphin konsole kdialog zenity libnotify-bin; do
+for p in dolphin konsole kdialog zenity libnotify-bin python3-gi; do
   if dpkg-query -W -f='${Status}' "$p" 2>/dev/null | grep -Fx 'install ok installed' >/dev/null; then
     continue
   elif apt-cache show "$p" >/dev/null 2>&1; then

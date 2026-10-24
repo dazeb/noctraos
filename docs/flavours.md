@@ -1,18 +1,18 @@
 # NoctraOS flavours
 
-Status: agreed direction, 2026-10-10. Read this before changing anything that differs by desktop or
+Status updated 2026-10-14; flavour direction agreed 2026-10-10. Read this before changing anything that differs by desktop or
 base: `install/05` to `09`, `install/desktop/`, `install/lib.sh` desktop guards, `iso/`, `branding/`,
 `extensions/`, the release pipeline, the update channel, or any doc that describes what the user sees.
 
 ## What we are doing
 
-NoctraOS is **one product**: the same OS, name, version, feature set and command set, shipped in
+NoctraOS is **one product**: the same name, version and command set, with feature parity as the goal, shipped in
 **flavours**. A flavour is one supported build: an upstream base, one desktop, and its own ISO pipeline.
 The base and the desktop are implementation choices. The product stays the same.
 
 | Flavour id | Base | Desktop | Status |
 |---|---|---|---|
-| `zorin` | Zorin OS 18.1 (Ubuntu 24.04) | GNOME | shipped (0.3.x, 0.4.0) |
+| `zorin` | Zorin OS 18.1 (Ubuntu 24.04) | GNOME | shipped, including 0.5.0; recommended download |
 | `kubuntu` | Kubuntu 26.04 (Ubuntu 26.04) | KDE Plasma 6 | preview from 0.5.0 (released beside zorin, labelled preview) |
 
 ## Vocabulary (use these words exactly)
@@ -65,14 +65,20 @@ Decide in this order:
 
 1. Does the change alter what a user sees on both flavours? Then it is shared code. Both flavours must be
    tested before the change is called done.
-2. Does it touch gsettings, dconf, `gnome-shell`, Nautilus or Zorin names? Then it is GNOME desktop code:
-   `install/desktop/gnome/` (planned), or a module with header `# desktops: gnome`.
+2. Does it touch GNOME desktop gsettings, dconf, `gnome-shell`, Nautilus or Zorin names? Then it is GNOME desktop code:
+   `install/desktop/gnome/`, or a module with header `# desktops: gnome`.
 3. Does it touch `kwriteconfig6`, `plasma*`, KWin, KDE or Dolphin? Then it is Plasma desktop code:
-   `install/desktop/plasma/` (planned), or a module with header `# desktops: plasma`.
+   `install/desktop/plasma/`, or a module with header `# desktops: plasma`.
 4. Does it touch the ISO, a base's installer, the boot chain or the release? Then it goes in
    `iso/flavours/<id>.sh` (planned). Never add a flavour `if` inside `iso/build-noctraos-iso.sh`.
 5. Does it describe the product in a doc? Shared text says NoctraOS. Base names appear only in the base
    sections.
+
+The legacy `org.gnome.shell.extensions.noctraos-search` GSettings schema is a
+narrow shared exception to rule 2. It stores search sources, index roots and
+web-provider preferences for both desktops, not GNOME desktop settings. Keep
+browser history opt-in. This exception does not permit GNOME Shell extensions
+or other GNOME desktop schemas in a Kubuntu bundle.
 
 Module headers: a module that depends on the desktop declares it on its second line:
 `# desktops: any`, `# desktops: gnome` or `# desktops: plasma`. On a desktop it does not support, it prints
@@ -89,7 +95,7 @@ contradicts the file or an unknown value; `install.sh` exports the result as `NO
 the same file to pick the machine's update channel (`docs/updates.md`) and passes `NOCTRAOS_FLAVOUR` to migrations; a
 migration for one flavour prints `NOT APPLIED on the <flavour> flavour` on the others and exits 0.
 
-## Current state of the code (2026-10-10)
+## Current state of the code (2026-10-14)
 
 Taken from the repo and the VM runs. Not every item has been verified on a VM.
 
@@ -100,6 +106,22 @@ Taken from the repo and the VM runs. Not every item has been verified on a VM.
 - **Core modules that still contain GNOME/Zorin-coupled lines** (split or guard them before a Plasma release):
   `04_gui_apps` (the gnome-keyring restart) and `04c_app_policy` (Zorin package removals and launcher hides). The ISO
   remaster is still `iso/build-noctraos-iso.sh`, not yet `iso/flavours/zorin.sh`. `lib.sh` has the one allowed desktop guard.
+
+Published 0.5.0 Kubuntu artifacts still lack the new Super+Space search and the
+AI-first Start categories. The working code now has Plasma module 09: Meta+Space
+opens KRunner, stock KRunner supplies apps, and the shared backend supplies files,
+CopyQ, opt-in browser history and web search. On 2026-10-14, the local Kubuntu VM
+test covered key activation, fixture results, Enter opening Kate, shortcut
+persistence after reboot and an idempotent setup rerun. No new Zorin runtime test
+is claimed by this test. The AI-first Kickoff Start categories are not implemented.
+Broad theme acceptance, interactive Calamares installation and real hardware
+remain untested.
+
+System and user search migrations are in the working tree for existing Kubuntu
+systems to receive search through a future optional signed update. Publication
+scripts are gaining explicit `--flavour` selection and per-flavour CI jobs. No
+Kubuntu channel was published in this work; its public manifests previously
+returned HTTP 404. Wiring a publisher is not evidence of a live channel.
 
 ## Rules for agents
 
@@ -130,17 +152,17 @@ Taken from the repo and the VM runs. Not every item has been verified on a VM.
 - "NoctraOS KDE" or "the Kubuntu version" → "NoctraOS (kubuntu flavour)".
 - "works on Kubuntu" with no VM run behind it → "installs on Kubuntu; the desktop is not yet ported".
 
-## Status matrix (2026-10-10)
+## Status matrix (2026-10-14)
 
 | Component | zorin | kubuntu |
 |---|---|---|
-| Core provisioner: 00, 01, 02, 04, 04b, 04c, 04d, 07, 10 | shipped | ran on a 26.04.1 VM with return code 0; 01, 04b, 04c and 07 still contain GNOME-coupled lines |
-| 03 Ollama, 11 Hermes | shipped | 03 and 11 not run |
-| 05 mouse ergonomics | shipped (Nautilus scripts) | written (Dolphin right-click actions through `noctraos-fileaction`); not run on a Plasma session yet |
-| 06 desktop theme | shipped | written: colour scheme, Konsole profile, wallpapers, Agents section, panel layout (applied from the session); not run on a Plasma session yet |
-| 08 shell theme | shipped | written: Global Theme `dev.noctraos.desktop` (splash, previews, layout), wallpaper packages, SDDM login screen, lock-screen picture, About this System, NoctraOS logo on Kickoff (`configs/plasma/install-look.sh`, also baked into the ISO); unit-tested and the splash rendered offscreen with Qt 6, not run on a Plasma session yet; the AI-first Kickoff categories are not started |
-| 09 Super+Space and Start | shipped (GNOME Shell extensions) | report `NOT APPLIED`; plan is a KRunner runner and Kickoff |
-| Login and boot | shipped | SDDM greeter starts, and login reaches a Plasma session on the VM with virtio-vga-gl; the screen is not verified from the host |
-| ISO build | remaster script (`iso/build-noctraos-iso.sh`) | `iso/flavours/kubuntu.sh`: release (interactive Calamares, NoctraOS pictures and a six-slide slideshow) ISO only, built from the real kubuntu-26.04.1 ISO; the live session's Plymouth splash is still Kubuntu's; appliance build (`NOCTRAOS_UNATTENDED=1`): `iso/flavours/kubuntu/autoinstall.sh` installs the way Calamares does (2026-10-12, local KVM VM: it installed, rebooted into SDDM autologin and Plasma, and first-boot provisioning started); the release ISO's interactive install is not VM-tested yet |
-| Release pipeline and update channel | wired | release pipeline wired (`release-build-kubuntu`, `releases/vX/kubuntu/`, the site's preview section); update channel: the client reads `kubuntu/<channel>/`, but nothing publishes to it yet (the update jobs are zorin only) |
+| Core provisioner | shipped | earlier 26.04.1 VM run returned 0; the Oct 14 search test is not a full provisioner rerun |
+| Optional local Ollama, 11 Hermes | shipped | no new runtime acceptance claimed by the Oct 14 search test |
+| 05 mouse ergonomics | shipped (Nautilus scripts) | written (Dolphin right-click actions through `noctraos-fileaction`); interactive action acceptance not established by the search test |
+| 06 desktop theme | shipped | written: colour scheme, Konsole profile, wallpapers, Agents section, panel layout; broad interactive acceptance remains untested |
+| 08 shell theme | shipped | written: Global Theme `dev.noctraos.desktop` (splash, previews, layout), wallpaper packages, SDDM login screen, lock-screen picture, About this System, NoctraOS logo on Kickoff (`configs/plasma/install-look.sh`, also baked into the ISO); unit-tested and splash rendered offscreen with Qt 6; broad interactive acceptance remains untested; AI-first Kickoff Start categories are not implemented |
+| 09 Super+Space and Start | shipped (GNOME Shell extensions) | working module 09 and KRunner runner; local VM search scope above passed; published 0.5.0 still lacks search; AI-first Kickoff Start categories are not implemented |
+| Login and boot | shipped | local Kubuntu VM search shortcut persisted after reboot on Oct 14; broader login and boot visual acceptance not established by that test |
+| ISO build | remaster script (`iso/build-noctraos-iso.sh`) | `iso/flavours/kubuntu.sh` builds release and appliance ISOs; appliance uses `kubuntu/autoinstall.sh` (Oct 12 local KVM test installed, rebooted into SDDM autologin and Plasma, and started first-boot provisioning); working remaster includes search files; no rebuilt release-ISO search acceptance claimed; interactive Calamares installation remains untested |
+| Release pipeline and update channel | release pipeline wired; existing legacy update paths retained | 0.5.0 preview published; client reads `kubuntu/<channel>/`; working publisher adds `--flavour` and Kubuntu CI jobs, with system and user search migrations; no Kubuntu channel published in this work, public manifests previously HTTP 404 |
 | Control Panel | shipped | runs on GTK3; not verified on Plasma |

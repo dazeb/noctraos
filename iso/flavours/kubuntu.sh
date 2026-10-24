@@ -170,6 +170,32 @@ kubuntu_look() { # kubuntu_look <squashfs-root>
   bash "$KB_REPO_ROOT/configs/plasma/install-look.sh" "$1"
 }
 
+# Super+Space on Plasma: the KRunner runner, its metadata and the shortcut setup, baked into the image so the
+# very first session has them (the provisioner's Plasma module 09 runs inside the first session, and KRunner
+# must not be asked before it finished). This is the file-copy half of install/desktop/plasma/09_super_search.sh:
+# keep the two lists in step. The search app and its settings schema are the shared ones (both flavours).
+kubuntu_search() { # kubuntu_search <squashfs-root> <provisioner-tree>
+  local root="$1" repo="$2" schemas="$1/usr/share/glib-2.0/schemas"
+  install -d -m 755 "$root/usr/local/share/noctraos-search" "$root/usr/local/bin" \
+    "$root/usr/share/krunner/dbusplugins" "$root/usr/share/dbus-1/services" \
+    "$root/usr/local/share/noctraos/plasma" "$root/etc/xdg/autostart" "$schemas"
+  for f in "$repo"/search/*.py; do install -m 644 "$f" "$root/usr/local/share/noctraos-search/"; done
+  install -m 755 "$repo/bin/noctraos-search" "$repo/bin/noctraos-search-plasma" "$repo/bin/noctraos-weather" \
+    "$root/usr/local/bin/"
+  install -m 644 "$repo/configs/gsettings/org.gnome.shell.extensions.noctraos-search.gschema.xml" "$schemas/"
+  if [ -x "$root/usr/bin/glib-compile-schemas" ]; then
+    chroot "$root" /usr/bin/glib-compile-schemas /usr/share/glib-2.0/schemas
+  else
+    glib-compile-schemas "$schemas"
+  fi || { echo "kubuntu_search: glib-compile-schemas failed" >&2; return 1; }
+  install -m 644 "$repo/configs/plasma/krunner/noctraos-search.desktop" "$root/usr/share/krunner/dbusplugins/"
+  install -m 644 "$repo/configs/plasma/krunner/org.kde.noctraos.search.service" "$root/usr/share/dbus-1/services/"
+  install -D -m 644 "$repo/configs/plasma/krunner/noctraos-search-settings.desktop" \
+    "$root/usr/local/share/applications/noctraos-search-settings.desktop"
+  install -m 755 "$repo/configs/plasma/apply-search.sh" "$root/usr/local/share/noctraos/plasma/apply-search.sh"
+  install -m 644 "$repo/configs/autostart/noctraos-plasma-search.desktop" "$root/etc/xdg/autostart/"
+}
+
 # First-boot provisioning: the runner (shared text, iso/firstboot-runner.sh), its autostart, the flavour file and the snapshot.
 # Stock Kubuntu first-login extras that NoctraOS replaces: KDE's Welcome Center (NoctraOS has its own welcome) and the two
 # web-link icons on a new user's desktop. The Welcome Center is opened by the kded_plasma_welcome module when the user has
@@ -291,6 +317,7 @@ kubuntu_main() {
   kubuntu_calamares "$sq_root" "$version"
   kubuntu_boot_theme_squashfs "$sq_root"
   kubuntu_look "$sq_root"
+  kubuntu_search "$sq_root" "$sq_root/opt/noctraos"
   kubuntu_defaults "$sq_root"
   bake_guest_tools "$sq_root"
   kubuntu_theme_grub "$iso_tree"

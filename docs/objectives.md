@@ -7,8 +7,9 @@ summarise it; if they disagree with this file, this file wins.
 
 An **AI development workstation OS**, on an Ubuntu base. It ships as one product
 in flavours: Zorin OS 18.x with GNOME (`zorin`, shipped) and Kubuntu 26.04 with KDE
-Plasma (`kubuntu`, a preview from 0.5.0). The name, version, features and commands are the
-same in every flavour; see [flavours.md](flavours.md).
+Plasma (`kubuntu`, a preview from 0.5.0). The name, version and commands are the
+same in every flavour. Feature parity is the goal, not a claim about the preview;
+see [flavours.md](flavours.md).
 
 It does what [Omarchy](https://omarchy.org) does for developers who live in a
 tiling window manager — a complete, opinionated, AI-first workstation out of the
@@ -55,12 +56,21 @@ One overlay is meant to reach the whole system: **applications, files and
 folders, clipboard history, the web, browser history, and more**, with a
 settings panel for sources and indexed locations. Shipped today: applications,
 files and folders, clipboard history (CopyQ), web search, and **opt-in browser
-history** (Chromium family and Firefox). Other sources are not built yet.
+history** (Chromium family and Firefox) on the GNOME flavour. Other sources are not built yet.
+
+As of 2026-10-14, the working Plasma code opens KRunner with Meta+Space, KDE's
+name for Super+Space. The runner uses the shared backend for files, CopyQ,
+opt-in browser history and web search; stock KRunner supplies applications.
+The local Kubuntu VM test covered key activation, fixture results, Enter opening
+Kate, shortcut persistence after reboot and an idempotent setup rerun. Published
+0.5.0 Kubuntu images still lack this search. The AI-first Kickoff Start categories
+are not implemented. Broad theme acceptance, interactive Calamares installation
+and real hardware remain untested.
 
 ### Browser history is opt-in and set up after first use
 
 A new user has no browser configured at first login, so onboarding cannot ask.
-Instead, once a supported browser has history on the account, the Super+Space
+On GNOME, once a supported browser has history on the account, the Super+Space
 overlay shows a small "Finish setup" notice: *search your browser history too?
 Choose your browser.* **Set up** opens a short dialog (which browser(s), and
 "Search my history" or "No thanks"); **Not now** dismisses it for good. The
@@ -68,6 +78,10 @@ choice is reversible in Search settings. History is copied into the user's
 private cache (`~/.cache/noctraos-search/history`, mode 0700) and searched
 locally; nothing is uploaded. It is the main thing a new user should learn, and the reference
 for the visual theme.
+
+The working Plasma port uses the same opt-in preferences through Search settings
+(`noctraos-search --settings`). The GNOME overlay's setup notice is not a claim
+about KRunner onboarding.
 
 Status: in the repo and installed by `install/desktop/gnome/09_super_search.sh` — two GNOME
 Shell extensions (`extensions/noctraos-search@noctraos.local`, the overlay;
@@ -133,7 +147,9 @@ some stock icons) are tracked in the coverage table in `theme-design.md`.
 - **The KDE Plasma edition ships as a preview from 0.5.0** (decided 2026-10-12). Every
   release builds and publishes both flavours from one tag. `kubuntu` gets its own
   files and its own download-page section, labelled preview, with the parts that are
-  not ported yet listed (Super+Space, the Start panel). This happens once its appliance
+  not ported yet listed. Published 0.5.0 lacks Super+Space search and the AI-first
+  Start panel; the working search port does not change those published artifacts.
+  Preview publication requires that its appliance
   installs unattended, provisions, and passes `noc doctor` and the boot test in a VM.
   The GNOME edition stays the one the site recommends, and the Proxmox script offers
   it only. The rules for agents are in [flavours.md](flavours.md).

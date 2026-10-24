@@ -696,10 +696,31 @@ cmd_doctor() {
     chk fail vscode "VS Code" "missing"
   fi
 
-  # Super+Space is a GNOME Shell extension today; the Plasma version (a KRunner runner) is not written yet (docs/flavours.md).
-  # "Re-run the installer" would be wrong advice there: the installer prints NOT APPLIED for it.
+  # Super+Space: a GNOME Shell extension on zorin, a KRunner DBus runner on kubuntu (search/krunner.py).
   if [ "$(noc_desktop)" = plasma ]; then
-    chk info search "Super+Space search" "not on KDE Plasma yet (planned)"
+    local krunner_metadata=/usr/share/krunner/dbusplugins/noctraos-search.desktop
+    test_hooks && krunner_metadata="${NOCTRAOS_KRUNNER_METADATA:-$krunner_metadata}"
+    if have noctraos-search-plasma && [ -f "$krunner_metadata" ]; then
+      local search_state
+      search_state="$(noctraos-search-plasma --status --json 2>/dev/null | python3 -c '
+import json, sys
+try:
+    report = json.load(sys.stdin)
+    print("missing" if not report.get("installed") else
+          "ok" if report.get("shortcut") is True else
+          "shortcut" if report.get("shortcut") is False else "session")
+except (ValueError, TypeError):
+    print("missing")
+' 2>/dev/null)" || search_state=missing
+      case "$search_state" in
+        ok) chk ok search "Super+Space search" "KRunner runner installed; Super+Space assigned" ;;
+        shortcut) chk warn search "Super+Space search" "KRunner installed; set Super+Space in System Settings > Shortcuts" ;;
+        session) chk info search "Super+Space search" "KRunner installed; shortcut not verified (no Plasma session)" ;;
+        *) chk fail search "Super+Space search" "incomplete (re-run the installer)" ;;
+      esac
+    else
+      chk fail search "Super+Space search" "missing (re-run the installer)"
+    fi
   elif have noctraos-search \
      && [ -d /usr/share/gnome-shell/extensions/noctraos-search@noctraos.local ]; then
     chk ok search "Super+Space search" "installed"

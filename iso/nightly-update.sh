@@ -12,12 +12,15 @@
 #   3. publishes it with iso/publish-update.sh nightly, notes "Nightly YYYY-MM-DD <short sha>: <subject>".
 # It only ever writes the nightly channel. Nightly is for testers who chose it in the Updates page; moving an update to stable is a
 # deliberate step (a tag, or iso/publish-update.sh stable), never automatic.
-# Environment (tests set these): NIGHTLY_HOME, NIGHTLY_REPO_URL, NIGHTLY_PUBLIC_BASE, PUBLISH_UPDATE, NIGHTLY_CHECKS.
+# Every flavour has its own nightly channel (NIGHTLY_FLAVOURS, default "zorin kubuntu", docs/flavours.md): the checks run once and
+# only the flavours whose channel does not already serve this commit are published.
+# Environment (tests set these): NIGHTLY_HOME, NIGHTLY_REPO_URL, NIGHTLY_PUBLIC_BASE, PUBLISH_UPDATE, NIGHTLY_CHECKS, NIGHTLY_FLAVOURS.
 set -Eeuo pipefail
 
 HOME_DIR="${NIGHTLY_HOME:-$HOME/.local/share/noctraos-nightly}"
 REPO_URL="${NIGHTLY_REPO_URL:-https://github.com/dazeb/noctraos.git}"
 BASE="${NIGHTLY_PUBLIC_BASE:-https://dl.noctraos.dev/updates}"
+FLAVOURS="${NIGHTLY_FLAVOURS:-zorin kubuntu}"
 DRY=0; [ "${1:-}" = "--dry-run" ] && DRY=1
 log() { printf '=== %s %s\n' "$(date '+%F %H:%M')" "$*"; }
 
@@ -37,15 +40,30 @@ git -C "$REPO" fetch -q origin main
 git -C "$REPO" reset -q --hard origin/main
 head="$(git -C "$REPO" rev-parse HEAD)"
 
-# What the nightly channel serves now. No manifest yet (or an unreachable host) means: publish.
-published="$(curl -fsS --max-time 30 "$BASE/nightly/manifest.json" 2>/dev/null | jq -r '.commit // empty' 2>/dev/null || true)"
-if [ "$published" = "$head" ]; then log "the nightly channel already serves ${head:0:7}"; exit 0; fi
-mapfile -t items < <(python3 "$REPO/scripts/make-update.py" items)
-if [ -n "$published" ] && git -C "$REPO" cat-file -e "$published^{commit}" 2>/dev/null \
-   && git -C "$REPO" diff --quiet "$published" "$head" -- "${items[@]}"; then
-  log "main moved (${published:0:7} to ${head:0:7}) but nothing an update carries changed: no new update"
-  exit 0
-fi
+# Which flavours need this commit. A channel that already serves it, or whose carried files did not change, is left alone.
+pending=()
+for flavour in $FLAVOURS; do
+  case "$flavour" in
+    zorin) prefix="" ;;
+    kubuntu) prefix="$flavour/" ;;
+    *) log "unknown flavour $flavour: skipping"; continue ;;
+  esac
+  # No manifest yet (or an unreachable host) means: publish.
+  published="$(curl -fsS --max-time 30 "$BASE/${prefix}nightly/manifest.json" 2>/dev/null | jq -r '.commit // empty' 2>/dev/null || true)"
+  if [ "$published" = "$head" ]; then log "$flavour: the nightly channel already serves ${head:0:7}"; continue; fi
+  if ! carried="$(python3 "$REPO/scripts/make-update.py" items --flavour "$flavour")" || [ -z "$carried" ]; then
+    notify_failure "cannot select the update items for $flavour: nothing was published."
+    exit 1
+  fi
+  mapfile -t items <<< "$carried"
+  if [ -n "$published" ] && git -C "$REPO" cat-file -e "$published^{commit}" 2>/dev/null \
+     && git -C "$REPO" diff --quiet "$published" "$head" -- "${items[@]}"; then
+    log "$flavour: main moved (${published:0:7} to ${head:0:7}) but nothing an update carries changed: no new update"
+    continue
+  fi
+  pending+=("$flavour")
+done
+if [ ${#pending[@]} -eq 0 ]; then log "nothing to publish"; exit 0; fi
 
 checks="${NIGHTLY_CHECKS:-}"
 if [ -z "$checks" ]; then
@@ -58,10 +76,12 @@ if ! ( cd "$REPO" && bash -c "$checks" ) > "$HOME_DIR/checks.log" 2>&1; then
 fi
 
 notes="Nightly $(date -u +%F) ${head:0:7}: $(git -C "$REPO" log -1 --format=%s "$head" | cut -c1-120)"
-if [ "$DRY" = 1 ]; then log "dry run: would publish ${head:0:7} as: $notes"; exit 0; fi
-log "publishing: $notes"
-if ! bash "${PUBLISH_UPDATE:-$REPO/iso/publish-update.sh}" nightly --ref "$head" --notes "$notes"; then
-  notify_failure "publish-update.sh failed for ${head:0:7}."
-  exit 1
-fi
-log "published ${head:0:7} on the nightly channel"
+if [ "$DRY" = 1 ]; then log "dry run: would publish ${head:0:7} for ${pending[*]} as: $notes"; exit 0; fi
+for flavour in "${pending[@]}"; do
+  log "publishing $flavour: $notes"
+  if ! bash "${PUBLISH_UPDATE:-$REPO/iso/publish-update.sh}" nightly --ref "$head" --notes "$notes" --flavour "$flavour"; then
+    notify_failure "publish-update.sh failed for ${head:0:7} ($flavour)."
+    exit 1
+  fi
+  log "published ${head:0:7} on the $flavour nightly channel"
+done

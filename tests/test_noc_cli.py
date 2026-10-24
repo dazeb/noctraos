@@ -249,7 +249,7 @@ class DoctorStatusTests(unittest.TestCase):
             extra["NOC_SELFUPDATE"] = str(e.bin / "selfupdate")
         return {r["id"]: r for r in json.loads(e.noc("doctor", "--json", **extra).stdout)}["noctraos-update"]
 
-    def search_row(self, flavour=None):
+    def search_row(self, flavour, runner=False, metadata=False, shortcut=True, installed=True):
         e = Env(self)
         extra = {}
         if flavour is not None:
@@ -257,13 +257,27 @@ class DoctorStatusTests(unittest.TestCase):
             extra["NOCTRAOS_FLAVOUR_FILE"] = str(e.home / "flavour")
         else:
             extra["NOCTRAOS_FLAVOUR_FILE"] = str(e.home / "no-flavour-file")
+        if runner:
+            e.stub("noctraos-search-plasma", "echo '" + json.dumps({'installed': installed, 'shortcut': shortcut}) + "'")
+        marker = e.home / ("krunner/noctraos-search.desktop" if metadata else "absent.desktop")
+        if metadata:
+            marker.parent.mkdir(parents=True, exist_ok=True)
+            marker.write_text("[Desktop Entry]\n")
+        extra["NOCTRAOS_KRUNNER_METADATA"] = str(marker)
         return {r["id"]: r for r in json.loads(e.noc("doctor", "--json", **extra).stdout)}["search"]
 
-    def test_doctor_super_space_on_plasma_is_not_ported_yet_never_a_failure(self):
+    def test_doctor_super_space_on_plasma_reports_the_krunner_runner(self):
+        self.assertEqual(self.search_row("kubuntu", runner=True, metadata=True)["status"], "ok")
+
+    def test_doctor_plasma_does_not_claim_an_unverified_shortcut_works(self):
+        self.assertEqual(self.search_row("kubuntu", runner=True, metadata=True, shortcut=None)['status'], 'info')
+        self.assertEqual(self.search_row("kubuntu", runner=True, metadata=True, shortcut=False)['status'], 'warn')
+        self.assertEqual(self.search_row("kubuntu", runner=True, metadata=True, installed=False)['status'], 'fail')
+
+    def test_doctor_super_space_on_plasma_fails_when_the_runner_is_missing(self):
         row = self.search_row("kubuntu")
-        self.assertEqual(row["status"], "info")
-        self.assertIn("KDE Plasma", row["detail"])
-        self.assertNotIn("re-run", row["detail"])
+        self.assertEqual(row["status"], "fail")
+        self.assertIn("re-run the installer", row["detail"])
 
     def test_doctor_super_space_on_gnome_still_fails_when_missing(self):
         for flavour in ("zorin", None):     # no flavour file: installed before flavours existed, so zorin

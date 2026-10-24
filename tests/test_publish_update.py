@@ -1,14 +1,14 @@
 """iso/publish-update.sh with rclone and curl stubbed over two directory 'stores' (r2 and hetzner): bundle first, manifest
 last, never overwrite, promotion keeps the bundle and serial, and the read-back verifies the signature with the same
 key clients use. No network, no real bucket, no real key."""
+import hashlib
 import json
 import os
-from pathlib import Path
 import shutil
 import subprocess
-import sys
 import tempfile
 import unittest
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "iso/publish-update.sh"
@@ -76,11 +76,12 @@ class Publish(unittest.TestCase):
                     "STUB_LOG": str(self.log), "NOC_UPDATE_REPO": str(self.repo), "NOCTRAOS_UPDATE_KEY": str(self.key),
                     "UPDATE_SIGNERS": str(self.tmp / "signers"), "R2_ACCESS_KEY_ID": "x", "R2_SECRET_ACCESS_KEY": "x",
                     "R2_ENDPOINT": "x", "R2_BUCKET": "b", "AWS_ACCESS_KEY_ID": "x", "AWS_SECRET_ACCESS_KEY": "x",
-                    "NOCTRAOS_S3_ENV_FILE": "/nonexistent", "VERIFY_RETRY_DELAY": "0"}
+                    "NOCTRAOS_S3_ENV_FILE": "/nonexistent", "VERIFY_RETRY_DELAY": "0",
+                    "UPDATE_PUBLISH_LOCK": str(self.tmp / "publish.lock")}
         self.env.pop("RELEASE_STORE", None)
 
     def git(self, *a):
-        r = subprocess.run(["git", "-C", str(self.repo), *a], capture_output=True, text=True)
+        r = subprocess.run(["git", "-C", str(self.repo), *a], capture_output=True, text=True, check=False)
         self.assertEqual(r.returncode, 0, r.stderr)
 
     def commit(self, version):
@@ -93,7 +94,7 @@ class Publish(unittest.TestCase):
         self.git("commit", "-q", "-m", "c", "--allow-empty")
 
     def publish(self, *args, **env):
-        return subprocess.run(["bash", str(SCRIPT), *args], capture_output=True, text=True, env={**self.env, **env})
+        return subprocess.run(["bash", str(SCRIPT), *args], capture_output=True, text=True, env={**self.env, **env}, check=False)
 
     def manifest(self, store, channel):
         base = self.store / ("r2/b" if store == "r2" else "hz/noctraos-releases")
@@ -142,7 +143,7 @@ class NightlyTests(Publish):
         shutil.rmtree(self.store / "hz")                     # one store lost everything
         r = self.publish("nightly", "--ref", "HEAD", UPDATE_STORES="hetzner")
         self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertTrue(self.has_bundle("hetzner", 1) or self.has_bundle("hetzner", 2))
+        self.assertTrue(self.has_bundle("hetzner", 1))
 
     def test_what_the_public_host_serves_must_verify(self):
         r = self.publish("nightly", "--ref", "HEAD", STUB_PUBLIC_TAMPER="1")
@@ -154,8 +155,111 @@ class NightlyTests(Publish):
         self.assertNotEqual(r.returncode, 0)
         self.assertIn("no signing key", r.stderr)
 
+    def test_retry_reuses_the_newest_serial_for_each_flavour_and_repairs_a_missing_mirror(self):
+        for flavour in ("zorin", "kubuntu"):
+            with self.subTest(flavour=flavour):
+                prefix = "" if flavour == "zorin" else "kubuntu/"
+                r = self.publish("nightly", "--ref", "HEAD", "--flavour", flavour)
+                self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+                target = self.store / "r2/b/updates" / prefix / "nightly/manifest.json"
+                before = json.loads(target.read_text())
+                bundle = self.store / "r2/b/updates" / before["bundle"]["path"]
+                data = bundle.read_bytes()
+                mirror_root = self.store / "hz/noctraos-releases/updates" / prefix
+                (mirror_root / "nightly/manifest.json").unlink()
+                (mirror_root / "bundles/noctraos-1.tar.gz").unlink()
+                r = self.publish("nightly", "--ref", "HEAD", "--flavour", flavour)
+                self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+                after = json.loads(target.read_text())
+                self.assertEqual(after["serial"], 1)
+                self.assertEqual(after["bundle"], before["bundle"])
+                self.assertEqual(bundle.read_bytes(), data)
+                self.assertEqual((mirror_root / "bundles/noctraos-1.tar.gz").read_bytes(), data)
+                self.assertFalse((mirror_root / "bundles/noctraos-2.tar.gz").exists())
+
+    def test_wrong_flavour_source_is_refused_before_any_upload(self):
+        self.assertEqual(self.publish("nightly", "--ref", "HEAD").returncode, 0)
+        for store in ("r2/b", "hz/noctraos-releases"):
+            base = self.store / store / "updates"
+            shutil.copytree(base / "nightly", base / "kubuntu/nightly")
+        self.log.write_text("")
+        r = self.publish("stable", "--rollout", "10", "--flavour", "kubuntu")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("source is for zorin, not kubuntu", r.stderr)
+        self.assertEqual(self.log.read_text(), "")
+
+    def test_retry_with_changed_bundle_construction_advances_without_replacing_old_bytes(self):
+        self.assertEqual(self.publish("nightly", "--ref", "HEAD").returncode, 0)
+        old = None
+        for store in ("r2/b", "hz/noctraos-releases"):
+            base = self.store / store / "updates"
+            bundle = base / "bundles/noctraos-1.tar.gz"
+            # Simulate an old builder with a different gzip timestamp but the same commit and serial.
+            data = bytearray(bundle.read_bytes())
+            data[4] = 1
+            old = bytes(data)
+            bundle.write_bytes(old)
+            target = base / "nightly/manifest.json"
+            manifest = json.loads(target.read_text())
+            manifest["bundle"]["sha256"] = hashlib.sha256(old).hexdigest()
+            target.write_text(json.dumps(manifest))
+        r = self.publish("nightly", "--ref", "HEAD")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        for store in ("r2/b", "hz/noctraos-releases"):
+            base = self.store / store / "updates"
+            self.assertEqual((base / "bundles/noctraos-1.tar.gz").read_bytes(), old)
+            self.assertEqual(json.loads((base / "nightly/manifest.json").read_text())["serial"], 2)
+
+    def test_wrong_flavour_bundle_path_is_refused_before_any_upload(self):
+        self.assertEqual(self.publish("nightly", "--ref", "HEAD").returncode, 0)
+        for store in ("r2/b", "hz/noctraos-releases"):
+            target = self.store / store / "updates/nightly/manifest.json"
+            source = json.loads(target.read_text())
+            source["bundle"]["path"] = "kubuntu/bundles/noctraos-1.tar.gz"
+            target.write_text(json.dumps(source))
+        self.log.write_text("")
+        r = self.publish("stable", "--rollout", "10")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("source bundle path does not match", r.stderr)
+        self.assertEqual(self.log.read_text(), "")
+
 
 class StableTests(Publish):
+    def test_renewal_and_old_promote_retry_never_lower_a_flavours_rollout(self):
+        for flavour in ("zorin", "kubuntu"):
+            with self.subTest(flavour=flavour):
+                prefix = "" if flavour == "zorin" else "kubuntu/"
+                self.assertEqual(self.publish("nightly", "--ref", "HEAD", "--flavour", flavour).returncode, 0)
+                self.assertEqual(self.publish("stable", "--rollout", "10", "--flavour", flavour).returncode, 0)
+                saved = (self.store / "r2/b/updates" / prefix / "stable/manifest.json").read_bytes()
+                self.assertEqual(self.publish("stable", "--rollout", "100", "--flavour", flavour).returncode, 0)
+                # A previous partial rollout left one mirror behind. Renewal must use the widest, not the first store.
+                (self.store / "r2/b/updates" / prefix / "stable/manifest.json").write_bytes(saved)
+                r = self.publish("renew", "stable", "--flavour", flavour)
+                self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+                for store in ("r2/b", "hz/noctraos-releases"):
+                    m = json.loads((self.store / store / "updates" / prefix / "stable/manifest.json").read_text())
+                    self.assertEqual((m["serial"], m["rollout"]["percent"]), (1, 100))
+                r = self.publish("stable", "--rollout", "10", "--flavour", flavour)
+                self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+                m = json.loads((self.store / "r2/b/updates" / prefix / "stable/manifest.json").read_text())
+                self.assertEqual(m["rollout"]["percent"], 100)
+
+    def test_an_older_nightly_cannot_replace_a_newer_stable(self):
+        self.assertEqual(self.publish("nightly", "--ref", "HEAD").returncode, 0)
+        saved = {store: (self.store / store / "updates/nightly/manifest.json").read_bytes()
+                 for store in ("r2/b", "hz/noctraos-releases")}
+        self.commit("2")
+        self.assertEqual(self.publish("nightly", "--ref", "HEAD").returncode, 0)
+        self.assertEqual(self.publish("stable", "--rollout", "100").returncode, 0)
+        for store, data in saved.items():
+            (self.store / store / "updates/nightly/manifest.json").write_bytes(data)
+        self.log.write_text("")
+        r = self.publish("stable", "--rollout", "10")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("stable already holds newer update 2", r.stderr)
+        self.assertEqual(self.log.read_text(), "")
+
     def test_promotion_reuses_the_nightly_bundle_and_serial_at_a_staged_percentage(self):
         self.publish("nightly", "--ref", "HEAD")
         r = self.publish("stable", "--rollout", "10")

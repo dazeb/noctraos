@@ -1,0 +1,5 @@
+# D-Bus activation for the NoctraOS KRunner runner (flavour kubuntu). KRunner calls
+# org.kde.noctraos.search; the session bus starts this program the first time, so no process sits idle.
+[D-BUS Service]
+Name=org.kde.noctraos.search
+Exec=/usr/local/bin/noctraos-search-plasma

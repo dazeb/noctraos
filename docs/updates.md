@@ -3,13 +3,39 @@
 How a NoctraOS machine that is already installed gets new features without a new ISO. Built 2026-10-08.
 The tools are `bin/noc-selfupdate` (the machine), `scripts/make-update.py` and `iso/publish-update.sh` (the publisher).
 
+## Kubuntu status (2026-10-14)
+
+Published 0.5.0 Kubuntu images do not include the new Super+Space search. The
+working code adds KRunner on Meta+Space with stock KRunner application results
+and the shared backend for files, CopyQ, opt-in browser history and web search.
+The local Kubuntu VM test covered key activation, fixture results, Enter opening
+Kate, shortcut persistence after reboot and an idempotent setup rerun. It did not
+verify a public signed update, broad theme acceptance, interactive Calamares
+installation or real hardware. AI-first Kickoff Start categories are not implemented.
+
+Working system migration `0002_install_plasma_search.sh` reuses Plasma module 09
+from the root-owned snapshot to install the search files. User migration
+`0003_setup_plasma_search.sh` reuses the once-per-account shortcut helper for
+other accounts; KDE autostart can retry setup when a session is available. The
+helper keeps its existing marker and user choices. These migrations provide the
+delivery path for a future optional signed update, not evidence that one shipped.
+The legacy-named `org.gnome.shell.extensions.noctraos-search` schema is shared
+search configuration, not GNOME desktop settings; browser history remains opt-in.
+
+Publication scripts are gaining explicit `--flavour` selection and per-flavour
+CI jobs. No Kubuntu update channel was published in this work. Public Kubuntu
+manifests previously returned HTTP 404; do not treat the new jobs as proof of a
+live channel. Before offering search to existing systems, verify the signed
+Kubuntu bundle and migrations on a previous-release VM, then publish and read
+back the flavour's manifests and bundle through the public hostnames.
+
 ## What is and is not covered
 
 | Layer | How it updates | Where |
 |---|---|---|
-| Ubuntu/Zorin base, system packages | apt | `noc update` step `apt` |
+| Ubuntu base, system packages in either flavour | apt | `noc update` step `apt` |
 | Flatpak apps | Flatpak | step `flatpak` |
-| **The NoctraOS layer**: install modules, theme, GNOME Shell extensions, search, Control Panel, `noc`, `noc-gpu` | **signed rolling update** (this document) | step `noctraos` |
+| **The NoctraOS layer**: install modules, theme, the flavour's desktop integration, search, Control Panel, `noc`, `noc-gpu` | **signed rolling update** (this document) | step `noctraos` |
 | Programming languages, AI models | mise, Ollama | steps `mise`, `models` |
 | Upgrading the base itself (Zorin 18 to the next release) | not here; a separate, rarer feature | |
 
@@ -78,6 +104,12 @@ Omarchy does with Snapper (Zorin installs on ext4). `rollback` restores the Noct
 
 ## The pipeline: from a merged change to people's machines
 
+The job names below without a suffix are for `zorin`. The working CI adds
+`update-nightly-kubuntu`, `update-stable-10-kubuntu`, `update-stable-50-kubuntu`
+and `update-stable-100-kubuntu` for Kubuntu. Each uses its flavour's own serials,
+bundles and channels. These jobs have not published Kubuntu channels in this work.
+The diagram describes the intended publication path, not current channel status.
+
 ```
 PR merged to GitHub main
    |  (a) tag update-YYYY.MM.DD  ->  GitLab update-nightly          or   (b) the daily timer (rolling nightly)
@@ -133,14 +165,19 @@ previous update** when there is one. Terminal: `noc channel [stable|nightly|roll
 * `stable`: the default. A nightly **promoted** after it has soaked: same bundle, same serial, new signature.
 
 ```bash
-iso/publish-update.sh nightly --ref origin/main --notes "Faster Start panel"   # build + publish the next serial
-iso/publish-update.sh stable --rollout 10                                      # promote the newest nightly to 10%
-iso/publish-update.sh stable --from stable --rollout 50                        # widen
-iso/publish-update.sh stable --from stable --rollout 100
-iso/publish-update.sh renew stable                                             # at least every 2 weeks
+iso/publish-update.sh nightly --flavour zorin --ref origin/main --notes "Faster Start panel"   # build + publish the next serial
+iso/publish-update.sh stable --flavour zorin --rollout 10                                      # promote the newest nightly to 10%
+iso/publish-update.sh stable --flavour zorin --from stable --rollout 50                        # widen
+iso/publish-update.sh stable --flavour zorin --from stable --rollout 100
+iso/publish-update.sh renew stable --flavour zorin                                             # at least every 2 weeks
 ```
 
-Serials are one counter across channels, so promotion is just the same number appearing in `stable`. A machine that
+Use `--flavour kubuntu` for the Kubuntu channels once the code and publication
+checks pass. Specify the flavour on every manual publish, promotion and renewal.
+The working publisher defaults to `NOCTRAOS_FLAVOUR`, then `zorin`, but an
+explicit flag avoids publishing to the wrong flavour.
+
+Serials are one counter across channels **within each flavour**, so promotion is just the same number appearing in `stable`. A machine that
 switches from `nightly` to `stable` gets nothing until `stable` catches up (never backwards).
 Add `--relogin` when the update changes GNOME Shell extensions (the shell scans for them once at login) and
 `--reboot` for anything that needs a restart; the Updates page tells the person.
@@ -151,7 +188,8 @@ last, and each store is read back through its **public** hostname with the same 
 ```
 updates/bundles/noctraos-N.tar.gz            immutable, never overwritten (a different one with the same N stops the publish)
 updates/<channel>/manifest.json + .sig       the only mutable files
-updates/kubuntu/bundles/, kubuntu/<channel>/ the same for the kubuntu flavour: its own serials, bundles and channels
+updates/kubuntu/bundles/noctraos-N.tar.gz    immutable Kubuntu bundles, with their own serials
+updates/kubuntu/<channel>/manifest.json + .sig  Kubuntu manifests, separate from zorin
 ```
 
 Each flavour (`docs/flavours.md`) has its own channels. zorin keeps the top-level layout every installed machine already
@@ -190,7 +228,7 @@ never override a person's choice. A failed migration is recorded, retried at the
 What an update refreshes without a migration: module 07's files (`noc`, `noc-gpu`, `noc-upstream`, the root helper, the Control
 Panel, the updater), every installed `/usr/local/bin/noctraos-*` program, and the NoctraOS **launchers and icons**
 (`install_launchers` in `install/lib.sh`: copies only what differs, touches no setting). Files that modules 06, 08 and 09 install
-(extensions, the search app, themes, schemas) are **not** refreshed, because those modules also apply desktop settings; a change to
+(extensions, the search app, themes, schemas) are **not** refreshed by module 07, because those modules also apply desktop settings; a change to
 them ships with a migration that re-runs the module (see `migrations/README.md`). Pinning something to the dock is a per-account
 setting, so it is a user migration (`migrations/user/0001_pin_control_panel.sh`).
 
@@ -220,6 +258,11 @@ checks that the PUBLIC manifest really expires at least 25 days out, and shows a
 systemd **user** timer on the release workstation, the only machine with the signing key. The job uses its own clone of GitHub `main`
 (`~/.local/share/noctraos-renew/repo`, reset before every run), never a development checkout. `status` shows the timer and the real
 expiry of each public manifest; `run` renews now.
+
+The working renewal scripts check both flavours and renew only channels with a
+published manifest. A missing manifest means there is nothing to renew, not that
+the flavour has a live channel. Verify the public paths and expiry after the
+first Kubuntu publication.
 
 ## Limits and next steps
 

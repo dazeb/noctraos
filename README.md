@@ -22,7 +22,8 @@ in, and the desktop is dark with a little amber along the way.
 ## What you get
 
 - **One shortcut: Super + Space.** Find apps, files, clipboard history, and
-  the web. Browser history is available if you opt in.
+  the web on the GNOME flavour. Browser history is available if you opt in.
+  The published 0.5.0 KDE Plasma preview does not include this search yet.
 - **AI on your computer, if you want it.** Local models run through Ollama, set
   up with one optional command and LLMFIT to find one that fits your hardware.
   No model is downloaded until you pick one, and Ollama starts with your
@@ -47,7 +48,7 @@ in, and the desktop is dark with a little amber along the way.
 | :---: | :---: |
 | [<img src="site/img/shots/control-overview.webp" alt="NoctraOS Control Panel overview: version, updates, local AI, graphics, disk and Hermes" width="400">](site/img/shots/full/control-overview.webp) | [<img src="site/img/shots/control-privacy.webp" alt="NoctraOS Control Panel privacy page: Hermes local only or the Nous cloud free tier" width="400">](site/img/shots/full/control-privacy.webp) |
 
-*Real screenshots from a running NoctraOS VM. Click any image for the full view.*
+*Real screenshots from a running NoctraOS GNOME VM. Click any image for the full view.*
 
 **A note on AI:** Ollama runs locally. Hermes' free tier uses the Nous cloud,
 so prompts leave your computer; a local-only option is available. Other coding
@@ -62,6 +63,23 @@ Aim for **8 GB RAM minimum** (16 GB recommended) and **25 GB free disk** for set
 First login needs internet and roughly **25–40 minutes** to set up the AI tools.
 The VM disks are trial appliances: they sign in as `noctraos` (password
 `noctraos`) with passwordless sudo.
+
+NoctraOS ships in two flavours: `zorin` on Zorin OS 18.1 with GNOME, and
+`kubuntu` on Kubuntu 26.04 with KDE Plasma, labelled preview from 0.5.0.
+The GNOME flavour remains the recommended download and the Proxmox installer's
+only flavour.
+
+As of 2026-10-14, the working code adds Super+Space search on Plasma through
+KRunner, called Meta+Space in KDE settings. It uses the shared backend for files,
+CopyQ clipboard history, opt-in browser history and web search, while stock
+KRunner provides application results. In a local Kubuntu VM, testing confirmed
+key activation, fixture results, Enter opening a file in Kate, shortcut
+persistence after reboot and an idempotent setup rerun. This is not in the
+published 0.5.0 images. The AI-first Kickoff Start categories are not implemented,
+and broad theme acceptance, interactive Calamares installation and real hardware
+remain untested. See [flavour status](docs/flavours.md) and
+[updates](docs/updates.md) for the future optional signed-update path for existing
+Kubuntu systems. No Kubuntu update channel was published in this work.
 
 **On Proxmox VE** (8 or 9), run this on the host as root. It asks for RAM, cores and
 storage, checks the download against `SHA256SUMS`, and creates a UEFI VM from the
@@ -107,7 +125,7 @@ Questions, press, or a security report: **[admin@noctraos.dev](mailto:admin@noct
 
 ## Credits and license
 
-Built on **Zorin OS 18 / Ubuntu 24.04 LTS**, with thanks to their communities,
+Built on **Zorin OS 18.1 / Ubuntu 24.04 LTS** and **Kubuntu 26.04**, with thanks to their communities,
 and inspired by [Omarchy](https://omarchy.org) and [Omakub](https://omakub.org).
 NoctraOS is independent and isn't affiliated with or endorsed by those projects.
 

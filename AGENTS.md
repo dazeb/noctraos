@@ -12,7 +12,7 @@ optional local Ollama stack, a six-agent start menu, mise-managed Node, a dark +
 amber theme, and the **Super+Space** system search as the headline feature.
 
 NoctraOS is **one product shipped in flavours**: `zorin` (GNOME on Zorin OS 18.1, shipped) and
-`kubuntu` (KDE Plasma on Kubuntu 26.04, in progress). Read the section below and `docs/flavours.md`
+`kubuntu` (KDE Plasma on Kubuntu 26.04, published as a preview from 0.5.0). Read the section below and `docs/flavours.md`
 before any change that differs by desktop or base.
 
 Read `docs/objectives.md` first: it defines the audience, principles
@@ -24,12 +24,16 @@ the onboarding goal, and non-goals. Keep it current when direction changes.
 The full contract is in [docs/flavours.md](docs/flavours.md). The rules that matter most:
 
 - Name the flavour in every commit title, PR and status report, and say which flavours a change was tested on.
-- Shared code has no Zorin or Kubuntu branch. Desktop code lives in `install/desktop/<desktop>/` (planned) or in a
+- Shared code has no Zorin or Kubuntu branch. Desktop code lives in `install/desktop/<desktop>/` or in a
   module whose second line is `# desktops: gnome|plasma|any`.
 - Never copy a fix between flavours. Each flavour gets its own change and its own test.
 - Skipped desktop work prints `NOT APPLIED`, never a success line.
 - Artifacts, release folders and update channels are per flavour. Never cross them.
 - Product decisions live only in `docs/objectives.md`.
+- The legacy `org.gnome.shell.extensions.noctraos-search` GSettings schema is
+  shared search configuration, not GNOME desktop settings. It is a narrow naming
+  exception, not permission to ship GNOME desktop settings or extensions to
+  Plasma. Browser history stays opt-in.
 
 The repo is **public on GitHub** (`github.com/dazeb/noctraos`) — this is a hard
 requirement: the one-liner bootstrap and the ISO's first-boot fetch clone it
@@ -73,7 +77,8 @@ install/
                             07_nautilus_skel (Dolphin right-click actions via bin/noctraos-fileaction), 06_desktop_theme (colour scheme, Konsole
                             profile, wallpapers, Agents menu, panel layout through configs/plasma/apply-layout.sh), 08_shell_theme (runs
                             configs/plasma/install-look.sh /: Global Theme dev.noctraos.desktop, wallpaper packages, SDDM login screen, splash,
-                            lock screen, About this System; the kubuntu ISO runs the same script on the squashfs); 09 not written yet
+                            lock screen, About this System; the kubuntu ISO runs the same script on the squashfs); 09_super_search now installs
+                            the shared search backend, KRunner D-Bus runner and Meta+Space shortcut; working code, not in published 0.5.0
   07_persistence.sh         /etc/skel defaults, noc + Control Panel install (retires the old noc-menu)
   10_boot_theme.sh          Plymouth splash + GRUB theme for non-ISO installs
                             (update-alternatives, update-initramfs, update-grub)
@@ -110,6 +115,7 @@ bin/
   noctraos-agent            agent launcher wrapper: installs npm package on
                             first use, then execs the agent
   noctraos-search           wrapper that execs the system-Python search app (search/)
+  noctraos-search-plasma    KRunner bridge launcher and shortcut entry point (working Kubuntu search port)
   noctraos-copyq            CopyQ autostart wrapper: runs it under XWayland, sets the tray icon white
   noctraos-weather          Open-Meteo lookup for the Start panel (keyless; city is a user choice)
 branding/setup-branding.py  once-per-account dock + top-bar layout (marker desktop-layout-v1)
@@ -117,7 +123,8 @@ extensions/                 GNOME Shell extensions: noctraos-search (Super+Space
                             noctraos-start (Start panel), noctraos-branding (flat top bar, Show Desktop)
 control/                    Control Panel (docs/control-panel-plan.md): panel.py = pure formatting of `noc ... --json` and the Overview's setup checklist (`setup_steps`)
                             (unit-tested, no GTK), main.py = GTK3 window; installed to /usr/local/share/noctraos-control
-search/                     search app: file index (SQLite), CopyQ bridge, browser history, settings window
+search/                     shared search backend: file index (SQLite), CopyQ bridge, opt-in browser history, web and settings window;
+                            krunner.py is the Plasma D-Bus runner; stock KRunner supplies application results
 help/index.html             "New users start here" page the Start panel opens
 scripts/                    render-theme.py, build-desktop-theme.py, seed-password-store.py, make-update.py (update bundles + signed manifests)
 migrations/                 system/ and user/ scripts (user/0001 pins the Control Panel icon to the dock) a machine runs once when it updates (README has the rules); in the update bundle
@@ -793,7 +800,29 @@ Overview, Updates, AI models, Hardware, Health, Privacy, About. Root work goes t
 `noc-privileged` only. Merge the stacked PRs in order and release them together: between the phases
 update and GPU setup had no GUI.
 
-## Current state (2026-10-08)
+## Current state (2026-10-14)
+
+Published **0.5.0** includes both flavours. The Kubuntu preview artifacts still
+lack the new Super+Space search and the AI-first Start categories.
+
+The working Kubuntu port now opens KRunner with Meta+Space, KDE's name for
+Super+Space. Stock KRunner supplies application results; the shared backend
+supplies files, CopyQ, opt-in browser history and web search. On 2026-10-14, the
+main agent tested the working code in a local Kubuntu VM: key activation, fixture
+results, Enter opening Kate, shortcut persistence after reboot and an idempotent
+setup rerun. This is search-specific evidence, not broad theme acceptance or a
+new Zorin runtime test. The AI-first Kickoff Start categories are not implemented.
+Interactive Calamares installation and real-hardware acceptance remain untested.
+
+Working system migration `0002_install_plasma_search.sh` and user migration
+`0003_setup_plasma_search.sh` provide the path for existing Kubuntu systems to get
+search in a future optional signed update. Publication scripts are gaining
+explicit `--flavour` selection and per-flavour CI jobs. No Kubuntu update channel
+was published in this work; public Kubuntu manifests previously returned HTTP
+404. Do not describe this wiring as a live channel or the search as shipped in
+0.5.0. See `docs/updates.md` and `docs/release-runbook.md` for publication gates.
+
+## Historical state (2026-10-08)
 
 Version **0.4.0** (`VERSION`), released by the pipeline on 2026-10-08: tag `v0.4.0` (f377828, GitLab pipeline 122: `release-build`
 37 min, `release-publish` 35 min, `release-site` 1 min), files at `https://dl.noctraos.dev/releases/v0.4.0/` (ISO 3.9 GB, QCOW2 17 GB,

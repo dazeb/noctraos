@@ -62,12 +62,15 @@ case "${1:-}" in
     systemctl --user enable --now noctraos-update-renewal.timer >/dev/null
     say "installed: $(systemctl --user list-timers noctraos-update-renewal.timer --no-legend | awk '{print "next run", $1, $2, $3}')" ;;
   status)
-    systemctl --user is-enabled noctraos-update-renewal.timer 2>&1 | sed 's/^/timer:  /'
-    systemctl --user list-timers noctraos-update-renewal.timer --no-legend 2>/dev/null | awk '{print "next:   " $1, $2, $3}'
-    systemctl --user show noctraos-update-renewal.service -p ActiveEnterTimestamp -p Result 2>/dev/null | sed 's/^/last:   /'
-    for ch in nightly stable; do
-      printf 'public %-8s ' "$ch"
-      curl -fsS --max-time 20 "$BASE/$ch/manifest.json" 2>/dev/null | jq -r '"serial \(.serial), expires \(.expires)"' 2>/dev/null || echo "no manifest"
+    systemctl --user is-enabled noctraos-update-renewal.timer 2>&1 | sed 's/^/timer:  /' || true
+    systemctl --user list-timers noctraos-update-renewal.timer --no-legend 2>/dev/null | awk '{print "next:   " $1, $2, $3}' || true
+    systemctl --user show noctraos-update-renewal.service -p ActiveEnterTimestamp -p Result 2>/dev/null | sed 's/^/last:   /' || true
+    for flavour in ${RENEW_FLAVOURS:-zorin kubuntu}; do
+      prefix=""; [ "$flavour" = zorin ] || prefix="$flavour/"
+      for ch in ${RENEW_CHANNELS:-nightly stable}; do
+        printf 'public %-8s %-7s ' "$flavour" "$ch"
+        curl -fsS --max-time 20 "$BASE/${prefix}$ch/manifest.json" 2>/dev/null | jq -r '"serial \(.serial), expires \(.expires)"' 2>/dev/null || echo "no manifest"
+      done
     done ;;
   run) systemctl --user start noctraos-update-renewal.service && say "renewed (see: journalctl --user -u noctraos-update-renewal -n 20)" ;;
   remove)

@@ -1,0 +1,22 @@
+# KRunner DBus runner metadata (flavour kubuntu). KRunner reads every .desktop file in
+# /usr/share/krunner/dbusplugins (and ~/.local/share/krunner/dbusplugins) and, for X-Plasma-API=DBus,
+# talks to the service named by X-Plasma-DBusRunner-Service at X-Plasma-DBusRunner-Path.
+# The service is search/krunner.py; the D-Bus activation file next to this one
+# (org.kde.noctraos.search.service) lets KRunner start it on demand, so nothing runs when nobody searches.
+# "Enabled by default" puts it in System Settings > Search without anyone having to tick it.
+[Desktop Entry]
+Name=NoctraOS Search
+Comment=Files, folders, browser history and clipboard history from the NoctraOS index
+Type=Service
+Icon=noctraos-logo
+X-KDE-PluginInfo-Author=NoctraOS
+X-KDE-PluginInfo-Email=admin@noctraos.dev
+X-KDE-PluginInfo-Name=noctraos-search
+X-KDE-PluginInfo-Version=1.0
+X-KDE-PluginInfo-License=MIT
+X-KDE-PluginInfo-EnabledByDefault=true
+X-Plasma-API=DBus
+X-Plasma-DBusRunner-Service=org.kde.noctraos.search
+X-Plasma-DBusRunner-Path=/runner
+X-Plasma-Runner-Syntaxes=:q:
+X-Plasma-Runner-Syntax-Descriptions=Your files, folders, browser history and clipboard history

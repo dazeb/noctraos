@@ -1,5 +1,6 @@
 """Native GTK settings, launched outside the GNOME Shell process."""
 from pathlib import Path
+import subprocess
 
 import gi
 gi.require_version('Gtk', '3.0')
@@ -76,7 +77,8 @@ def show_history_setup(settings):
 
 
 def show_settings(settings):
-    from main import request_index
+    from main import desktop_is_plasma, request_index
+    plasma = desktop_is_plasma()
     app = Gtk.Application(application_id='local.noctraos.SearchSettings')
 
     def activate(application):
@@ -105,6 +107,8 @@ def show_settings(settings):
                            ('files', 'Files and folders'), ('clipboard', 'Clipboard and CopyQ text history'),
                            ('web', 'Web search'), ('history', 'Browser history'), ('hidden', 'Include hidden files and folders'),
                            ('contents', 'Search inside small text files (up to 128 KiB)')]:
+            if plasma and key == 'apps':
+                continue
             row = Gtk.Box(spacing=12)
             row.pack_start(Gtk.Label(label=title, xalign=0), True, True, 0)
             switch = Gtk.Switch(active=settings.get_boolean(key), valign=Gtk.Align.CENTER)
@@ -149,34 +153,50 @@ def show_settings(settings):
         current = settings.get_string('web-provider')
         provider.set_active(engines.index(current) if current in engines else 0)
         box.pack_start(provider, False, False, 0)
-        label('Keyboard shortcut — click to record a new key combination.')
-        shortcut_value = (settings.get_strv('toggle-search') or ['<Super>space'])[0]
-        shortcut = Gtk.Button(label=Gtk.accelerator_get_label(*Gtk.accelerator_parse(shortcut_value)))
-        shortcut.get_accessible().set_name('Change keyboard shortcut')
-        box.pack_start(shortcut, False, False, 0)
+        if plasma:
+            label('Plasma controls application results and the shortcut that opens KRunner. '
+                  'Change them in System Settings; these choices are not changed by Save settings.')
 
-        def record_shortcut(_button):
-            dialog = Gtk.Dialog(title='Change keyboard shortcut', transient_for=window, modal=True)
-            dialog.get_content_area().add(Gtk.Label(label='Press a shortcut with Super, Ctrl, or Alt. Escape cancels.',
-                                                   margin=24))
+            def open_plasma_settings(_button, module):
+                try:
+                    subprocess.Popen(['systemsettings', module], start_new_session=True)
+                except OSError:
+                    notice.set_text('Could not open System Settings. Open it from the Start menu and choose Search or Shortcuts.')
 
-            def capture(_dialog, event):
-                nonlocal shortcut_value
-                if event.keyval == Gdk.KEY_Escape:
-                    dialog.response(Gtk.ResponseType.CANCEL)
+            for title, module in [('Application search settings…', 'kcm_plasmasearch'),
+                                  ('Keyboard shortcuts…', 'kcm_keys')]:
+                button = Gtk.Button(label=title, halign=Gtk.Align.START)
+                button.connect('clicked', open_plasma_settings, module)
+                box.pack_start(button, False, False, 0)
+        else:
+            label('Keyboard shortcut — click to record a new key combination.')
+            shortcut_value = (settings.get_strv('toggle-search') or ['<Super>space'])[0]
+            shortcut = Gtk.Button(label=Gtk.accelerator_get_label(*Gtk.accelerator_parse(shortcut_value)))
+            shortcut.get_accessible().set_name('Change keyboard shortcut')
+            box.pack_start(shortcut, False, False, 0)
+
+            def record_shortcut(_button):
+                dialog = Gtk.Dialog(title='Change keyboard shortcut', transient_for=window, modal=True)
+                dialog.get_content_area().add(Gtk.Label(label='Press a shortcut with Super, Ctrl, or Alt. Escape cancels.',
+                                                       margin=24))
+
+                def capture(_dialog, event):
+                    nonlocal shortcut_value
+                    if event.keyval == Gdk.KEY_Escape:
+                        dialog.response(Gtk.ResponseType.CANCEL)
+                        return True
+                    key = Gdk.keyval_to_lower(event.keyval)
+                    modifiers = event.state & Gtk.accelerator_get_default_mod_mask()
+                    if modifiers and Gtk.accelerator_valid(key, modifiers):
+                        shortcut_value = Gtk.accelerator_name(key, modifiers)
+                        shortcut.set_label(Gtk.accelerator_get_label(key, modifiers))
+                        dialog.response(Gtk.ResponseType.OK)
                     return True
-                key = Gdk.keyval_to_lower(event.keyval)
-                modifiers = event.state & Gtk.accelerator_get_default_mod_mask()
-                if modifiers and Gtk.accelerator_valid(key, modifiers):
-                    shortcut_value = Gtk.accelerator_name(key, modifiers)
-                    shortcut.set_label(Gtk.accelerator_get_label(key, modifiers))
-                    dialog.response(Gtk.ResponseType.OK)
-                return True
-            dialog.connect('key-press-event', capture)
-            dialog.show_all()
-            dialog.run()
-            dialog.destroy()
-        shortcut.connect('clicked', record_shortcut)
+                dialog.connect('key-press-event', capture)
+                dialog.show_all()
+                dialog.run()
+                dialog.destroy()
+            shortcut.connect('clicked', record_shortcut)
         label('Maximum results per source')
         count = Gtk.SpinButton.new_with_range(5, 30, 1)
         count.get_accessible().set_name('Maximum results per source')
@@ -199,22 +219,23 @@ def show_settings(settings):
             if not paths or any(not Path(p).is_absolute() or not Path(p).is_dir() for p in paths):
                 notice.set_text('Choose existing absolute folder paths before saving.')
                 return
-            key, modifiers = Gtk.accelerator_parse(shortcut_value)
-            if not key or not modifiers or not Gtk.accelerator_valid(key, modifiers):
-                notice.set_text('Choose a shortcut with Super, Ctrl, or Alt and a valid key.')
-                return
-            accelerator = Gtk.accelerator_name(key, modifiers)
-            wm = Gio.Settings.new('org.gnome.desktop.wm.keybindings')
-            conflicts = []
-            for name in wm.list_keys():
-                value = wm.get_value(name)
-                if value.get_type_string() == 'as':
-                    for binding in value.unpack():
-                        if Gtk.accelerator_parse(binding) == (key, modifiers):
-                            conflicts.append(name)
-            if conflicts:
-                notice.set_text('That shortcut is used by ' + ', '.join(name.replace('-', ' ') for name in conflicts) + '. Choose another.')
-                return
+            if not plasma:
+                key, modifiers = Gtk.accelerator_parse(shortcut_value)
+                if not key or not modifiers or not Gtk.accelerator_valid(key, modifiers):
+                    notice.set_text('Choose a shortcut with Super, Ctrl, or Alt and a valid key.')
+                    return
+                accelerator = Gtk.accelerator_name(key, modifiers)
+                wm = Gio.Settings.new('org.gnome.desktop.wm.keybindings')
+                conflicts = []
+                for name in wm.list_keys():
+                    value = wm.get_value(name)
+                    if value.get_type_string() == 'as':
+                        for binding in value.unpack():
+                            if Gtk.accelerator_parse(binding) == (key, modifiers):
+                                conflicts.append(name)
+                if conflicts:
+                    notice.set_text('That shortcut is used by ' + ', '.join(name.replace('-', ' ') for name in conflicts) + '. Choose another.')
+                    return
             changed = any(settings.get_boolean(k) != toggles[k].get_active()
                           for k in ('files', 'hidden', 'contents', 'history')) or paths != expanded_roots(settings)
             settings.delay()
@@ -225,7 +246,8 @@ def show_settings(settings):
                 if not settings.get_strv('history-browsers'):
                     settings.set_strv('history-browsers', [b['id'] for b in browsers.detected()])
                 settings.set_string('history-setup', 'configured')
-            settings.set_strv('toggle-search', [accelerator])
+            if not plasma:
+                settings.set_strv('toggle-search', [accelerator])
             settings.set_string('web-provider', provider.get_active_text())
             settings.set_int('max-results', count.get_value_as_int())
             settings.apply()
@@ -233,7 +255,7 @@ def show_settings(settings):
             if changed or reindex:
                 request_index()
             notice.set_text('Settings saved. ' + ('The file index is rebuilding in the background.'
-                                                if changed or reindex else 'Your shortcut is ready.'))
+                                                if changed or reindex else ('Your search choices are ready.' if plasma else 'Your shortcut is ready.')))
 
         save.connect('clicked', apply)
         rebuild.connect('clicked', lambda button: apply(button, True))

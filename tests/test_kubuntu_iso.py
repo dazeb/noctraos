@@ -178,6 +178,9 @@ class RefusalTests(unittest.TestCase):
 
     def test_no_zorin_or_gnome_code_here(self):
         text = SCRIPT.read_text()
+        # Shared search preferences keep their legacy schema id on both desktops.
+        text = text.replace('configs/gsettings/org.gnome.shell.extensions.noctraos-search.gschema.xml',
+                            'shared-search-schema')
         for word in ("gdm", "gnome-shell", "ubiquity", "isolinux", "gsettings"):
             self.assertNotIn(word, re.sub(r"(?m)^\s*#.*$", "", text), word)
 

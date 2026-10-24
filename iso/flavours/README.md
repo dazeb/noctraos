@@ -16,3 +16,12 @@ unattended mode, so the appliance ISO (`NOCTRAOS_UNATTENDED=1`, the source of th
 or `NOCTRAOS_FLAVOUR=kubuntu iso/build-local.sh <dir>`) and, when sourced, only defines functions (`tests/test_kubuntu_iso.py`).
 The first-boot runner text is shared (`iso/firstboot-runner.sh`; a test pins it to the Zorin script's copy). The Zorin remaster is
 still `iso/build-noctraos-iso.sh` and moves here in a separate change.
+
+As of 2026-10-14, published 0.5.0 Kubuntu artifacts remain a preview without the
+new Super+Space search. The working Kubuntu remaster now includes the KRunner
+search files and Meta+Space setup. The working port was tested in a local Kubuntu
+VM for key activation, fixture results, Enter opening Kate, shortcut persistence
+after reboot and an idempotent setup rerun. That test does not verify a rebuilt
+release ISO, interactive Calamares installation, broad theme acceptance or real
+hardware. The AI-first Kickoff Start categories are not implemented. See
+[flavour status](../../docs/flavours.md) before describing an image as ready.

@@ -2,6 +2,7 @@
 """CLI bridge between GNOME Shell and the user-owned index/settings."""
 import argparse
 import json
+import os
 import subprocess
 import sys
 import time
@@ -10,6 +11,10 @@ import browsers
 from core import build_index, cache_dir, index_state, search_clipboard, search_files
 
 SCHEMA = 'org.gnome.shell.extensions.noctraos-search'
+
+
+def desktop_is_plasma():
+    return bool({'kde', 'plasma'} & set(os.environ.get('XDG_CURRENT_DESKTOP', '').casefold().split(':')))
 
 
 def get_settings():
@@ -129,7 +134,10 @@ def main():
             results.extend(clips)
             if notice:
                 notices.append(notice)
-    print(json.dumps({'results': results, 'notice': ' '.join(notices)}, ensure_ascii=True))
+    history_setup_needed = (not config['history'] and settings.get_string('history-setup') == 'unset'
+                            and bool(browsers.detected()))
+    print(json.dumps({'results': results, 'notice': ' '.join(notices),
+                      'history_setup_needed': history_setup_needed}, ensure_ascii=True))
 
 
 if __name__ == '__main__':

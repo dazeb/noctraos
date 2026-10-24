@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=NoctraOS Search settings
+Comment=Choose search sources, indexed folders and browser history
+Exec=/usr/local/bin/noctraos-search --settings
+Icon=system-search
+Categories=Settings;DesktopSettings;
+OnlyShowIn=KDE;
+Terminal=false
+StartupNotify=true
+Keywords=search;KRunner;clipboard;history;index;

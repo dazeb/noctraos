@@ -242,7 +242,12 @@ class ModuleGuardTests(unittest.TestCase):
             self.assertEqual(text.splitlines()[1], "# desktops: plasma", path.name)
             self.assertIn("desktop_is_plasma", text, path.name)
             self.assertIn("NOT APPLIED", text, path.name)
-            self.assertNotRegex(re.sub(r"(?m)^\s*#.*$", "", text), r"(?i)zorin|gnome|gsettings", path.name)
+            # The legacy-named search schema stores shared backend settings, not GNOME desktop settings.
+            shared_schema = 'configs/gsettings/org.gnome.shell.extensions.noctraos-search.gschema.xml'
+            code = re.sub(r"(?m)^\s*#.*$", "", text).replace(shared_schema, 'shared-search-schema')
+            code = code.replace('/usr/share/glib-2.0/schemas/org.gnome.shell.extensions.noctraos-search.gschema.xml',
+                                'installed-shared-search-schema')
+            self.assertNotRegex(code, r"(?i)zorin|gnome|gsettings", path.name)
 
     def test_off_plasma_every_module_says_not_applied_and_changes_nothing(self):
         with tempfile.TemporaryDirectory() as tmp:

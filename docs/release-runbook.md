@@ -4,6 +4,42 @@ Written 2026-10-05 as a handoff. Read `AGENTS.md` first (rules, pitfalls). This 
 ordered list of what is left to ship 0.3.0 and exactly how. Everything below was done by hand
 once; the scripts named here exist so you do not have to repeat the discovery.
 
+## Current Kubuntu handoff (2026-10-14)
+
+0.5.0 is published for both flavours, with Kubuntu labelled preview. Its
+published artifacts still lack the new Super+Space search. The working Plasma
+code binds Meta+Space to KRunner, uses stock KRunner for apps and the shared
+backend for files, CopyQ, opt-in browser history and web search.
+
+The main agent's local Kubuntu VM test on 2026-10-14 covered key activation,
+fixture results, Enter opening Kate, shortcut persistence after reboot and an
+idempotent setup rerun. It did not establish broad theme acceptance, an
+interactive Calamares install, real-hardware acceptance or a public signed-update
+apply. AI-first Kickoff Start categories are not implemented. Do not mark those
+items complete from the search test.
+
+Working system and user migrations reuse module 09 and its once-per-account
+shortcut helper to deliver search to existing Kubuntu systems in a future
+optional signed update. The legacy-named search GSettings schema is shared
+search configuration, not GNOME desktop settings. Keep browser history opt-in.
+Publication scripts are gaining explicit `--flavour` and per-flavour CI jobs.
+No Kubuntu channel was published in this work; public Kubuntu manifests
+previously returned HTTP 404.
+
+Before publishing the search update:
+
+1. Verify the Kubuntu signed bundle and migrations on a previous-release VM,
+   including existing account choices and an idempotent rerun. Record Zorin
+   regression coverage separately.
+2. Use the Kubuntu CI jobs or explicit `--flavour kubuntu` for a manual publish,
+   promotion or renewal. Keep Zorin's legacy paths and Kubuntu's paths separate.
+3. Read back and verify the public signatures, manifests, bundle hashes and
+   expiry. Only then describe a channel as published.
+4. Keep new images labelled preview and list the remaining acceptance gaps.
+   Rebuild and test the final tagged code before claiming an image includes search.
+
+The 0.3.0 handoff below is historical; it does not describe 0.5.0 feature status.
+
 ## Rolling updates for installed systems (between releases)
 
 A release is an ISO and VM disks for new machines. Machines that are already installed get new features through a
@@ -14,6 +50,7 @@ pipeline now:
 git fetch origin && git tag -a update-2026.10.09 -m "what changed, one line" origin/main   # main only: the job refuses anything else
 git push gitlab origin/main:refs/heads/main update-2026.10.09
 # GitLab: update-nightly publishes it to testers; later press update-stable-10, then -50, then -100 (manual jobs)
+# Kubuntu working jobs use the corresponding -kubuntu suffix; do not infer a live channel from their presence.
 iso/setup-update-renewal.sh status                                                           # manifests expire after 30 days: the weekly timer renews
 ```
 
