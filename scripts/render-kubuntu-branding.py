@@ -243,13 +243,13 @@ def slides():
           f'Press the <span class="key" style="font-size:18px;padding:.35em .55em;vertical-align:.12em">{WIN_KEY}</span> '
           "key, or click the logo in the panel, and type.",
           [("One search.", "Apps, settings and files from the Start menu, as you type."),
-           ("Agents in the menu.", "Hermes and the coding assistants have a section of their own."),
+           ("Agents are one search away.", "Type Hermes, Claude or Codex and press Enter."),
            ("One click away.", "Files, Terminal, VS Code, Hermes and the Control Panel are pinned to the panel.")],
           f'''<div style="position:relative;width:560px;height:560px">
   <div class="win" style="position:absolute;left:0;top:0;width:430px">
     <div class="row" style="margin:14px;border:1px solid var(--accent);background:var(--raised);color:var(--muted)">
       <span style="width:20px;height:20px;color:var(--muted)">{SEARCH}</span>Search…</div>
-    <div class="hd">Agents</div>{rows}
+    <div class="hd">Applications</div>{rows}
     <div class="sep"></div>
     <div class="row"><span class="ic"></span>Control Panel</div>
     <div class="row" style="padding-bottom:20px"><span class="ic"></span>All applications</div>
