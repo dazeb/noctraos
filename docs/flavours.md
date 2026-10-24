@@ -131,11 +131,27 @@ the Flatpak security row (Kubuntu 26.04 ships Flatpak 1.16.6), Meta+Space search
 returned application results, and after a reboot the NoctraOS panel layout and
 wallpaper were in place (the layout shows from the next login, not the first
 session). The fixed ISO has not been rebuilt and installed again, so the fix is
-verified on the installed system, not on a fresh image. Other things seen and not
-fixed: the live-session welcome and Plymouth still show stock Kubuntu branding,
-the root filesystem label is `kubuntu_2604`, the installer's final slide mentions
-an Agents Start menu that the Plasma flavour does not have, and the keyboard
-defaults to UK until chosen.
+verified on the installed system, not on a fresh image. The things seen and not
+fixed are listed below.
+
+### Kubuntu known issues (found 2026-10-24, not fixed)
+
+Each item says how sure we are. "Seen" means observed in the interactive install
+above; "read" means found in the source. Nothing here was tried on real hardware.
+
+| Issue | Evidence | Status |
+| --- | --- | --- |
+| The installer's second slide says "Agents in the menu: Hermes and the coding assistants have a section of their own", but the AI-first Kickoff categories are not implemented. | Read: slide 2 text in `scripts/render-kubuntu-branding.py`. | Wrong claim in shipped artwork. Reword the slide and re-render (`render-kubuntu-branding.py calamares`), or implement the categories. |
+| Systems installed from the published 0.5.0 ISOs that never started first-boot setup have no update-carried repair. The autostart entry is copied from `/etc/skel` into each account's `~/.config/autostart`, so a fixed ISO does not reach them. | Read: `kubuntu_firstboot` writes the entry only into `/etc/skel`. | Not addressed. A user migration could rewrite the entry for accounts that never ran setup. Until then the download page's workaround is the only fix. |
+| The first session after provisioning shows the stock Kubuntu panel (the wallpaper had already changed). The NoctraOS panel layout appears after the next login. | Seen: screenshot before the reboot vs. after. | Not addressed. Either tell the person to log out and in at the end of setup (the runner's closing text) or apply the layout live. |
+| `noc doctor` shows `!!` for Flatpak security on a fresh install: Kubuntu 26.04 ships Flatpak 1.16.6, older than 1.18.4. | Seen: `noc doctor` after provisioning. | The row works as designed (it warns until the distribution patches). No newer Flatpak is shipped; decide whether the ISO should (roadmap idea in `AGENTS.md`). |
+| The live session's welcome app and Plymouth splash are stock Kubuntu. The installed system gets the NoctraOS splash. | Seen (welcome). Read: the live Plymouth stays Kubuntu's on purpose (header of `iso/flavours/kubuntu.sh`). | Deliberate for the splash (live initrd). The live welcome is unthemed. |
+| The root filesystem label is `kubuntu_2604`. | Seen on the installed system. | Cosmetic. Where Calamares takes it from was not investigated. |
+| Calamares defaulted the keyboard to UK. | Seen. The VM has no geo-IP, so that may be the cause; not checked on a networked install. | Not investigated. |
+| SDDM showed only the wallpaper until a click or key press, so the login form looked missing. | Seen on several boots in the VM. | Not investigated. May be specific to the virtual display. |
+| A fresh install has no `sshd` until provisioning reaches module 01, so remote test or support access needs the desktop first. | Seen: SSH to the new VM was reset until setup installed openssh-server. | By design. Noted because other test notes assume SSH. |
+| The QEMU guest agent socket did not answer before first login, although `kubuntu.sh` bakes `qemu-guest-agent` in. | Seen once (a `guest-exec` call timed out). Cause unknown: agent missing, not started, or queried too early. | Unverified. Check `systemctl status qemu-guest-agent` on a fresh install before claiming the bake works on the Kubuntu ISO. |
+| Calamares' Donate and Support links were not opened. | Not tested. | Check where they point before the next release. |
 
 System and user search migrations are in the working tree for existing Kubuntu
 systems to receive search through an optional signed update. Publication

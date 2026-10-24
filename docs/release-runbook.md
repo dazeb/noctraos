@@ -112,6 +112,13 @@ Calamares has no unattended mode.
   workstation (Docker, KVM, the R2 and GitHub credentials, the 2 TB drive are there), a systemd *user* service, tag
   `noctraos-release`, ref-protected, locked to this project; `v*` tags are protected so only maintainers can start a
   release. The checks (`shell`, `version`, `tests`) still run on the TrueNAS Docker runner.
+  **Open (2026-10-24):** that Docker runner (id 6) is stale and offline, so the `shell`, `version` and `tests` jobs of a
+  push sit pending and never go green; the release runner (id 7) is online. Until the Docker runner is fixed or replaced, run
+  the equivalent checks locally (`bash -n`, shellcheck in Docker, the unit suite, ideally as root in a container) and say so.
+- **Open before the next Kubuntu release (2026-10-24):** rebuild the kubuntu ISO from `main` and run one interactive Calamares
+  install of it; the first-boot fix is only verified on an installed system. Kubuntu update 1 is on `kubuntu/nightly` only; promoting
+  it to stable (`iso/publish-update.sh stable --flavour kubuntu --from nightly --rollout 10`) is waiting for a decision. The other
+  unfixed Kubuntu findings are in the table in `docs/flavours.md`.
 - Needs on the runner: Docker, KVM, qemu + OVMF, google-chrome, `gh` logged in, ssh push to GitHub,
   `~/secrets/cloudflare-r2.env`, and `in/Zorin-OS-18.1-Core-64-bit.iso` and `in/kubuntu-26.04.1-desktop-amd64.iso` in the build dir
   (a hardlink of the copy in `noctraos-build/in/` is enough).
