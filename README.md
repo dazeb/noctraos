@@ -97,6 +97,7 @@ Questions, press, or a security report: **[admin@noctraos.dev](mailto:admin@noct
 | Setup, configuration, GPU support, maintenance, or troubleshooting | [Setup guide](docs/setup.md) |
 | What NoctraOS sets up, and what it leaves to you | [What we do](docs/what-we-do.md) |
 | The project's direction and principles | [Objectives](docs/objectives.md) |
+| Near-term priorities and completion evidence | [Public roadmap](docs/roadmap.md) |
 | The welcome, dock, Start panel, and search experience | [Onboarding](docs/onboarding.md) · [Desktop layout](docs/desktop-layout.md) |
 | The Control Panel: updates, apps, accounts, models, hardware, health, privacy | [Control Panel](docs/control-panel.md) |
 | How an installed system gets new features: signed, staged rolling updates | [Updates](docs/updates.md) |

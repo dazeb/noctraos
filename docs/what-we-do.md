@@ -2,6 +2,16 @@
 
 NoctraOS sets up the system, then you take control. This page says where that line is, so nothing here comes as a surprise.
 
+## Why setup choices are optional
+
+NoctraOS includes the base system, the desktop and the Control Panel. Additional setup choices belong to the person using the computer.
+
+Before an optional action, the Control Panel explains what it changes and why someone might need it. It also states when the action needs a download, disk space, administrator access or a restart. The person can continue, decline without later reminders or use the shown `noc` command instead.
+
+This rule already covers local AI, model downloads, GPU setup, Git name and e-mail, GitHub sign-in, browser-history search, updates and whether Ollama starts with the computer. The same pages provide the relevant controls afterwards, such as removing a model, stopping Ollama, signing out of GitHub or changing a privacy choice.
+
+Complete install and removal control for every non-core component is still in progress. The [public roadmap](roadmap.md) treats that as required product work rather than an optional improvement.
+
 ## What we set up
 
 When you install, NoctraOS prepares a complete AI workstation so you do not have to:

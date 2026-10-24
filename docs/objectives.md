@@ -37,13 +37,17 @@ make it powerful instead.
    by mouse and through Super+Space itself. Everything else should feel familiar.
 5. **A distribution, not a script.** The deliverable is a bootable ISO that
    installs and boots into the finished experience.
-6. **We set up the system, then you take control.** NoctraOS prepares the
-   workstation and then gets out of the way. Anything that costs memory, sends
-   data off the computer or belongs to the person is a choice they make, and
-   every choice can be undone from the Control Panel or with `noc`. Updates are
-   optional, reversible and must never break the system; the goal is a
-   frictionless experience. [What we do](what-we-do.md) is the plain-language
-   version of this line for users.
+6. **Explain first, ask, and keep the choice reversible.** The base system
+   includes what NoctraOS needs to boot and provide the desktop and Control
+   Panel. Every additional setup chore or non-core component must be optional.
+   Before an action, the Control Panel says what it changes, why someone might
+   need it, and whether it needs downloads, disk space or a restart. The person
+   can decline without being nagged, then install, disable or remove the option
+   later from the Control Panel or with `noc`. If an option cannot yet meet this
+   rule, it is an incomplete part of the product, not an exception. For example,
+   Git name and e-mail are offered because Git needs them to label commits, but
+   the person can skip the step and set them up elsewhere. [What we do](what-we-do.md)
+   is the plain-language version of this rule.
 
 ## Headline feature: Super+Space
 
@@ -142,8 +146,9 @@ some stock icons) are tracked in the coverage table in `theme-design.md`.
 - **Flatpak and AppImage first.** apt is for CLI tools, system tools and
   host-integration apps; the app set and the removals are in `install/04c_app_policy.sh`.
 - **Install only what NoctraOS itself needs.** Node.js is the one language (the coding-agent launchers and Hermes Desktop use it);
-  Python, Go and Ruby are not installed, and no local model is downloaded. The apps are a deliberate selection (Flatpak and AppImage first)
-  and stay. People add their own languages with mise.
+  Python, Go and Ruby are not installed, and no local model is downloaded. The current images contain a deliberate workstation app selection
+  (Flatpak and AppImage first). Full install and removal control for non-core components is not complete and remains on the
+  [public roadmap](roadmap.md). People add their own languages with mise.
 - **Ollama starts with the computer only if the person turns that on.** The
   vendor's installer enables the service at boot; the setup switches it off
   again and an update of Ollama puts back whatever the person chose (AI models

@@ -57,7 +57,7 @@
   </div>
 </header>
 <aside class="alpha-bar" aria-label="Project status">
-  <div class="wrap"><span class="badge">Alpha</span><span>Bleeding-edge and changing daily, so expect things to break. Try it in a virtual machine.</span><a href="download.html#files">Get a VM disk</a><a href="community.html">Help build it</a></div>
+  <div class="wrap"><span class="badge">Alpha</span><span>Under active development. Start with a virtual machine and review the known limitations.</span><a href="download.html#files">Get a VM disk</a><a href="community.html">Help build it</a></div>
 </aside>
 
 <main>
@@ -66,7 +66,7 @@
   <div class="wrap">
     <p class="eyebrow"><span class="dot"></span>Features</p>
     <h1>What is in the box</h1>
-    <p class="lede">Noctra sets everything up for you the first time you log in. There is nothing to assemble.</p>
+    <p class="lede">Noctra sets up the desktop and coding tools the first time you log in. Local AI and personal accounts remain your choice.</p>
   </div>
 </div>
 
@@ -89,14 +89,27 @@
         <figure class="shot"><a href="img/shots/full/welcome-shortcut.webp" target="_blank" rel="noopener" aria-label="Open the full-size screenshot: The Noctra welcome asking you to press Windows and Space, and confirming when you do"><img src="img/shots/welcome-shortcut.webp" alt="The Noctra welcome asking you to press Windows and Space, and confirming when you do" width="1008" height="630" loading="lazy" decoding="async"></a><figcaption><b>A short welcome.</b> It checks that the shortcut works for you.</figcaption></figure>
       </div>
     </div>
-        <div class="row">
+    <div class="row">
       <div class="intro">
-        <h2>AI on your own computer</h2>
-        <p>The AI models run on your PC, not on someone else's server.</p>
+        <h2>You decide what gets set up</h2>
+        <p>Optional setup stays optional. The Control Panel explains each choice before it changes the computer.</p>
       </div>
       <ul>
-        <li><div><strong>Graphics card drivers.</strong> <span>If your PC has an NVIDIA or AMD graphics card, Noctra installs its driver during setup, with CUDA for NVIDIA and ROCm for supported AMD cards, so local models run on the card instead of the processor. Restart once after the first install.</span></div></li>
-        <li><div><strong>Picks models that fit.</strong> <span><span class="soon">Coming soon</span> Noctra will check your processor, graphics card and memory, then show which models run well.</span></div></li>
+        <li><div><strong>A reason for every option.</strong> <span>The panel says what an option changes, why you might need it, and whether it needs a download, disk space or a restart.</span></div></li>
+        <li><div><strong>Skip without reminders.</strong> <span>Local AI, GPU setup, Git name and e-mail, and GitHub sign-in can all be declined. Noctra remembers the choice.</span></div></li>
+        <li><div><strong>Git is explained, not required.</strong> <span>The Accounts page offers a name and e-mail because Git needs them to label commits. You can set them yourself instead.</span></div></li>
+        <li><div><strong>Keep control afterwards.</strong> <span>The Control Panel can remove models, stop Ollama, change its startup setting, sign out of GitHub and reverse privacy choices.</span></div></li>
+        <li><div><strong>The terminal remains available.</strong> <span>Every Control Panel action shows the matching <code>noc</code> command.</span></div></li>
+      </ul>
+    </div>
+        <div class="row">
+      <div class="intro">
+        <h2>Local AI, when you want it</h2>
+        <p>Local models run on your PC. No model is downloaded until you choose one.</p>
+      </div>
+      <ul>
+        <li><div><strong>Setup asks first.</strong> <span>The AI models page explains the Ollama, NVIDIA, AMD, CUDA and ROCm changes before it installs anything. Local AI is optional.</span></div></li>
+        <li><div><strong>Models that fit.</strong> <span>LLMFIT checks your processor, graphics card and memory, then lists models that fit the computer.</span></div></li>
         <li><div><strong>Private prompts.</strong> <span>With a local model, your prompts and files stay on your computer. Online assistants send what you give them to their own servers.</span></div></li>
         <li><div><strong>Simple model list.</strong> <span>Pick a model from a list and download it from a window.</span></div></li>
         <li><div><strong>Right-click to explain.</strong> <span>Right-click any file and ask the AI what it says.</span></div></li>
@@ -226,7 +239,7 @@
       </div>
       <div>
         <h3>Community</h3>
-        <ul><li><a href="community.html">Get involved</a></li><li><a href="community.html#contact">Contact us</a></li><li><a href="https://github.com/dazeb/noctraos/issues">Report a bug</a></li><li><a href="https://github.com/dazeb/noctraos">Source code</a></li><li><a href="https://www.patreon.com/cw/NoctraOS">Support on Patreon</a></li><li><a href="mailto:admin@noctraos.dev">admin@noctraos.dev</a></li></ul>
+        <ul><li><a href="community.html">Get involved</a></li><li><a href="community.html#contact">Contact us</a></li><li><a href="https://github.com/dazeb/noctraos/issues">Report a bug</a></li><li><a href="https://github.com/dazeb/noctraos">Source code</a></li><li><a href="mailto:admin@noctraos.dev">admin@noctraos.dev</a></li></ul>
       </div>
       <div>
         <h3>Documentation</h3>
