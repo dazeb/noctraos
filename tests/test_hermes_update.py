@@ -5,6 +5,7 @@ import fcntl
 import os
 from pathlib import Path
 import pty
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -265,6 +266,46 @@ class OptionalInstallTests(HermesBox):
         r = self.hermes("launch")                                          # stdout is a pipe here, as for a desktop entry
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         self.assertIn("Setting up Hermes", window.read_text())
+        self.assertEqual(self.installs(), [])
+
+    def menu_launch_with_only(self, *terminals):
+        """The menu entry on a box whose only terminals are `terminals`: the real PATH is cut down to what the script needs."""
+        tools = self.tmp / "tools"
+        tools.mkdir()
+        for name in ("bash", "env", "dirname", "basename", "cat", "grep", "sed", "awk", "readlink", "mkdir", "df", "tr", "head",
+                     "id", "flock", "sleep", "rm", "mv", "cp", "ls", "tail", "date", "mktemp", "uname", "wc", "cut", "sort"):
+            found = shutil.which(name)
+            if found:
+                (tools / name).symlink_to(found)
+        calls = self.tmp / "terminal-calls"
+        for name in terminals:
+            self.script(self.bin / name, f'#!/bin/sh\necho "{name} $@" >> "{calls}"\n')
+        env = {"PATH": f"{self.bin}:{self.home}/.local/bin:{tools}"}
+        r = subprocess.run(["bash", str(HERMES), "launch"], capture_output=True, text=True, env={**self.env, **env})
+        return r, (calls.read_text().splitlines() if calls.exists() else [])
+
+    def test_the_menu_entry_opens_konsole_when_that_is_the_only_terminal(self):
+        # Plasma installs konsole and no gnome-terminal: the opt-in prompt has to open there too
+        r, calls = self.menu_launch_with_only("konsole")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertEqual(calls, [f"konsole -e {HERMES} launch"])
+        self.assertEqual(self.installs(), [])
+
+    def test_the_menu_entry_prefers_gnome_terminal_when_both_exist(self):
+        _, calls = self.menu_launch_with_only("gnome-terminal", "konsole")
+        self.assertEqual(calls, [f"gnome-terminal --title=Setting up Hermes -- {HERMES} launch"])
+
+    def test_the_menu_entry_falls_back_to_the_system_terminal(self):
+        _, calls = self.menu_launch_with_only("x-terminal-emulator")
+        self.assertEqual(calls, [f"x-terminal-emulator -e {HERMES} launch"])
+
+    def test_the_menu_entry_says_how_to_set_up_when_no_terminal_exists(self):
+        self.script(self.bin / "notify-send", f'#!/bin/sh\necho "$@" > "{self.tmp / "notice"}"\n')
+        r, calls = self.menu_launch_with_only()
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("no terminal found; run: noc hermes setup", r.stdout)
+        self.assertIn("noc hermes setup", (self.tmp / "notice").read_text())
+        self.assertEqual(calls, [])
         self.assertEqual(self.installs(), [])
 
 

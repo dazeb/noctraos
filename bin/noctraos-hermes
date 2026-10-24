@@ -390,12 +390,27 @@ confirm_setup() {
   case "$answer" in y|Y) return 0 ;; *) say "Nothing was installed."; return 1 ;; esac
 }
 
+# A desktop entry runs without a terminal and the confirmation needs one, so open whichever this desktop has: gnome-terminal on
+# GNOME, Konsole on Plasma. Konsole gets no --title (it has none; a wrong option would keep the window from opening at all).
+open_setup_terminal() {
+  if command -v gnome-terminal >/dev/null 2>&1; then
+    exec gnome-terminal --title="Setting up Hermes" -- "$0" launch
+  elif command -v konsole >/dev/null 2>&1; then
+    exec konsole -e "$0" launch
+  elif command -v x-terminal-emulator >/dev/null 2>&1; then
+    exec x-terminal-emulator -e "$0" launch
+  fi
+  # Launched from a menu nobody sees stdout, so say it as a notice too.
+  command -v notify-send >/dev/null 2>&1 \
+    && notify-send "Hermes" "No terminal window found. Set it up from the Control Panel's Apps page, or run: noc hermes setup" || true
+  say "ERROR: no terminal found; run: noc hermes setup"
+  exit 1
+}
+
 cmd_launch() {
   if ! runtime_ready || ! app_ready; then
     # Desktop entries have no terminal; first-run install needs one to show progress.
-    if [ ! -t 1 ]; then
-      exec gnome-terminal --title="Setting up Hermes" -- "$0" launch
-    fi
+    [ -t 1 ] || open_setup_terminal
     # Hermes is optional and heavy: nothing is downloaded until the person says yes here.
     confirm_setup || exit 0
     cmd_install || { read -r -n 1 -s -p "Press any key to close..."; exit 1; }

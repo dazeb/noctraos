@@ -2,7 +2,7 @@
 
 ## Hermes Desktop
 
-**Optional: nothing installs it on its own** (decided 2026-10-11, "opt in for now"). Setting it up takes 25 to 40 minutes, needs no sudo, builds the Electron app locally with `hermes desktop --build-only` (upstream disabled Linux desktop release builds) and adds about 5 GiB, so it waits until the person asks: the Control Panel's Apps page ("Set up Hermes…", summary and a yes first), `noc hermes setup`, or opening Hermes in the Start panel (asks `[y/N]` first). A machine that already has Hermes keeps it. Launcher/installer: `noctraos-hermes`. Only one install runs at a time (a lock in `$XDG_RUNTIME_DIR`; a second one exits 75), and it refuses when the disk has under about 7 GB free (`NOCTRAOS_HERMES_INSTALL_MIN_FREE_KB`). A finished install also links the NoctraOS skill into `~/.hermes/skills`.
+**Optional: nothing installs it on its own** (decided 2026-10-11, "opt in for now"). Setting it up takes 25 to 40 minutes, needs no sudo, builds the Electron app locally with `hermes desktop --build-only` (upstream disabled Linux desktop release builds) and adds about 5 GiB, so it waits until the person asks: the Control Panel's Apps page ("Set up Hermes…", summary and a yes first), `noc hermes setup`, or opening Hermes from its launcher (asks `[y/N]` in a terminal window first). A machine that already has Hermes keeps it. Launcher/installer: `noctraos-hermes`. Only one install runs at a time (a lock in `$XDG_RUNTIME_DIR`; a second one exits 75), and it refuses when the disk has under about 7 GB free (`NOCTRAOS_HERMES_INSTALL_MIN_FREE_KB`). A finished install also links the NoctraOS skill into `~/.hermes/skills`.
 
 ```
 noctraos-hermes                  launch (asks first when Hermes is not set up yet, then installs)

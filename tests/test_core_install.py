@@ -30,6 +30,13 @@ class CoreInstallTests(unittest.TestCase):
                                     f"{path.relative_to(ROOT)}:{number}: {line.strip()}")
         self.assertIn("noc hermes setup", INSTALL.read_text())                  # the closing message says how to get it
 
+    def test_no_desktop_module_says_hermes_is_installed_by_module_11(self):
+        """Every desktop has its own Agents-section module, so each one has to drop the old claim (flavours rule 2)."""
+        modules = sorted((ROOT / "install/desktop").glob("*/*.sh"))
+        self.assertTrue(modules)
+        for path in modules:
+            self.assertNotRegex(path.read_text(), r"module 11|Hermes preinstalled", str(path.relative_to(ROOT)))
+
     def test_the_flags_for_local_ai_are_gone(self):
         text = INSTALL.read_text()
         self.assertNotIn("--skip-ai", text)

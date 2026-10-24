@@ -92,8 +92,8 @@ noctraos-control  # the Control Panel: system state, mouse-driven (more pages co
 ```
 
 Hermes Desktop is optional and not part of the install (about 5 GB, a 25 to 40 minute build).
-Set it up from the Control Panel's Apps page, with `noc hermes setup`, or by opening Hermes
-from the Agents menu, which asks first. It has its own launcher: `noctraos-hermes` (launch),
+Set it up from the Control Panel's Apps page, with `noc hermes setup`, or by opening the Hermes
+launcher, which asks first. It has its own launcher: `noctraos-hermes` (launch),
 `local` (local-only: Ollama primary, free tier off, persistent), `status`, `ready`, `install`.
 
 Agents are managed from the **Agents** menu; each CLI agent checks for its
@@ -290,7 +290,7 @@ upload, tag, website) are in the [release runbook](release-runbook.md).
   the install prompt; it needs node (included) and internet.
 - **The Welcome offers "Set up Hermes…" instead of Meet Hermes** — Hermes Desktop is
   optional and not installed until you ask for it. Press the button (it opens the
-  Control Panel's Apps page), or run `noc hermes setup`; opening Hermes from the Agents menu
+  Control Panel's Apps page), or run `noc hermes setup`; opening the Hermes launcher
   also offers it. `noctraos-hermes status` shows where a half-finished one is
   (`noc repair hermes` finishes it).
 - **Hermes and privacy** — the local Ollama model never leaves the computer, but

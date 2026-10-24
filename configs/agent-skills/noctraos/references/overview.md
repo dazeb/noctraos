@@ -38,7 +38,7 @@ Vocabulary: **NoctraOS** is the product (never "Zorin edition"); **base** is Zor
 
 ## What stays yours
 
-- **Hermes Desktop.** Not in the install (about 5 GB, 25 to 40 minutes to build). Set up from the Apps page, `noc hermes setup`, or by opening Hermes in the Start panel, which asks first. A machine that already has it keeps it.
+- **Hermes Desktop.** Not in the install (about 5 GB, 25 to 40 minutes to build). Set up from the Apps page, `noc hermes setup`, or by opening the Hermes launcher, which asks first. A machine that already has it keeps it.
 - **Coding agents' sign-ins, API keys, subscriptions and settings.** A launcher installs the program on first use; nothing else.
 - **Languages.** Only Node. Python, Go etc. are added with `mise use -g python@3.12`.
 - **AI models.** None is downloaded until the person picks one.

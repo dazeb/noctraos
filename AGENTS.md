@@ -378,7 +378,7 @@ bash -n boot.sh install.sh install/*.sh install/optional/*.sh install/desktop/*/
 docker run --rm -v "$PWD:/mnt" koalaman/shellcheck:stable --severity=warning \
   boot.sh install.sh install/*.sh install/optional/*.sh install/desktop/*/*.sh iso/flavours/*.sh iso/flavours/*/*.sh iso/firstboot-runner.sh bin/noc bin/noc-gpu bin/noc-privileged bin/noctraos-control bin/noctraos-agent \
   bin/noctraos-copyq bin/noctraos-hermes configs/nautilus-scripts/*     # same list as CI (CI excludes SC2164 for iso/firstboot-runner.sh only: its text is pinned to the Zorin heredoc)
-python3 -m unittest discover -s tests  # 677 tests: theme, GPU detection, noc JSON modes, root helper, Control Panel, agent skill
+python3 -m unittest discover -s tests  # 834 tests: theme, GPU detection, noc JSON modes, root helper, Control Panel, agent skill
 python3 scripts/render-theme.py --check              # committed theme outputs match palette.json
 
 # wallpaper iteration (venv at ~/workspace/scratch/zorin-img-venv: pillow+numpy)
@@ -687,16 +687,21 @@ tail -f /root/noctraos-build.log
 - **Hermes Desktop is optional: nothing installs it on its own** (user's decision, 2026-10-11: "opt in for now"). It adds about 5 GiB and a
   25 to 40 minute Electron build, so the first run no longer includes it (module 11 is gone; `install.sh` only says how to get it). It is
   set up by `noc hermes setup` (the same step as `noc repair hermes`, which `noc doctor` offers for a half-finished one), by the Control
-  Panel's Apps page ("Set up Hermes…": a summary of the size, the time and the cloud free tier, and a yes first), or by opening Hermes in the
-  Start panel, which asks `[y/N]` in its terminal window before downloading anything. All three end in `noctraos-hermes install`, which
+  Panel's Apps page ("Set up Hermes…": a summary of the size, the time and the cloud free tier, and a yes first), or by opening Hermes from its launcher
+  (the Agents menu entry or the pinned icon; on GNOME that is the Start panel), which asks `[y/N]` in a terminal window it opens itself
+  (gnome-terminal, else Konsole, else x-terminal-emulator; none found prints `noc hermes setup`) before downloading anything. All three end in `noctraos-hermes install`, which
   holds a lock (`$XDG_RUNTIME_DIR/noctraos-hermes-<uid>.lock`, released before `launch` execs Hermes) so two windows never build at once, refuses under 7 GB free whenever the runtime or the app is missing, and links the
   NoctraOS agent skill (`noc-agent-skills install`) once Hermes exists. Until then `noctraos-hermes mode` prints `none`, `local` and `cloud`
   refuse, `noc status --json` has `hermes.installed: false, mode: null`, `noc doctor` shows `info` (never `warn`) when neither the runtime nor
   the app exist and the Overview/Privacy/checklist point at the Apps page (`waiting`, no skip button); the Welcome app shows only "Set up
   Hermes…" (it opens that page). Machines that already have Hermes keep it; `noc update` and `noc apps update` only ever update an installed
-  Hermes, never install one. Untested on a real desktop so far: the Set up button's real run (the smoke test drives it with a stand-in), the
-  terminal `[y/N]` flow from the Start panel, and a full first-boot install now that the 25 to 40 minute step is gone (re-measure
-  the timing in `docs/setup.md` and the release runbook).
+  Hermes, never install one. Tested: zorin only (unit tests, the xvfb GTK smoke test and, on 2026-10-11, a real local KVM VM from the 0.4.0 appliance with its Hermes
+  removed): a fresh state reports `none`/`info`; `noc hermes setup` (295 s, 4.7 GiB) and the Control Panel's Set up button (about 9 min)
+  build it and link the skill; a second run exits 75; declining the launcher's `[y/N]` downloads nothing; `noc apps update` and `noc update`
+  leave a machine without Hermes alone; Hermes finds the NoctraOS skill by itself and runs `noc doctor` for it. The 25 to 40 minutes quoted
+  elsewhere came from a slow host. Kubuntu: not run. The Konsole branch of the launcher is covered by PATH-stub tests only, so
+  confirm the window opens on a real Plasma session. Still untested anywhere: opening the Hermes app after setup, answering `y` at the
+  launcher's prompt, the Privacy page and Welcome buttons after setup, and the true first-boot time without Hermes (needs an ISO install).
 - **Hermes' free tier is a cloud service: prompts leave the machine.** Everything the welcome app
   and README say about "local AI" is about the Ollama model; Hermes resolves to the Nous cloud
   unless it is local-only. Never describe Hermes as local without that qualification. The welcome

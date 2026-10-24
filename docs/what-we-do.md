@@ -25,7 +25,7 @@ When you install, NoctraOS prepares a complete AI workstation so you do not have
 
 ## What stays yours
 
-- **Hermes Desktop.** It is not part of the install: it adds about 5 GB and takes 25 to 40 minutes to build, so it is there when you want it and not before. Set it up from the Control Panel's Apps page ("Set up Hermes…", with a summary and a yes first), by opening Hermes in the Start panel (it asks first), or with `noc hermes setup`. Its free tier is a cloud service, so what you type there leaves your computer; the Privacy page switches it to local only. A computer that already has Hermes keeps it.
+- **Hermes Desktop.** It is not part of the install: it adds about 5 GB and takes 25 to 40 minutes to build, so it is there when you want it and not before. Set it up from the Control Panel's Apps page ("Set up Hermes…", with a summary and a yes first), by opening the Hermes launcher (it asks first), or with `noc hermes setup`. Its free tier is a cloud service, so what you type there leaves your computer; the Privacy page switches it to local only. A computer that already has Hermes keeps it.
 - **The coding agents.** A launcher installs the program the first time you open it. Signing in, API keys, subscriptions and each tool's own settings are yours: we do not set them up, store them or manage them.
 - **Your languages.** Only Node.js is installed, because NoctraOS itself uses it. Python, Go and the rest are yours to add with mise (for example `mise use -g python@3.12`), so nothing you do not use sits on the disk.
 - **Your AI models.** No model is downloaded until you pick one on the AI models page.
