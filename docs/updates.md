@@ -22,12 +22,10 @@ delivery path for a future optional signed update, not evidence that one shipped
 The legacy-named `org.gnome.shell.extensions.noctraos-search` schema is shared
 search configuration, not GNOME desktop settings; browser history remains opt-in.
 
-Publication scripts are gaining explicit `--flavour` selection and per-flavour
-CI jobs. No Kubuntu update channel was published in this work. Public Kubuntu
-manifests previously returned HTTP 404; do not treat the new jobs as proof of a
-live channel. Before offering search to existing systems, verify the signed
-Kubuntu bundle and migrations on a previous-release VM, then publish and read
-back the flavour's manifests and bundle through the public hostnames.
+Publication scripts take an explicit `--flavour` and the CI has per-flavour jobs. On 2026-10-24 Kubuntu update 1 (this search) was published on the **nightly** channel only (`updates/kubuntu/nightly/`, relogin flagged); `stable` has no Kubuntu manifest yet. It was applied through the real updater on a VM booted from the published 0.5.0 Kubuntu image: both migrations ran, Meta+Space was assigned, `noc doctor` showed the search row OK, the KRunner runner answered over D-Bus, and a rerun was a no-op.
+The publish read back both stores through their public hostnames (signature and bundle hash verified); the weekly renewal covers
+the Kubuntu channels. Next: soak on nightly, then promote with
+`iso/publish-update.sh stable --flavour kubuntu --from nightly --rollout 10`, then widen.
 
 ## What is and is not covered
 
@@ -107,8 +105,8 @@ Omarchy does with Snapper (Zorin installs on ext4). `rollback` restores the Noct
 The job names below without a suffix are for `zorin`. The working CI adds
 `update-nightly-kubuntu`, `update-stable-10-kubuntu`, `update-stable-50-kubuntu`
 and `update-stable-100-kubuntu` for Kubuntu. Each uses its flavour's own serials,
-bundles and channels. These jobs have not published Kubuntu channels in this work.
-The diagram describes the intended publication path, not current channel status.
+bundles and channels. Kubuntu update 1 was published by hand with `iso/publish-update.sh --flavour kubuntu`
+(2026-10-24); the tag-driven jobs have not run for Kubuntu yet.
 
 ```
 PR merged to GitHub main

@@ -816,10 +816,10 @@ Interactive Calamares installation and real-hardware acceptance remain untested.
 
 Working system migration `0002_install_plasma_search.sh` and user migration
 `0003_setup_plasma_search.sh` provide the path for existing Kubuntu systems to get
-search in a future optional signed update. Publication scripts are gaining
-explicit `--flavour` selection and per-flavour CI jobs. No Kubuntu update channel
-was published in this work; public Kubuntu manifests previously returned HTTP
-404. Do not describe this wiring as a live channel or the search as shipped in
+search in an optional signed update. Publication scripts take an explicit `--flavour`
+and the CI has per-flavour jobs. Kubuntu update 1 (the search) is published on the
+`kubuntu/nightly` channel only (2026-10-24) and was applied on a VM booted from the
+published 0.5.0 image; `kubuntu/stable` has no manifest. Do not describe the search as shipped in
 0.5.0. See `docs/updates.md` and `docs/release-runbook.md` for publication gates.
 
 ## Historical state (2026-10-08)

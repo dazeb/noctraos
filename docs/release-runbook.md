@@ -19,14 +19,15 @@ apply. AI-first Kickoff Start categories are not implemented. Do not mark those
 items complete from the search test.
 
 Working system and user migrations reuse module 09 and its once-per-account
-shortcut helper to deliver search to existing Kubuntu systems in a future
+shortcut helper to deliver search to existing Kubuntu systems in an
 optional signed update. The legacy-named search GSettings schema is shared
 search configuration, not GNOME desktop settings. Keep browser history opt-in.
-Publication scripts are gaining explicit `--flavour` and per-flavour CI jobs.
-No Kubuntu channel was published in this work; public Kubuntu manifests
-previously returned HTTP 404.
+Publication scripts take an explicit `--flavour`; the CI has per-flavour jobs.
+Kubuntu update 1 (the search) went to the `kubuntu/nightly` channel on 2026-10-24 and
+was applied on a VM booted from the published 0.5.0 image; `kubuntu/stable` is empty. Promote
+with `iso/publish-update.sh stable --flavour kubuntu --from nightly --rollout 10`, then widen.
 
-Before publishing the search update:
+Before promoting the search update to stable (the nightly publish and the previous-release VM check are done):
 
 1. Verify the Kubuntu signed bundle and migrations on a previous-release VM,
    including existing account choices and an idempotent rerun. Record Zorin

@@ -24,7 +24,7 @@ The local Kubuntu VM test on 2026-10-14 covered key activation, fixture results,
 shortcut persistence after reboot and an idempotent setup rerun. This does not establish broad theme acceptance,
 interactive Calamares installation or real-hardware coverage. The AI-first Kickoff Start categories are not implemented.
 Published 0.5.0 Kubuntu images still lack the new search. System migration `0002_install_plasma_search.sh` and user
-migration `0003_setup_plasma_search.sh` provide the path for a future optional signed update; none was published in this work.
+migration `0003_setup_plasma_search.sh` are delivered by Kubuntu update 1, on the nightly channel since 2026-10-24 (not yet on stable).
 The artwork is rendered by scripts/render-kubuntu-branding.py into
 assets/plasma and assets/boot/calamares. The colour scheme and Konsole files in configs/plasma are rendered from configs/theme/palette.json
 by scripts/render-theme.py.

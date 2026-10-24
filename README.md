@@ -79,7 +79,7 @@ published 0.5.0 images. The AI-first Kickoff Start categories are not implemente
 and broad theme acceptance, interactive Calamares installation and real hardware
 remain untested. See [flavour status](docs/flavours.md) and
 [updates](docs/updates.md) for the future optional signed-update path for existing
-Kubuntu systems. No Kubuntu update channel was published in this work.
+Kubuntu systems. That update is on the Kubuntu nightly channel (2026-10-24) and has not been promoted to stable.
 
 **On Proxmox VE** (8 or 9), run this on the host as root. It asks for RAM, cores and
 storage, checks the download against `SHA256SUMS`, and creates a UEFI VM from the

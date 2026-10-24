@@ -118,10 +118,9 @@ Broad theme acceptance, interactive Calamares installation and real hardware
 remain untested.
 
 System and user search migrations are in the working tree for existing Kubuntu
-systems to receive search through a future optional signed update. Publication
-scripts are gaining explicit `--flavour` selection and per-flavour CI jobs. No
-Kubuntu channel was published in this work; its public manifests previously
-returned HTTP 404. Wiring a publisher is not evidence of a live channel.
+systems to receive search through an optional signed update. Publication
+scripts take an explicit `--flavour` and the CI has per-flavour jobs. On 2026-10-24 Kubuntu update 1 (this search) was published on the **nightly** channel only (`updates/kubuntu/nightly/`, relogin flagged); `stable` has no Kubuntu manifest yet. It was applied through the real updater on a VM booted from the published 0.5.0 Kubuntu image: both migrations ran, Meta+Space was assigned, `noc doctor` showed the search row OK, the KRunner runner answered over D-Bus, and a rerun was a no-op.
+Not yet done: promotion to `stable`, and no real-desktop (interactive) check of the update prompt.
 
 ## Rules for agents
 
@@ -164,5 +163,5 @@ returned HTTP 404. Wiring a publisher is not evidence of a live channel.
 | 09 Super+Space and Start | shipped (GNOME Shell extensions) | working module 09 and KRunner runner; local VM search scope above passed; published 0.5.0 still lacks search; AI-first Kickoff Start categories are not implemented |
 | Login and boot | shipped | local Kubuntu VM search shortcut persisted after reboot on Oct 14; broader login and boot visual acceptance not established by that test |
 | ISO build | remaster script (`iso/build-noctraos-iso.sh`) | `iso/flavours/kubuntu.sh` builds release and appliance ISOs; appliance uses `kubuntu/autoinstall.sh` (Oct 12 local KVM test installed, rebooted into SDDM autologin and Plasma, and started first-boot provisioning); working remaster includes search files; no rebuilt release-ISO search acceptance claimed; interactive Calamares installation remains untested |
-| Release pipeline and update channel | release pipeline wired; existing legacy update paths retained | 0.5.0 preview published; client reads `kubuntu/<channel>/`; working publisher adds `--flavour` and Kubuntu CI jobs, with system and user search migrations; no Kubuntu channel published in this work, public manifests previously HTTP 404 |
+| Release pipeline and update channel | release pipeline wired; existing legacy update paths retained | 0.5.0 preview published; client reads `kubuntu/<channel>/`; publisher takes `--flavour`, Kubuntu CI jobs exist; update 1 (search, with system and user migrations) is on the `kubuntu/nightly` channel since 2026-10-24 and was applied on a 0.5.0 VM; `kubuntu/stable` has no manifest yet |
 | Control Panel | shipped | runs on GTK3; not verified on Plasma |
