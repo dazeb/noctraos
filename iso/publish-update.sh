@@ -82,6 +82,8 @@ for s in $STORES; do
   for c in nightly stable; do
     f="$WORK/seen-$s-$c.json"
     ( export RELEASE_STORE="$s"; store_env; rclone cat "$STORE_REMOTE:$STORE_BUCKET/updates/$PREFIX$c/manifest.json" > "$f" 2>/dev/null ) || rm -f "$f"
+    # The S3 stores answer a key that is not there with success and no bytes: that is "nothing published yet" too.
+    [ -s "$f" ] || rm -f "$f"
   done
 done
 shopt -s nullglob

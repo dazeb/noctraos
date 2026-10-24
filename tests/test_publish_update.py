@@ -21,7 +21,7 @@ map() { local r="${1%%:*}" rest="${1#*:}"; printf '%s/%s/%s' "$STUB_STORE" "$r" 
 case "$1" in
   lsf) shift; while [[ "$1" == --* ]]; do shift 2; done; d="$(map "$1")"; [ -d "$d" ] || exit 0
        for f in "$d"/*; do [ -f "$f" ] && printf '%s|%s\n' "$(basename "$f")" "$(stat -c %s "$f")"; done; exit 0 ;;
-  cat) f="$(map "$2")"; [ -f "$f" ] && cat "$f" || exit 3 ;;
+  cat) f="$(map "$2")"; if [ -f "$f" ]; then cat "$f"; elif [ -n "${STUB_EMPTY_MISSING:-}" ]; then exit 0; else exit 3; fi ;;
   copyto) src="$2"; dst="$3"
        if [[ "$src" == *:* ]]; then src="$(map "$src")"; fi
        if [[ "$dst" == *:* ]]; then dst="$(map "$dst")"; fi
@@ -119,6 +119,13 @@ class NightlyTests(Publish):
         first_manifest = next(i for i, l in enumerate(order) if "manifest.json" in l)
         self.assertTrue(all("bundles" in l for l in order[:first_manifest]))
         self.assertEqual(len([l for l in order[:first_manifest]]), 2)
+
+    def test_a_store_that_answers_a_missing_manifest_with_nothing_is_a_first_publish(self):
+        # The S3 stores (found on the first kubuntu publish, 2026-10-24) exit 0 with no bytes for a key that is not there.
+        r = self.publish("nightly", "--flavour", "kubuntu", "--ref", "HEAD", STUB_EMPTY_MISSING="1")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("OK  r2", r.stdout)
+        self.assertIn("OK  hetzner", r.stdout)
 
     def test_the_next_nightly_gets_the_next_serial(self):
         self.publish("nightly", "--ref", "HEAD")
