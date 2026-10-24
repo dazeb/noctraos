@@ -17,8 +17,8 @@ or `NOCTRAOS_FLAVOUR=kubuntu iso/build-local.sh <dir>`) and, when sourced, only 
 The first-boot runner text is shared (`iso/firstboot-runner.sh`; a test pins it to the Zorin script's copy). The Zorin remaster is
 still `iso/build-noctraos-iso.sh` and moves here in a separate change.
 
-As of 2026-10-14, published 0.5.0 Kubuntu artifacts remain a preview without the
-new Super+Space search. The working Kubuntu remaster now includes the KRunner
+As of 2026-10-14, published 0.5.0 Plasma artifacts remain a preview without the
+new Super+Space search. The working Plasma remaster now includes the KRunner
 search files and Meta+Space setup. The working port was tested in a local Kubuntu
 VM for key activation, fixture results, Enter opening Kate, shortcut persistence
 after reboot and an idempotent setup rerun. That test does not verify a rebuilt

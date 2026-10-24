@@ -10,15 +10,20 @@ NoctraOS is **one product**: the same name, version and command set, with featur
 **flavours**. A flavour is one supported build: an upstream base, one desktop, and its own ISO pipeline.
 The base and the desktop are implementation choices. The product stays the same.
 
-| Flavour id | Base | Desktop | Status |
-|---|---|---|---|
-| `zorin` | Zorin OS 18.1 (Ubuntu 24.04) | GNOME | shipped, including 0.5.0; recommended download |
-| `kubuntu` | Kubuntu 26.04 (Ubuntu 26.04) | KDE Plasma 6 | preview from 0.5.0 (released beside zorin, labelled preview) |
+| Flavour id | Name | Base | Desktop | Status |
+|---|---|---|---|---|
+| `zorin` | Zorin | Zorin OS 18.1 (Ubuntu 24.04) | GNOME | shipped, including 0.5.0; recommended download |
+| `kubuntu` | Plasma | Kubuntu 26.04 (Ubuntu 26.04) | KDE Plasma 6 | preview from 0.5.0 (released beside zorin, labelled preview) |
+
+**The Plasma flavour's id is `kubuntu`** (2026-10-24: the name people read is Plasma, because it is KDE Plasma; Kubuntu is
+only its base). The id stays because it is in published places: the update channel `updates/kubuntu/`, release folders and file names
+(`noctraos-<v>-kubuntu-*`), `--flavour kubuntu`, and `/etc/noctraos/flavour` on installed machines. Write "Plasma" in anything a person
+reads; write `kubuntu` only where the id is meant. Renaming the id would need an alias and a republish of the channels.
 
 ## Vocabulary (use these words exactly)
 
-- **NoctraOS**: the product. Never "Zorin edition" and never "Kubuntu fork".
-- **flavour**: a supported build, named by its id (`zorin`, `kubuntu`). Used for artifacts, the flavour
+- **NoctraOS**: the product. Never "Zorin edition" and never "Plasma fork".
+- **flavour**: a supported build, named by its id (`zorin`, `kubuntu`; the second is called Plasma). Used for artifacts, the flavour
   file, ISO scripts and release folders.
 - **base**: the upstream distribution and its ISO. Zorin and Kubuntu are bases. Ubuntu is their common
   ancestor.
@@ -107,10 +112,10 @@ Taken from the repo and the VM runs. Not every item has been verified on a VM.
   `04_gui_apps` (the gnome-keyring restart) and `04c_app_policy` (Zorin package removals and launcher hides). The ISO
   remaster is still `iso/build-noctraos-iso.sh`, not yet `iso/flavours/zorin.sh`. `lib.sh` has the one allowed desktop guard.
 
-Published 0.5.0 Kubuntu artifacts still lack the new Super+Space search and the
+Published 0.5.0 Plasma artifacts still lack the new Super+Space search and the
 AI-first Start categories. The working code now has Plasma module 09: Meta+Space
 opens KRunner, stock KRunner supplies apps, and the shared backend supplies files,
-CopyQ, opt-in browser history and web search. On 2026-10-14, the local Kubuntu VM
+CopyQ, opt-in browser history and web search. On 2026-10-14, the local Plasma VM
 test covered key activation, fixture results, Enter opening Kate, shortcut
 persistence after reboot and an idempotent setup rerun. No new Zorin runtime test
 is claimed by this test. The AI-first Kickoff Start categories are not implemented.
@@ -121,7 +126,7 @@ main).** English (US), a user, erase disk, Next through to "All done", then SDDM
 and a Plasma login all worked. First-boot provisioning did not: the autostart
 entry used `Terminal=true`, which Plasma 6 ignores (it starts autostart through
 `systemd-xdg-autostart-generator`), so the runner had no TTY and its first `sudo`
-could not ask for the password. **The published 0.5.0 Kubuntu release ISOs have
+could not ask for the password. **The published 0.5.0 Plasma release ISOs have
 this bug**; an interactive install from them ends at a bare Kubuntu desktop until
 `/usr/local/sbin/noctraos-firstboot` is run by hand in Konsole. Fixed on main
 (`kubuntu_firstboot` now opens Konsole itself; the Zorin entry is unchanged, GNOME
@@ -134,7 +139,7 @@ session). The fixed ISO has not been rebuilt and installed again, so the fix is
 verified on the installed system, not on a fresh image. The things seen and not
 fixed are listed below.
 
-### Kubuntu known issues (found 2026-10-24, not fixed)
+### Plasma known issues (found 2026-10-24, not fixed)
 
 Each item says how sure we are. "Seen" means observed in the interactive install
 above; "read" means found in the source. Nothing here was tried on real hardware.
@@ -150,12 +155,12 @@ above; "read" means found in the source. Nothing here was tried on real hardware
 | Calamares defaulted the keyboard to UK. | Seen. The VM has no geo-IP, so that may be the cause; not checked on a networked install. | Not investigated. |
 | SDDM showed only the wallpaper until a click or key press, so the login form looked missing. | Seen on several boots in the VM. | Not investigated. May be specific to the virtual display. |
 | A fresh install has no `sshd` until provisioning reaches module 01, so remote test or support access needs the desktop first. | Seen: SSH to the new VM was reset until setup installed openssh-server. | By design. Noted because other test notes assume SSH. |
-| The QEMU guest agent socket did not answer before first login, although `kubuntu.sh` bakes `qemu-guest-agent` in. | Seen once (a `guest-exec` call timed out). Cause unknown: agent missing, not started, or queried too early. | Unverified. Check `systemctl status qemu-guest-agent` on a fresh install before claiming the bake works on the Kubuntu ISO. |
+| The QEMU guest agent socket did not answer before first login, although `kubuntu.sh` bakes `qemu-guest-agent` in. | Seen once (a `guest-exec` call timed out). Cause unknown: agent missing, not started, or queried too early. | Unverified. Check `systemctl status qemu-guest-agent` on a fresh install before claiming the bake works on the Plasma ISO. |
 | Calamares' Donate and Support links were not opened. | Not tested. | Check where they point before the next release. |
 
 System and user search migrations are in the working tree for existing Kubuntu
 systems to receive search through an optional signed update. Publication
-scripts take an explicit `--flavour` and the CI has per-flavour jobs. On 2026-10-24 Kubuntu update 1 (this search) was published on the **nightly** channel only (`updates/kubuntu/nightly/`, relogin flagged); `stable` has no Kubuntu manifest yet. It was applied through the real updater on a VM booted from the published 0.5.0 Kubuntu image: both migrations ran, Meta+Space was assigned, `noc doctor` showed the search row OK, the KRunner runner answered over D-Bus, and a rerun was a no-op.
+scripts take an explicit `--flavour` and the CI has per-flavour jobs. On 2026-10-24 Plasma update 1 (this search) was published on the **nightly** channel only (`updates/kubuntu/nightly/`, relogin flagged); `stable` has no Kubuntu manifest yet. It was applied through the real updater on a VM booted from the published 0.5.0 Kubuntu image: both migrations ran, Meta+Space was assigned, `noc doctor` showed the search row OK, the KRunner runner answered over D-Bus, and a rerun was a no-op.
 Not yet done: promotion to `stable`, and no real-desktop (interactive) check of the update prompt.
 
 ## Rules for agents
@@ -184,7 +189,7 @@ Not yet done: promotion to `stable`, and no real-desktop (interactive) check of 
 ## Wrong phrasing, and what to write instead
 
 - "NoctraOS Zorin" or "the Zorin version" → "NoctraOS (zorin flavour)".
-- "NoctraOS KDE" or "the Kubuntu version" → "NoctraOS (kubuntu flavour)".
+- "NoctraOS KDE" or "the Plasma version" → "NoctraOS (Plasma flavour)".
 - "works on Kubuntu" with no VM run behind it → "installs on Kubuntu; the desktop is not yet ported".
 
 ## Status matrix (2026-10-14)
@@ -197,7 +202,7 @@ Not yet done: promotion to `stable`, and no real-desktop (interactive) check of 
 | 06 desktop theme | shipped | written: colour scheme, Konsole profile, wallpapers, Agents section, panel layout; broad interactive acceptance remains untested |
 | 08 shell theme | shipped | written: Global Theme `dev.noctraos.desktop` (splash, previews, layout), wallpaper packages, SDDM login screen, lock-screen picture, About this System, NoctraOS logo on Kickoff (`configs/plasma/install-look.sh`, also baked into the ISO); unit-tested and splash rendered offscreen with Qt 6; broad interactive acceptance remains untested; AI-first Kickoff Start categories are not implemented |
 | 09 Super+Space and Start | shipped (GNOME Shell extensions) | working module 09 and KRunner runner; local VM search scope above passed; published 0.5.0 still lacks search; AI-first Kickoff Start categories are not implemented |
-| Login and boot | shipped | local Kubuntu VM search shortcut persisted after reboot on Oct 14; broader login and boot visual acceptance not established by that test |
+| Login and boot | shipped | local Plasma VM search shortcut persisted after reboot on Oct 14; broader login and boot visual acceptance not established by that test |
 | ISO build | remaster script (`iso/build-noctraos-iso.sh`) | `iso/flavours/kubuntu.sh` builds release and appliance ISOs; appliance uses `kubuntu/autoinstall.sh` (Oct 12 local KVM test installed, rebooted into SDDM autologin and Plasma, and started first-boot provisioning); working remaster includes search files; no rebuilt release-ISO search acceptance claimed; interactive Calamares install run 2026-10-24: installs and boots, first-boot setup bug found and fixed on main, fixed ISO not yet rebuilt |
-| Release pipeline and update channel | release pipeline wired; existing legacy update paths retained | 0.5.0 preview published; client reads `kubuntu/<channel>/`; publisher takes `--flavour`, Kubuntu CI jobs exist; update 1 (search, with system and user migrations) is on the `kubuntu/nightly` channel since 2026-10-24 and was applied on a 0.5.0 VM; `kubuntu/stable` has no manifest yet |
+| Release pipeline and update channel | release pipeline wired; existing legacy update paths retained | 0.5.0 preview published; client reads `kubuntu/<channel>/`; publisher takes `--flavour`, Plasma CI jobs exist; update 1 (search, with system and user migrations) is on the `kubuntu/nightly` channel since 2026-10-24 and was applied on a 0.5.0 VM; `kubuntu/stable` has no manifest yet |
 | Control Panel | shipped | runs on GTK3; not verified on Plasma |

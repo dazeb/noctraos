@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # desktops: plasma
-# Module 07 refreshes existing programs, but cannot add search to older Kubuntu
+# Module 07 refreshes existing programs, but cannot add search to older Plasma
 # installs. Module 09 copies bundled files only: no packages, downloads or builds.
 set -u
 
 if [ "${NOCTRAOS_FLAVOUR:-zorin}" != kubuntu ]; then
-  echo "NOT APPLIED on the ${NOCTRAOS_FLAVOUR:-zorin} flavour: Plasma search is for Kubuntu"
+  echo "NOT APPLIED on the ${NOCTRAOS_FLAVOUR:-zorin} flavour: Plasma search is for the Plasma flavour"
   exit 0
 fi
 

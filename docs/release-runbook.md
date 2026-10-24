@@ -4,28 +4,28 @@ Written 2026-10-05 as a handoff. Read `AGENTS.md` first (rules, pitfalls). This 
 ordered list of what is left to ship 0.3.0 and exactly how. Everything below was done by hand
 once; the scripts named here exist so you do not have to repeat the discovery.
 
-## Current Kubuntu handoff (2026-10-14)
+## Current Plasma handoff (2026-10-14)
 
 0.5.0 is published for both flavours, with Kubuntu labelled preview. Its
 published artifacts still lack the new Super+Space search. The working Plasma
 code binds Meta+Space to KRunner, uses stock KRunner for apps and the shared
 backend for files, CopyQ, opt-in browser history and web search.
 
-The main agent's local Kubuntu VM test on 2026-10-14 covered key activation,
+The main agent's local Plasma VM test on 2026-10-14 covered key activation,
 fixture results, Enter opening Kate, shortcut persistence after reboot and an
 idempotent setup rerun. It did not establish broad theme acceptance,
 real-hardware acceptance or a public signed-update apply. An interactive Calamares
 install was run on 2026-10-24 and found the first-boot `Terminal=true` bug (fixed
-on main; the next Kubuntu ISO must be rebuilt and installed interactively once to
+on main; the next Plasma ISO must be rebuilt and installed interactively once to
 confirm). AI-first Kickoff Start categories are not implemented. Do not mark those
 items complete from the search test.
 
 Working system and user migrations reuse module 09 and its once-per-account
-shortcut helper to deliver search to existing Kubuntu systems in an
+shortcut helper to deliver search to existing Plasma systems in an
 optional signed update. The legacy-named search GSettings schema is shared
 search configuration, not GNOME desktop settings. Keep browser history opt-in.
 Publication scripts take an explicit `--flavour`; the CI has per-flavour jobs.
-Kubuntu update 1 (the search) went to the `kubuntu/nightly` channel on 2026-10-24 and
+Plasma update 1 (the search) went to the `kubuntu/nightly` channel on 2026-10-24 and
 was applied on a VM booted from the published 0.5.0 image; `kubuntu/stable` is empty. Promote
 with `iso/publish-update.sh stable --flavour kubuntu --from nightly --rollout 10`, then widen.
 
@@ -34,7 +34,7 @@ Before promoting the search update to stable (the nightly publish and the previo
 1. Verify the Kubuntu signed bundle and migrations on a previous-release VM,
    including existing account choices and an idempotent rerun. Record Zorin
    regression coverage separately.
-2. Use the Kubuntu CI jobs or explicit `--flavour kubuntu` for a manual publish,
+2. Use the Plasma CI jobs or explicit `--flavour kubuntu` for a manual publish,
    promotion or renewal. Keep Zorin's legacy paths and Kubuntu's paths separate.
 3. Read back and verify the public signatures, manifests, bundle hashes and
    expiry. Only then describe a channel as published.
@@ -117,10 +117,10 @@ Calamares has no unattended mode.
   TrueNAS (192.168.8.111; config in `/mnt/pool0/noctraos-runner/config`, unprivileged, `ubuntu:24.04`, one job, 1.5 GB limit, the NAS has
   little spare RAM). Pipeline 154 went green on it (`shell`, `version`, `tests`). If it goes stale again, create a new project runner
   and write its token into that `config.toml`.
-- **Open before the next Kubuntu release (2026-10-24):** rebuild the kubuntu ISO from `main` and run one interactive Calamares
-  install of it; the first-boot fix is only verified on an installed system. Kubuntu update 1 is on `kubuntu/nightly` only; promoting
+- **Open before the next Plasma release (2026-10-24):** rebuild the kubuntu ISO from `main` and run one interactive Calamares
+  install of it; the first-boot fix is only verified on an installed system. Plasma update 1 is on `kubuntu/nightly` only; promoting
   it to stable (`iso/publish-update.sh stable --flavour kubuntu --from nightly --rollout 10`) is waiting for a decision. The other
-  unfixed Kubuntu findings are in the table in `docs/flavours.md`.
+  unfixed Plasma findings are in the table in `docs/flavours.md`.
 - Needs on the runner: Docker, KVM, qemu + OVMF, google-chrome, `gh` logged in, ssh push to GitHub,
   `~/secrets/cloudflare-r2.env`, and `in/Zorin-OS-18.1-Core-64-bit.iso` and `in/kubuntu-26.04.1-desktop-amd64.iso` in the build dir
   (a hardlink of the copy in `noctraos-build/in/` is enough).

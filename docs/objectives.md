@@ -6,8 +6,8 @@ summarise it; if they disagree with this file, this file wins.
 ## What we are building
 
 An **AI development workstation OS**, on an Ubuntu base. It ships as one product
-in flavours: Zorin OS 18.x with GNOME (`zorin`, shipped) and Kubuntu 26.04 with KDE
-Plasma (`kubuntu`, a preview from 0.5.0). The name, version and commands are the
+in flavours: Zorin OS 18.x with GNOME (`zorin`, shipped) and KDE Plasma
+on Kubuntu 26.04 (the Plasma flavour, id `kubuntu`, a preview from 0.5.0). The name, version and commands are the
 same in every flavour. Feature parity is the goal, not a claim about the preview;
 see [flavours.md](flavours.md).
 
@@ -61,9 +61,9 @@ history** (Chromium family and Firefox) on the GNOME flavour. Other sources are 
 As of 2026-10-14, the working Plasma code opens KRunner with Meta+Space, KDE's
 name for Super+Space. The runner uses the shared backend for files, CopyQ,
 opt-in browser history and web search; stock KRunner supplies applications.
-The local Kubuntu VM test covered key activation, fixture results, Enter opening
+The local Plasma VM test covered key activation, fixture results, Enter opening
 Kate, shortcut persistence after reboot and an idempotent setup rerun. Published
-0.5.0 Kubuntu images still lack this search. The AI-first Kickoff Start categories
+0.5.0 Plasma images still lack this search. The AI-first Kickoff Start categories
 are not implemented. Broad theme acceptance, interactive Calamares installation
 and real hardware remain untested.
 

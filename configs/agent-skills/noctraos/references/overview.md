@@ -23,7 +23,7 @@ One product, built per flavour. The `noc` commands, `--json` contracts, Control 
 | Flavour id | Base | Desktop | Status |
 |---|---|---|---|
 | `zorin` | Zorin OS 18.1 (Ubuntu 24.04) | GNOME | shipped (0.3.x, 0.4.0) |
-| `kubuntu` | Kubuntu 26.04 | KDE Plasma 6 | in progress, no release |
+| `kubuntu` (called Plasma) | Kubuntu 26.04 | KDE Plasma 6 | in progress, no release |
 
 Vocabulary: **NoctraOS** is the product (never "Zorin edition"); **base** is Zorin/Kubuntu/Ubuntu; **desktop** is `gnome` or `plasma`; **core** is everything not desktop-specific. Artifacts, release folders and update channels are per flavour and never crossed. Skipped desktop work prints `NOT APPLIED`, never a success line. Read `docs/flavours.md` before touching desktop code, `iso/`, `branding/`, releases or updates.
 

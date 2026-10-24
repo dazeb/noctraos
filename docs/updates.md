@@ -3,12 +3,12 @@
 How a NoctraOS machine that is already installed gets new features without a new ISO. Built 2026-10-08.
 The tools are `bin/noc-selfupdate` (the machine), `scripts/make-update.py` and `iso/publish-update.sh` (the publisher).
 
-## Kubuntu status (2026-10-14)
+## Plasma status (2026-10-14)
 
-Published 0.5.0 Kubuntu images do not include the new Super+Space search. The
+Published 0.5.0 Plasma images do not include the new Super+Space search. The
 working code adds KRunner on Meta+Space with stock KRunner application results
 and the shared backend for files, CopyQ, opt-in browser history and web search.
-The local Kubuntu VM test covered key activation, fixture results, Enter opening
+The local Plasma VM test covered key activation, fixture results, Enter opening
 Kate, shortcut persistence after reboot and an idempotent setup rerun. It did not
 verify a public signed update, broad theme acceptance, interactive Calamares
 installation or real hardware. AI-first Kickoff Start categories are not implemented.
@@ -22,9 +22,9 @@ delivery path for a future optional signed update, not evidence that one shipped
 The legacy-named `org.gnome.shell.extensions.noctraos-search` schema is shared
 search configuration, not GNOME desktop settings; browser history remains opt-in.
 
-Publication scripts take an explicit `--flavour` and the CI has per-flavour jobs. On 2026-10-24 Kubuntu update 1 (this search) was published on the **nightly** channel only (`updates/kubuntu/nightly/`, relogin flagged); `stable` has no Kubuntu manifest yet. It was applied through the real updater on a VM booted from the published 0.5.0 Kubuntu image: both migrations ran, Meta+Space was assigned, `noc doctor` showed the search row OK, the KRunner runner answered over D-Bus, and a rerun was a no-op.
+Publication scripts take an explicit `--flavour` and the CI has per-flavour jobs. On 2026-10-24 Plasma update 1 (this search) was published on the **nightly** channel only (`updates/kubuntu/nightly/`, relogin flagged); `stable` has no Kubuntu manifest yet. It was applied through the real updater on a VM booted from the published 0.5.0 Kubuntu image: both migrations ran, Meta+Space was assigned, `noc doctor` showed the search row OK, the KRunner runner answered over D-Bus, and a rerun was a no-op.
 The publish read back both stores through their public hostnames (signature and bundle hash verified); the weekly renewal covers
-the Kubuntu channels. Next: soak on nightly, then promote with
+the Plasma channels. Next: soak on nightly, then promote with
 `iso/publish-update.sh stable --flavour kubuntu --from nightly --rollout 10`, then widen.
 
 ## What is and is not covered
@@ -105,7 +105,7 @@ Omarchy does with Snapper (Zorin installs on ext4). `rollback` restores the Noct
 The job names below without a suffix are for `zorin`. The working CI adds
 `update-nightly-kubuntu`, `update-stable-10-kubuntu`, `update-stable-50-kubuntu`
 and `update-stable-100-kubuntu` for Kubuntu. Each uses its flavour's own serials,
-bundles and channels. Kubuntu update 1 was published by hand with `iso/publish-update.sh --flavour kubuntu`
+bundles and channels. Plasma update 1 was published by hand with `iso/publish-update.sh --flavour kubuntu`
 (2026-10-24); the tag-driven jobs have not run for Kubuntu yet.
 
 ```
@@ -170,7 +170,7 @@ iso/publish-update.sh stable --flavour zorin --from stable --rollout 100
 iso/publish-update.sh renew stable --flavour zorin                                             # at least every 2 weeks
 ```
 
-Use `--flavour kubuntu` for the Kubuntu channels once the code and publication
+Use `--flavour kubuntu` for the Plasma channels once the code and publication
 checks pass. Specify the flavour on every manual publish, promotion and renewal.
 The working publisher defaults to `NOCTRAOS_FLAVOUR`, then `zorin`, but an
 explicit flag avoids publishing to the wrong flavour.
@@ -186,8 +186,8 @@ last, and each store is read back through its **public** hostname with the same 
 ```
 updates/bundles/noctraos-N.tar.gz            immutable, never overwritten (a different one with the same N stops the publish)
 updates/<channel>/manifest.json + .sig       the only mutable files
-updates/kubuntu/bundles/noctraos-N.tar.gz    immutable Kubuntu bundles, with their own serials
-updates/kubuntu/<channel>/manifest.json + .sig  Kubuntu manifests, separate from zorin
+updates/kubuntu/bundles/noctraos-N.tar.gz    immutable Plasma bundles, with their own serials
+updates/kubuntu/<channel>/manifest.json + .sig  Plasma manifests, separate from zorin
 ```
 
 Each flavour (`docs/flavours.md`) has its own channels. zorin keeps the top-level layout every installed machine already
@@ -260,7 +260,7 @@ expiry of each public manifest; `run` renews now.
 The working renewal scripts check both flavours and renew only channels with a
 published manifest. A missing manifest means there is nothing to renew, not that
 the flavour has a live channel. Verify the public paths and expiry after the
-first Kubuntu publication.
+first Plasma publication.
 
 ## Limits and next steps
 

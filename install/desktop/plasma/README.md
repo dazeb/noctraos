@@ -20,11 +20,11 @@ background and logo), the lock-screen picture, the splash default and "About thi
 same script on the squashfs. Module 09 now installs the shared search backend, index timer, search settings schema,
 KRunner D-Bus runner and once-per-account Meta+Space shortcut through `configs/plasma/apply-search.sh`.
 Stock KRunner handles application results; the shared backend handles files, CopyQ, opt-in browser history and web search.
-The local Kubuntu VM test on 2026-10-14 covered key activation, fixture results, Enter opening Kate,
+The local Plasma VM test on 2026-10-14 covered key activation, fixture results, Enter opening Kate,
 shortcut persistence after reboot and an idempotent setup rerun. This does not establish broad theme acceptance,
 interactive Calamares installation or real-hardware coverage. The AI-first Kickoff Start categories are not implemented.
-Published 0.5.0 Kubuntu images still lack the new search. System migration `0002_install_plasma_search.sh` and user
-migration `0003_setup_plasma_search.sh` are delivered by Kubuntu update 1, on the nightly channel since 2026-10-24 (not yet on stable).
+Published 0.5.0 Plasma images still lack the new search. System migration `0002_install_plasma_search.sh` and user
+migration `0003_setup_plasma_search.sh` are delivered by Plasma update 1, on the nightly channel since 2026-10-24 (not yet on stable).
 The artwork is rendered by scripts/render-kubuntu-branding.py into
 assets/plasma and assets/boot/calamares. The colour scheme and Konsole files in configs/plasma are rendered from configs/theme/palette.json
 by scripts/render-theme.py.

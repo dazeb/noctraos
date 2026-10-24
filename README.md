@@ -65,23 +65,23 @@ The VM disks are trial appliances: they sign in as `noctraos` (password
 `noctraos`) with passwordless sudo.
 
 NoctraOS ships in two flavours: `zorin` on Zorin OS 18.1 with GNOME, and
-`kubuntu` on Kubuntu 26.04 with KDE Plasma, labelled preview from 0.5.0.
+Plasma (id `kubuntu`) on Kubuntu 26.04 with KDE Plasma, labelled preview from 0.5.0.
 The GNOME flavour remains the recommended download and the Proxmox installer's
 only flavour.
 
 As of 2026-10-14, the working code adds Super+Space search on Plasma through
 KRunner, called Meta+Space in KDE settings. It uses the shared backend for files,
 CopyQ clipboard history, opt-in browser history and web search, while stock
-KRunner provides application results. In a local Kubuntu VM, testing confirmed
+KRunner provides application results. In a local Plasma VM, testing confirmed
 key activation, fixture results, Enter opening a file in Kate, shortcut
 persistence after reboot and an idempotent setup rerun. This is not in the
 published 0.5.0 images. The AI-first Kickoff Start categories are not implemented,
 and broad theme acceptance and real hardware remain untested. An interactive
-Calamares install of the 0.5.0 Kubuntu ISO works, but its first-boot setup does not
+Calamares install of the 0.5.0 Plasma ISO works, but its first-boot setup does not
 start on its own (fixed on main, ships in the next ISO; see
 [flavour status](docs/flavours.md)). See [flavour status](docs/flavours.md) and
 [updates](docs/updates.md) for the future optional signed-update path for existing
-Kubuntu systems. That update is on the Kubuntu nightly channel (2026-10-24) and has not been promoted to stable.
+Plasma systems. That update is on the Plasma nightly channel (2026-10-24) and has not been promoted to stable.
 
 **On Proxmox VE** (8 or 9), run this on the host as root. It asks for RAM, cores and
 storage, checks the download against `SHA256SUMS`, and creates a UEFI VM from the

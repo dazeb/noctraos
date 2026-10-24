@@ -12,7 +12,7 @@ optional local Ollama stack, a six-agent start menu, mise-managed Node, a dark +
 amber theme, and the **Super+Space** system search as the headline feature.
 
 NoctraOS is **one product shipped in flavours**: `zorin` (GNOME on Zorin OS 18.1, shipped) and
-`kubuntu` (KDE Plasma on Kubuntu 26.04, published as a preview from 0.5.0). Read the section below and `docs/flavours.md`
+`kubuntu` (called **Plasma**: KDE Plasma on Kubuntu 26.04, published as a preview from 0.5.0; the id stays `kubuntu`, see `docs/flavours.md`). Read the section below and `docs/flavours.md`
 before any change that differs by desktop or base.
 
 Read `docs/objectives.md` first: it defines the audience, principles
@@ -115,7 +115,7 @@ bin/
   noctraos-agent            agent launcher wrapper: installs npm package on
                             first use, then execs the agent
   noctraos-search           wrapper that execs the system-Python search app (search/)
-  noctraos-search-plasma    KRunner bridge launcher and shortcut entry point (working Kubuntu search port)
+  noctraos-search-plasma    KRunner bridge launcher and shortcut entry point (working Plasma search port)
   noctraos-copyq            CopyQ autostart wrapper: runs it under XWayland, sets the tray icon white
   noctraos-weather          Open-Meteo lookup for the Start panel (keyless; city is a user choice)
 branding/setup-branding.py  once-per-account dock + top-bar layout (marker desktop-layout-v1)
@@ -802,26 +802,27 @@ update and GPU setup had no GUI.
 
 ## Current state (2026-10-14)
 
-Published **0.5.0** includes both flavours. The Kubuntu preview artifacts still
+Published **0.5.0** includes both flavours. The Plasma preview artifacts still
 lack the new Super+Space search and the AI-first Start categories.
 
-The working Kubuntu port now opens KRunner with Meta+Space, KDE's name for
+The working Plasma port now opens KRunner with Meta+Space, KDE's name for
 Super+Space. Stock KRunner supplies application results; the shared backend
 supplies files, CopyQ, opt-in browser history and web search. On 2026-10-14, the
-main agent tested the working code in a local Kubuntu VM: key activation, fixture
+main agent tested the working code in a local Plasma VM: key activation, fixture
 results, Enter opening Kate, shortcut persistence after reboot and an idempotent
 setup rerun. This is search-specific evidence, not broad theme acceptance or a
 new Zorin runtime test. The AI-first Kickoff Start categories are not implemented.
 Real-hardware acceptance remains untested. An interactive Calamares install of the
-0.5.0 Kubuntu release ISO was run on 2026-10-24: it installs and boots, but its first-boot setup did not
+0.5.0 Plasma release ISO was run on 2026-10-24: it installs and boots, but its first-boot setup did not
 start, because Plasma 6 ignores `Terminal=true` in autostart entries (no TTY, so sudo cannot ask). Fixed in
 `kubuntu_firstboot` (the entry runs `konsole -e`); the published ISOs keep the bug, and the fixed ISO has not
-been rebuilt and installed again. Details in `docs/flavours.md`.
+been rebuilt and installed again. Tag `update-2026.10.24` published zorin update 7 and Plasma update 2 to the nightly channels
+(with the `node-security` doctor row); stable is not promoted for either. Details in `docs/flavours.md`.
 
 Working system migration `0002_install_plasma_search.sh` and user migration
-`0003_setup_plasma_search.sh` provide the path for existing Kubuntu systems to get
+`0003_setup_plasma_search.sh` provide the path for existing Plasma systems to get
 search in an optional signed update. Publication scripts take an explicit `--flavour`
-and the CI has per-flavour jobs. Kubuntu update 1 (the search) is published on the
+and the CI has per-flavour jobs. Plasma update 1 (the search) is published on the
 `kubuntu/nightly` channel only (2026-10-24) and was applied on a VM booted from the
 published 0.5.0 image; `kubuntu/stable` has no manifest. Do not describe the search as shipped in
 0.5.0. See `docs/updates.md` and `docs/release-runbook.md` for publication gates.

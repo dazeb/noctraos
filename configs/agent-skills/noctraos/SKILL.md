@@ -1,11 +1,11 @@
 ---
 name: noctraos
-description: Complete guide to NoctraOS, the AI development workstation OS (Ubuntu base, Zorin/GNOME and Kubuntu/KDE flavours). Use for anything on a NoctraOS machine or in the noctraos repo - the `noc` CLI, Control Panel, updates and channels, rollback, local AI (Ollama, models, GPU), Hermes Desktop and the coding-agent launchers, Super+Space search, Start panel, theme and wallpapers, privacy, Git/GitHub setup, disk grow, VM guest tools, doctor/repair, app policy (Flatpak/AppImage), installer modules, ISO and release builds, and contributing to the repo.
+description: Complete guide to NoctraOS, the AI development workstation OS (Ubuntu base, Zorin/GNOME and Plasma/KDE flavours). Use for anything on a NoctraOS machine or in the noctraos repo - the `noc` CLI, Control Panel, updates and channels, rollback, local AI (Ollama, models, GPU), Hermes Desktop and the coding-agent launchers, Super+Space search, Start panel, theme and wallpapers, privacy, Git/GitHub setup, disk grow, VM guest tools, doctor/repair, app policy (Flatpak/AppImage), installer modules, ISO and release builds, and contributing to the repo.
 ---
 
 # NoctraOS
 
-NoctraOS (`noctraos`, github.com/dazeb/noctraos) is an AI development workstation delivered as a bootable ISO on an Ubuntu base. Its idea: Omarchy's "everything set up for AI work" without a tiling-WM learning curve. One product, shipped as **flavours**: `zorin` (GNOME on Zorin OS 18.1, shipped) and `kubuntu` (KDE Plasma on Kubuntu 26.04, in progress). The headline feature is **Super+Space** system search.
+NoctraOS (`noctraos`, github.com/dazeb/noctraos) is an AI development workstation delivered as a bootable ISO on an Ubuntu base. Its idea: Omarchy's "everything set up for AI work" without a tiling-WM learning curve. One product, shipped as **flavours**: `zorin` (GNOME on Zorin OS 18.1, shipped) and `kubuntu` (called Plasma: KDE Plasma on Kubuntu 26.04, preview from 0.5.0). The headline feature is **Super+Space** system search.
 
 This skill works for any agent (Hermes, Codex, Claude Code, OpenCode, ...). It is split so you load only what the task needs. Read this page, then open the reference for your area.
 

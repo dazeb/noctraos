@@ -5,7 +5,7 @@
 set -u
 
 if [ "${NOCTRAOS_FLAVOUR:-zorin}" != kubuntu ]; then
-  echo "NOT APPLIED on the ${NOCTRAOS_FLAVOUR:-zorin} flavour: Plasma search shortcut is for Kubuntu"
+  echo "NOT APPLIED on the ${NOCTRAOS_FLAVOUR:-zorin} flavour: Plasma search shortcut is for the Plasma flavour"
   exit 0
 fi
 
