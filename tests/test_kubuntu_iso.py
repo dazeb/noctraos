@@ -152,6 +152,9 @@ class FirstBootTests(unittest.TestCase):
             desktop = (t.root / "etc/skel/.config/autostart/noctraos-setup.desktop").read_text()
             self.assertIn("boot=casper", desktop)       # never provisions inside the live session
             self.assertNotIn("GNOME", desktop)
+            # Plasma 6 ignores Terminal=true (no TTY, so sudo cannot ask): the entry must open Konsole itself.
+            self.assertIn("exec konsole -e /usr/local/sbin/noctraos-firstboot", desktop)
+            self.assertNotIn("Terminal=true", desktop)
 
     def test_the_runner_is_the_zorin_runner_word_for_word(self):
         build = (ROOT / "iso/build-noctraos-iso.sh").read_text()

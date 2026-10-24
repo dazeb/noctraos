@@ -812,7 +812,11 @@ main agent tested the working code in a local Kubuntu VM: key activation, fixtur
 results, Enter opening Kate, shortcut persistence after reboot and an idempotent
 setup rerun. This is search-specific evidence, not broad theme acceptance or a
 new Zorin runtime test. The AI-first Kickoff Start categories are not implemented.
-Interactive Calamares installation and real-hardware acceptance remain untested.
+Real-hardware acceptance remains untested. An interactive Calamares install of the
+0.5.0 Kubuntu release ISO was run on 2026-10-24: it installs and boots, but its first-boot setup did not
+start, because Plasma 6 ignores `Terminal=true` in autostart entries (no TTY, so sudo cannot ask). Fixed in
+`kubuntu_firstboot` (the entry runs `konsole -e`); the published ISOs keep the bug, and the fixed ISO has not
+been rebuilt and installed again. Details in `docs/flavours.md`.
 
 Working system migration `0002_install_plasma_search.sh` and user migration
 `0003_setup_plasma_search.sh` provide the path for existing Kubuntu systems to get

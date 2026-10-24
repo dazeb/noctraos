@@ -114,8 +114,28 @@ CopyQ, opt-in browser history and web search. On 2026-10-14, the local Kubuntu V
 test covered key activation, fixture results, Enter opening Kate, shortcut
 persistence after reboot and an idempotent setup rerun. No new Zorin runtime test
 is claimed by this test. The AI-first Kickoff Start categories are not implemented.
-Broad theme acceptance, interactive Calamares installation and real hardware
-remain untested.
+Broad theme acceptance and real hardware remain untested.
+
+**Interactive Calamares install (2026-10-24, local KVM, a release ISO built from
+main).** English (US), a user, erase disk, Next through to "All done", then SDDM
+and a Plasma login all worked. First-boot provisioning did not: the autostart
+entry used `Terminal=true`, which Plasma 6 ignores (it starts autostart through
+`systemd-xdg-autostart-generator`), so the runner had no TTY and its first `sudo`
+could not ask for the password. **The published 0.5.0 Kubuntu release ISOs have
+this bug**; an interactive install from them ends at a bare Kubuntu desktop until
+`/usr/local/sbin/noctraos-firstboot` is run by hand in Konsole. Fixed on main
+(`kubuntu_firstboot` now opens Konsole itself; the Zorin entry is unchanged, GNOME
+honours `Terminal=true`). With the fix applied to the installed system, the run
+went through to "setup complete" in about 10 minutes: `noc doctor` all OK except
+the Flatpak security row (Kubuntu 26.04 ships Flatpak 1.16.6), Meta+Space search
+returned application results, and after a reboot the NoctraOS panel layout and
+wallpaper were in place (the layout shows from the next login, not the first
+session). The fixed ISO has not been rebuilt and installed again, so the fix is
+verified on the installed system, not on a fresh image. Other things seen and not
+fixed: the live-session welcome and Plymouth still show stock Kubuntu branding,
+the root filesystem label is `kubuntu_2604`, the installer's final slide mentions
+an Agents Start menu that the Plasma flavour does not have, and the keyboard
+defaults to UK until chosen.
 
 System and user search migrations are in the working tree for existing Kubuntu
 systems to receive search through an optional signed update. Publication
@@ -162,6 +182,6 @@ Not yet done: promotion to `stable`, and no real-desktop (interactive) check of 
 | 08 shell theme | shipped | written: Global Theme `dev.noctraos.desktop` (splash, previews, layout), wallpaper packages, SDDM login screen, lock-screen picture, About this System, NoctraOS logo on Kickoff (`configs/plasma/install-look.sh`, also baked into the ISO); unit-tested and splash rendered offscreen with Qt 6; broad interactive acceptance remains untested; AI-first Kickoff Start categories are not implemented |
 | 09 Super+Space and Start | shipped (GNOME Shell extensions) | working module 09 and KRunner runner; local VM search scope above passed; published 0.5.0 still lacks search; AI-first Kickoff Start categories are not implemented |
 | Login and boot | shipped | local Kubuntu VM search shortcut persisted after reboot on Oct 14; broader login and boot visual acceptance not established by that test |
-| ISO build | remaster script (`iso/build-noctraos-iso.sh`) | `iso/flavours/kubuntu.sh` builds release and appliance ISOs; appliance uses `kubuntu/autoinstall.sh` (Oct 12 local KVM test installed, rebooted into SDDM autologin and Plasma, and started first-boot provisioning); working remaster includes search files; no rebuilt release-ISO search acceptance claimed; interactive Calamares installation remains untested |
+| ISO build | remaster script (`iso/build-noctraos-iso.sh`) | `iso/flavours/kubuntu.sh` builds release and appliance ISOs; appliance uses `kubuntu/autoinstall.sh` (Oct 12 local KVM test installed, rebooted into SDDM autologin and Plasma, and started first-boot provisioning); working remaster includes search files; no rebuilt release-ISO search acceptance claimed; interactive Calamares install run 2026-10-24: installs and boots, first-boot setup bug found and fixed on main, fixed ISO not yet rebuilt |
 | Release pipeline and update channel | release pipeline wired; existing legacy update paths retained | 0.5.0 preview published; client reads `kubuntu/<channel>/`; publisher takes `--flavour`, Kubuntu CI jobs exist; update 1 (search, with system and user migrations) is on the `kubuntu/nightly` channel since 2026-10-24 and was applied on a 0.5.0 VM; `kubuntu/stable` has no manifest yet |
 | Control Panel | shipped | runs on GTK3; not verified on Plasma |

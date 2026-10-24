@@ -13,9 +13,11 @@ backend for files, CopyQ, opt-in browser history and web search.
 
 The main agent's local Kubuntu VM test on 2026-10-14 covered key activation,
 fixture results, Enter opening Kate, shortcut persistence after reboot and an
-idempotent setup rerun. It did not establish broad theme acceptance, an
-interactive Calamares install, real-hardware acceptance or a public signed-update
-apply. AI-first Kickoff Start categories are not implemented. Do not mark those
+idempotent setup rerun. It did not establish broad theme acceptance,
+real-hardware acceptance or a public signed-update apply. An interactive Calamares
+install was run on 2026-10-24 and found the first-boot `Terminal=true` bug (fixed
+on main; the next Kubuntu ISO must be rebuilt and installed interactively once to
+confirm). AI-first Kickoff Start categories are not implemented. Do not mark those
 items complete from the search test.
 
 Working system and user migrations reuse module 09 and its once-per-account

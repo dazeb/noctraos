@@ -219,13 +219,16 @@ kubuntu_firstboot() { # kubuntu_firstboot <squashfs-root> <branch>
   sed "s|__NOCTRAOS_BRANCH__|$branch|" "$KB_ISO_DIR/firstboot-runner.sh" > "$runner"
   chmod 755 "$runner"
   # Not in the live session (the installer ISO boots with boot=casper): only an installed system provisions itself.
+  # Plasma 6 starts autostart entries through systemd-xdg-autostart-generator, which ignores Terminal=true: the runner
+  # then has no TTY and its first sudo cannot ask for the password (found on the first interactive Calamares install,
+  # 2026-10-24). So the entry opens Konsole itself. GNOME (the zorin flavour) honours Terminal=true and keeps it.
   cat > "$root/etc/skel/.config/autostart/noctraos-setup.desktop" <<'EOF'
 [Desktop Entry]
 Type=Application
 Name=noctraos Setup
 Comment=One-time setup of your AI developer workstation
-Exec=sh -c 'grep -qw boot=casper /proc/cmdline || exec /usr/local/sbin/noctraos-firstboot'
-Terminal=true
+Exec=sh -c 'grep -qw boot=casper /proc/cmdline || exec konsole -e /usr/local/sbin/noctraos-firstboot'
+Terminal=false
 Categories=System;
 NoDisplay=false
 EOF

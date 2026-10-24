@@ -76,8 +76,10 @@ KRunner provides application results. In a local Kubuntu VM, testing confirmed
 key activation, fixture results, Enter opening a file in Kate, shortcut
 persistence after reboot and an idempotent setup rerun. This is not in the
 published 0.5.0 images. The AI-first Kickoff Start categories are not implemented,
-and broad theme acceptance, interactive Calamares installation and real hardware
-remain untested. See [flavour status](docs/flavours.md) and
+and broad theme acceptance and real hardware remain untested. An interactive
+Calamares install of the 0.5.0 Kubuntu ISO works, but its first-boot setup does not
+start on its own (fixed on main, ships in the next ISO; see
+[flavour status](docs/flavours.md)). See [flavour status](docs/flavours.md) and
 [updates](docs/updates.md) for the future optional signed-update path for existing
 Kubuntu systems. That update is on the Kubuntu nightly channel (2026-10-24) and has not been promoted to stable.
 
