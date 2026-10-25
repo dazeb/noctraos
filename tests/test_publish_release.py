@@ -84,7 +84,7 @@ def run(listing, remote_files=None, lsf_fail=False, edit=None, drop=False, corru
                "STUB_REMOTE": str(remote), "STUB_LOG": str(d / "log"), "STUB_REL": str(rel),
                "STUB_LSF_FAIL": "1" if lsf_fail else "", "STUB_CURL_DROP": "1" if drop else "", "STUB_CORRUPT": corrupt,
                "VERIFY_RETRY_DELAY": "0", "RELEASE_FLAVOURS": "zorin kubuntu" if notes is not None else "zorin",
-               **(extra_env or {})}
+               "RELEASE_STORE": "r2", "NOCTRAOS_S3_ENV_FILE": "/nonexistent", **(extra_env or {})}
         result = subprocess.run(["bash", str(SCRIPT), str(d / "build")], capture_output=True, text=True, env=env)
         log = (d / "log").read_text().splitlines() if (d / "log").exists() else []
         if notes is not None and (d / "log.notes").exists():
@@ -112,6 +112,14 @@ class PublishTests(unittest.TestCase):
         uploads = [line for line in log if not line.startswith("gh ")]
         self.assertTrue(all(u.startswith("hz:noctraos-releases/releases/") for u in uploads), uploads)
         self.assertIn("noctraos-releases.fsn1.your-objectstorage.com", result.stdout)
+
+    def test_hetzner_is_the_default_store(self):
+        env = {"RELEASE_STORE": "", "AWS_ACCESS_KEY_ID": "x", "AWS_SECRET_ACCESS_KEY": "x",
+               "R2_ACCESS_KEY_ID": "", "R2_SECRET_ACCESS_KEY": ""}
+        result, log = run("", extra_env=env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        uploads = [line for line in log if not line.startswith("gh ")]
+        self.assertTrue(all(u.startswith("hz:noctraos-releases/releases/") for u in uploads), uploads)
 
     def test_hetzner_store_without_credentials_stops(self):
         env = {"RELEASE_STORE": "hetzner", "NOCTRAOS_S3_ENV_FILE": "/nonexistent", "AWS_ACCESS_KEY_ID": "",
