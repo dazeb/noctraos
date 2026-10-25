@@ -33,7 +33,7 @@ import urllib.parse
 
 TRACKERS = ["http://tracker.opentrackr.org:1337/announce", "udp://tracker.opentrackr.org:1337/announce",
             "udp://open.demonii.com:1337/announce", "udp://tracker.openbittorrent.com:80/announce"]
-DOWNLOAD = "https://dl.noctraos.dev/releases"
+DOWNLOAD = "https://noctraos-releases.fsn1.your-objectstorage.com/releases"
 PLASMA_START = "<!-- kubuntu flavour: written by scripts/update-site-release.py -->"
 PLASMA_END = "<!-- /kubuntu flavour -->"
 LOGIN = ('<span class="login">Signs in automatically as <code>noctraos</code> (password <code>noctraos</code>). '

@@ -104,7 +104,7 @@ class UpdateSiteTests(unittest.TestCase):
                 self.assertIn(f"/releases/v9.8.7/kubuntu/{name}", section)
                 self.assertIn(f"SHA-256: {hashlib.sha256(data).hexdigest()}", section)
             self.assertIn("/releases/v9.8.7/kubuntu/SHA256SUMS", section)
-            self.assertIn("ws=https%3A%2F%2Fdl.noctraos.dev%2Freleases%2Fv9.8.7%2Fkubuntu%2Fnoctraos-9.8.7-kubuntu-amd64.iso", section)
+            self.assertIn("ws=https%3A%2F%2Fnoctraos-releases.fsn1.your-objectstorage.com%2Freleases%2Fv9.8.7%2Fkubuntu%2Fnoctraos-9.8.7-kubuntu-amd64.iso", section)
             self.assertIn("urn:btih:" + MODULE.infohash(kubuntu / "noctraos-9.8.7-kubuntu-amd64.iso.torrent"), section)
             # the GNOME magnet still points at the GNOME ISO, outside the section
             rest = page.replace(section, "")

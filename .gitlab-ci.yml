@@ -10,7 +10,7 @@
 #   release-build    ISO + appliance ISO, an unattended install in a KVM VM, first-boot provisioning,
 #                    `noc doctor`, sysprep, qcow2/vmdk export, torrent, SHA256SUMS, a boot test of the
 #                    exported disk. 45 to 90 minutes. Nothing is public yet.
-#   release-publish  upload to dl.noctraos.dev/releases/vX.Y.Z/, verify every file through the public
+#   release-publish  upload to the release store (Hetzner) under releases/vX.Y.Z/, verify every file through the public
 #                    hostname, create the GitHub release. Refuses a version that is already published.
 #   release-site     PR to GitHub main with the new download page, torrent, checksums and cards;
 #                    merging it is the deploy, because Cloudflare builds the site from GitHub main

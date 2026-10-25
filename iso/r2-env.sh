@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
-# r2-env.sh — rclone settings for the files.dazeb.dev / dl.noctraos.dev bucket. Sourced.
+# r2-env.sh — rclone settings for the release stores: Hetzner Object Storage (the default since 2026-10-25) and the
+# old Cloudflare R2 bucket (files.dazeb.dev / dl.noctraos.dev). Sourced.
 #
 #   r2_env      sets RCLONE_CONFIG_R2_* so `rclone ... r2:$R2_BUCKET/...` works; never prints a secret.
-#   store_env   picks the release store from RELEASE_STORE (r2, the default, or hetzner) and sets
+#   store_env   picks the release store from RELEASE_STORE (hetzner, the default, or r2) and sets
 #               STORE_REMOTE / STORE_BUCKET / STORE_PUBLIC_BASE for `rclone ... "$STORE_REMOTE:$STORE_BUCKET/..."`.
 #
 # hetzner = the noctraos-releases bucket on Hetzner Object Storage (Falkenstein, S3 API). Credentials come from
@@ -28,7 +29,7 @@ r2_env() {
 }
 
 store_env() {
-  case "${RELEASE_STORE:-r2}" in
+  case "${RELEASE_STORE:-hetzner}" in
     r2)
       r2_env || return 1
       STORE_REMOTE=r2 STORE_BUCKET="$R2_BUCKET"
@@ -50,7 +51,7 @@ store_env() {
       STORE_REMOTE=hz STORE_BUCKET="${NOCTRAOS_S3_BUCKET:-noctraos-releases}"
       STORE_PUBLIC_BASE="${RELEASE_PUBLIC_BASE:-https://$STORE_BUCKET.fsn1.your-objectstorage.com}"
       ;;
-    *) echo "RELEASE_STORE must be r2 or hetzner, not '${RELEASE_STORE}'" >&2; return 1 ;;
+    *) echo "RELEASE_STORE must be hetzner or r2, not '${RELEASE_STORE}'" >&2; return 1 ;;
   esac
   export STORE_REMOTE STORE_BUCKET STORE_PUBLIC_BASE
 }

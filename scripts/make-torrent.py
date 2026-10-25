@@ -4,7 +4,7 @@
     scripts/make-torrent.py <iso> <version> <out.torrent> [flavour]
 
 Same shape as every release so far: 4 MiB pieces, the four public trackers, and the ISO on
-dl.noctraos.dev as the web seed (so the torrent works before anyone is seeding). The torrent is named after the ISO;
+the Hetzner release bucket as the web seed (so the torrent works before anyone is seeding). The torrent is named after the ISO;
 a flavour other than zorin is served from its own folder, releases/v<version>/<flavour>/ (docs/flavours.md rule 8).
 """
 import os
@@ -25,7 +25,7 @@ def main():
     folder = f"v{version}" if flavour == "zorin" else f"v{version}/{flavour}"
     torrent = torf.Torrent(path=iso, trackers=TRACKERS, piece_size=4 * 1024 * 1024, private=False,
                            comment=f"Noctra OS {version} amd64 installer ISO - https://noctraos.dev",
-                           webseeds=[f"https://dl.noctraos.dev/releases/{folder}/{name}"],
+                           webseeds=[f"https://noctraos-releases.fsn1.your-objectstorage.com/releases/{folder}/{name}"],
                            created_by="noctraos release pipeline")
     torrent.name = name
     torrent.generate()

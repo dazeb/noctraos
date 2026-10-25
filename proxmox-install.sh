@@ -15,7 +15,7 @@
 set -Eeuo pipefail
 
 VERSION='0.5.0'
-BASE_URL="${NOCTRAOS_BASE_URL:-https://dl.noctraos.dev/releases/v$VERSION}"
+BASE_URL="${NOCTRAOS_BASE_URL:-https://noctraos-releases.fsn1.your-objectstorage.com/releases/v$VERSION}"
 IMAGE_FILE="noctraos-$VERSION.qcow2"
 ISO_FILE="noctraos-$VERSION-amd64.iso"
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# publish-release.sh — put a built release in the release store (dl.noctraos.dev, or Hetzner with RELEASE_STORE=hetzner) and create the GitHub release.
+# publish-release.sh — put a built release in the release store (Hetzner Object Storage by default, or the old R2 bucket with RELEASE_STORE=r2) and create the GitHub release.
 #
 #   iso/publish-release.sh <build-dir>
 #   RELEASE_FLAVOURS="zorin kubuntu" iso/publish-release.sh <build-dir>      (default: zorin)
@@ -18,7 +18,7 @@
 #     what a downloader gets (not what the bucket says it holds),
 #   - only after that creates one GitHub release for all flavours (links and checksums only: GitHub caps assets at 2 GiB).
 #
-# Store and credentials: see iso/r2-env.sh (RELEASE_STORE=r2 is the default). GitHub: an authenticated `gh` (or GH_TOKEN) that can create releases.
+# Store and credentials: see iso/r2-env.sh (RELEASE_STORE=hetzner is the default). GitHub: an authenticated `gh` (or GH_TOKEN) that can create releases.
 # Release notes: docs/release-notes/v<VERSION>.md is used when it exists (write the known issues
 # there before tagging), followed by the generated download tables and the commit list.
 set -Eeuo pipefail
