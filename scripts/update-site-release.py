@@ -194,6 +194,8 @@ def update(root, version, release, date, kubuntu=None):
 
     if old != version:
         html = version_strings(html)
+    # the GNOME rows were written by hand with the old host; downloads come from DOWNLOAD now
+    html = html.replace("https://dl.noctraos.dev/releases/", DOWNLOAD + "/")
     # file rows: <code>NAME</code> <span class="size">SIZE</span><span class="hash">SHA-256: HASH</span>
     for name, (size, digest) in files.items():
         html = sub_once(rf'(<code>{re.escape(name)}</code> <span class="size">)[^<]*(</span><span class="hash">SHA-256: )[0-9a-f]{{64}}',

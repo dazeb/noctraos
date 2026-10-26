@@ -85,6 +85,16 @@ class UpdateSiteTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 MODULE.update(root, "9.8.7", release, None)
 
+    def test_gnome_links_move_from_the_old_host_to_the_download_host(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root, release, _, _ = fixture(directory)
+            page = root / "site/download.html"
+            page.write_text(page.read_text().replace(MODULE.DOWNLOAD + "/", "https://dl.noctraos.dev/releases/"))
+            MODULE.update(root, "9.8.7", release, None)
+            text = page.read_text()
+            self.assertNotIn("dl.noctraos.dev", text)
+            self.assertIn(MODULE.DOWNLOAD + "/v9.8.7/noctraos-9.8.7-amd64.iso", text)
+
     def test_missing_release_file_is_an_error(self):
         with tempfile.TemporaryDirectory() as directory:
             root, release, _, _ = fixture(directory)
