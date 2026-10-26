@@ -175,7 +175,7 @@ iso/strip-census.sh         sourced by the build script: removes Zorin's census 
 iso/rebrand-labels.sh       sourced by the build script: user-facing Zorin names (About, sessions, banner, launchers, live user)
 iso/build-release.sh        release build: ISOs -> VM -> provisioned disk -> qcow2/vmdk/torrent/SHA256SUMS -> boot test (RELEASE_REHEARSAL=1 to try it);
                             NOCTRAOS_FLAVOUR=kubuntu builds the kubuntu flavour into release/vX-kubuntu (names noctraos-<v>-kubuntu-*)
-iso/publish-release.sh      upload to dl.noctraos.dev, verify through the public hostname, create the GitHub release; never overwrites a version;
+iso/publish-release.sh      upload to the release store (Hetzner), verify through the public hostname, create the GitHub release; never overwrites a version;
                             RELEASE_FLAVOURS="zorin kubuntu" (the CI's value) checks every flavour before any upload, kubuntu goes to releases/vX/kubuntu/
 iso/renew-update-channels.sh, setup-update-renewal.sh   weekly systemd user timer that re-signs the update manifests before
                             they expire (30 days); `setup-update-renewal.sh status` shows the real expiry of each channel
@@ -293,9 +293,11 @@ iso/vm-sysprep.sh           run inside a fully provisioned VM before exporting i
   `https://fsn1.your-objectstorage.com`, public base `https://noctraos-releases.fsn1.your-objectstorage.com`
   (anonymous GET and Range verified; the bucket root lists as 403). Credentials: `~/secrets/noctraos-s3.env`
   (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`), never print them. `iso/publish-release.sh` publishes there with
-  `RELEASE_STORE=hetzner` (default stays `r2` = dl.noctraos.dev); `store_env` in `iso/r2-env.sh` does the switch. The site,
-  `proxmox-install.sh` and `scripts/release-site-pr.sh` still point at `dl.noctraos.dev`, so a Hetzner-only publish is not
-  yet what downloaders get: moving the canonical URL (custom domain or a redirect) is a separate decision.
+  `RELEASE_STORE` (**hetzner is the default since 2026-10-25**; `r2` = dl.noctraos.dev only on request); `store_env` in `iso/r2-env.sh`
+  does the switch. Why: Cloudflare had started charging, and a download spike must cost euros (Hetzner lists about EUR 1 per TB of
+  egress beyond the 1 TB included), so the release downloads moved. The site, `proxmox-install.sh`, the torrent web seeds and
+  `scripts/release-site-pr.sh` use the bucket host `noctraos-releases.fsn1.your-objectstorage.com`; v0.4.0 and v0.5.0 were copied there
+  (sizes checked). Older versions and the update manifests' R2 mirror (`dl.noctraos.dev/updates`, tiny) are still on R2.
 - **Rolling updates of the NoctraOS layer** (built 2026-10-08, `docs/updates.md`): `noc update` step `noctraos` runs
   `/usr/local/libexec/noctraos/noc-selfupdate apply`. Rules: (1) the item list in `install/07_persistence.sh`, `BUNDLE_ITEMS`
   in `bin/noc-selfupdate` and `ITEMS` in `scripts/make-update.py` must stay equal (a test pins it), (2) migrations are

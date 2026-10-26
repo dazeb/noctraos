@@ -85,7 +85,7 @@ git push gitlab origin/main:refs/heads/main vX.Y.Z    # GitLab must have the com
 | job | what it does | public? |
 |---|---|---|
 | `release-build`, `release-build-kubuntu` | per flavour (zorin, then kubuntu, one VM at a time through the resource group): release ISO + appliance ISO (`iso/build-local.sh both`), unattended install in a KVM VM, first-boot provisioning, `noc doctor` must be clean, sysprep, qcow2 + vmdk export, torrent, `SHA256SUMS`, then a boot test of the exported disk (ssh, autologin session, new host key). 45 to 90 minutes. | no |
-| `release-publish` | checks every flavour first, then uploads zorin to `dl.noctraos.dev/releases/vX.Y.Z/` and kubuntu to `releases/vX.Y.Z/kubuntu/` (each SHA256SUMS last), streams every file back through the public hostname and compares SHA-256, creates one GitHub release with a section per flavour (links + checksums). Refuses a version already in the bucket. | **yes** |
+| `release-publish` | checks every flavour first, then uploads zorin to the release store (Hetzner, `releases/vX.Y.Z/`) and kubuntu to `releases/vX.Y.Z/kubuntu/` (each SHA256SUMS last), streams every file back through the public hostname and compares SHA-256, creates one GitHub release with a section per flavour (links + checksums). Refuses a version already in the bucket. | **yes** |
 | `release-site` | PR to GitHub `main` that updates `site/download.html`, `site/index.html`, the sitemap, `proxmox-install.sh`, the social cards and the torrent, merges it (Cloudflare then deploys the site from `main`) and waits until `noctraos.dev/download` shows the version. | yes |
 
 Everything is in `.gitlab-ci.yml`; the work is done by `iso/build-release.sh`, `iso/publish-release.sh` and
