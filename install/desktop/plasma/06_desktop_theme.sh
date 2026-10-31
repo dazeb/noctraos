@@ -42,7 +42,7 @@ for i in "$REPO_ROOT"/assets/icons/hermes/hicolor/*/apps/hermes.png; do
     || sudo install -D -m 644 "$i" "/usr/local/share/icons/hicolor/$size/apps/hermes.png"
 done
 sudo kbuildsycoca6 >/dev/null 2>&1 || as_user kbuildsycoca6 >/dev/null 2>&1 || true
-log "OK: Agents section (Hermes preinstalled by module 11, the other agents install on first use)"
+log "OK: Agents section (Hermes sets itself up when you ask for it, the other agents install on first use)"
 
 log "Installing the wallpaper set..."
 WALLPAPER_DIR="/usr/local/share/backgrounds/noctraos"

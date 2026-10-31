@@ -91,9 +91,10 @@ noc privacy clipboard clear   # empty the clipboard history
 noctraos-control  # the Control Panel: system state, mouse-driven (more pages coming)
 ```
 
-Hermes has its own launcher, also available from the Agents menu:
-`noctraos-hermes` (launch), `local` (local-only: Ollama primary, free tier off,
-persistent), `status`, `ready`, `install`.
+Hermes Desktop is optional and not part of the install (about 5 GB, a 25 to 40 minute build).
+Set it up from the Control Panel's Apps page, with `noc hermes setup`, or by opening the Hermes
+launcher, which asks first. It has its own launcher: `noctraos-hermes` (launch),
+`local` (local-only: Ollama primary, free tier off, persistent), `status`, `ready`, `install`.
 
 Agents are managed from the **Agents** menu; each CLI agent checks for its
 command and offers a one-click npm install the first time you use it (node comes
@@ -107,12 +108,13 @@ from mise).
   accepts any Ubuntu-based `/etc/os-release`.*
 - A user with sudo (headless/SSH runs need passwordless sudo or cached credentials)
 - ≥ 25 GB free disk (desktop apps + runtimes); a re-run of an already provisioned machine
-  needs only 8 GB. The Hermes Desktop build adds about 5 GB. Local models are optional
+  needs only 8 GB. Hermes Desktop, if you set it up later, adds about 5 GB. Local models are optional
   and need their own space (see `noc llm setup`): 16 GB RAM is recommended for 7B-class ones
 - Internet access (Ubuntu archive + Flathub + GitHub reachability is checked)
-- Setup takes roughly 25 to 40 minutes on first run; most of it is the Hermes Desktop (Electron)
-  build. The first run downloads no language model: the installer only installs what the desktop
-  needs. Local AI is a separate, optional step (`noc llm setup`)
+- Setup time depends on your connection (Flatpaks and desktop apps are downloaded). The Hermes
+  Desktop (Electron) build, 25 to 40 minutes, used to be part of it and is now optional
+  (`noc hermes setup`). The first run downloads no language model: the installer only installs
+  what the desktop needs. Local AI is a separate, optional step (`noc llm setup`)
 
 ## Configuration
 
@@ -128,7 +130,7 @@ Environment variables, all optional:
 | `NOCTRAOS_OLLAMA_URL` | `http://localhost:11434` | Endpoint used by the *Ask AI to Explain* script |
 
 Installer flags: `--skip-gui` (headless-ish: skips GUI apps, app policy, Nautilus
-scripts, themes, search, boot theme and Hermes), and `--only <module>` (run one
+scripts, themes, search and boot theme), and `--only <module>` (run one
 module with the full environment, then stop — e.g.
 `bash ~/.local/share/noctraos/install.sh --only 04d_appmanager.sh` to retry a
 flaky download). The optional local AI step is `--only optional/local_llm.sh`, which
@@ -286,10 +288,11 @@ upload, tag, website) are in the [release runbook](release-runbook.md).
   type the password.
 - **An agent isn't installed yet** — launch it from the Agents menu and accept
   the install prompt; it needs node (included) and internet.
-- **The Hermes buttons in the Welcome are disabled** — Hermes' runtime and desktop
-  app are still being built (25 to 40 minutes on first setup, last module).
-  `noctraos-hermes status` shows where it is; launching Hermes from the Agents
-  menu later installs whatever is missing.
+- **The Welcome offers "Set up Hermes…" instead of Meet Hermes** — Hermes Desktop is
+  optional and not installed until you ask for it. Press the button (it opens the
+  Control Panel's Apps page), or run `noc hermes setup`; opening the Hermes launcher
+  also offers it. `noctraos-hermes status` shows where a half-finished one is
+  (`noc repair hermes` finishes it).
 - **Hermes and privacy** — the local Ollama model never leaves the computer, but
   Hermes' free tier is a cloud service. For local-only use pick *Hermes, local only*
   in the Welcome, or run `noctraos-hermes local` (undo: `hermes config set model.provider auto`).

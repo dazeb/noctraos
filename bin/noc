@@ -7,6 +7,7 @@
 #   noc apps          tracked upstream apps (Hermes, Ollama, AppManager, coding agents): installed vs latest release  [--json] [--refresh]
 #                     | update [app,app]  (bring them to the newest release; Ollama and AppManager ask for sudo)
 #   noc repair        run again what `noc doctor` found missing: appmanager | vm-guest | hermes
+#   noc hermes        optional Hermes Desktop: setup (about 5 GB, 25 to 40 minutes; nothing installs it for you)
 #   noc privacy       what the installer arranged without asking: status [--json] | remote [on|off] | clipboard [clear] | hermes [status|local|cloud]
 #   noc doctor        health check of the whole stack  [--json]
 #   noc status        Overview data as JSON (versions, updates, Ollama, GPU, disk, Hermes)
@@ -393,11 +394,24 @@ repair_module() {
   esac
 }
 
+# Hermes Desktop is optional: nothing installs it on its own. `noc hermes setup` (the Apps page's Set up button) and
+# `noc repair hermes` (the Health page's Fix for a half-finished one) are the same, idempotent step.
+hermes_setup() {
+  have noctraos-hermes || { bad "noctraos-hermes is not installed on this system"; return 1; }
+  noctraos-hermes install
+}
+
+cmd_hermes() {
+  case "${1:-}" in
+    setup) hermes_setup ;;
+    *) echo "usage: noc hermes [setup]"; return 1 ;;
+  esac
+}
+
 cmd_repair() {
   local name="${1:-}" module
   if [ "$name" = hermes ]; then
-    have noctraos-hermes || { bad "noctraos-hermes is not installed on this system"; return 1; }
-    noctraos-hermes install
+    hermes_setup
     return
   fi
   if ! module="$(repair_module "$name")"; then echo "usage: noc repair [appmanager | vm-guest | hermes]"; return 1; fi
@@ -767,6 +781,9 @@ except (ValueError, TypeError):
     hs="$(noctraos-hermes status 2>/dev/null || true)"
     if printf '%s\n' "$hs" | grep '^runtime: ok' >/dev/null && printf '%s\n' "$hs" | grep '^app:     ok' >/dev/null; then
       chk ok hermes "Hermes Desktop" "installed ($(printf '%s\n' "$hs" | sed -n 's/^primary: //p'))"
+    elif printf '%s\n' "$hs" | grep '^runtime: missing' >/dev/null && printf '%s\n' "$hs" | grep '^app:     not built' >/dev/null; then
+      # Optional, like local AI: never set up is a choice, not a fault.
+      chk info hermes "Hermes Desktop" "not set up (optional: Control Panel, Apps page, or: noc hermes setup)"
     else
       chk warn hermes "Hermes Desktop" "not fully installed (run: noc repair hermes)" "hermes:install"
     fi
@@ -1091,7 +1108,7 @@ privacy_status() {
     cloud) text="Nous free tier (cloud): what you type leaves this computer" ;;
     local) text="local only" ;;
     other) text="your own provider" ;;
-    *) text="not installed" ;;
+    *) text="not set up (optional: noc hermes setup)" ;;
   esac
   printf '  %-16s %s\n' "Hermes" "$text"
   case "$remote" in
@@ -1222,7 +1239,7 @@ cmd_status() {
                                               disk_bytes:$dsk.disk_bytes, partition_bytes:$dsk.partition_bytes,
                                               needs_fdisk:($dsk.needs_fdisk // false)} end)),
       ram_gb:$ram,
-      hermes:{installed:$hready, mode:(if $hmode=="" then null else $hmode end)},
+      hermes:{installed:$hready, mode:(if $hmode=="" or $hmode=="none" then null else $hmode end)},
       apps:$apps, accounts:$accounts, skipped:$skipped,
       search_index_age_seconds:$idx}'
 }
@@ -1240,6 +1257,7 @@ main() {
     models) shift; cmd_models "$@" ;;
     llm)    shift; cmd_llm "$@" ;;
     repair) shift; cmd_repair "$@" ;;
+    hermes) shift; cmd_hermes "$@" ;;
     privacy) shift; cmd_privacy "$@" ;;
     bg)     shift; cmd_bg "$@" ;;
     disk)   shift; if [ -x "$DISKTOOL" ]; then exec "$DISKTOOL" "$@"; else bad "noc-disk not installed (re-run the installer)"; exit 1; fi ;;
@@ -1261,6 +1279,7 @@ main() {
       echo "  noc llm         optional local AI: setup (engine, no model) | fit (find a model that fits) | start | stop | autostart [on|off]"
       echo "  noc apps        Hermes, Ollama, AppManager and the coding agents: versions, update"
       echo "  noc repair      run again what noc doctor found missing (appmanager | vm-guest | hermes)"
+      echo "  noc hermes      optional Hermes Desktop: setup (about 5 GB, 25 to 40 minutes)"
       echo "  noc privacy     remote login, clipboard history, saved passwords, Hermes (status | remote | clipboard | hermes)"
       echo "  noc bg          cycle or set the wallpaper (list | next | set)"
       echo "  noc gpu         GPU setup for local LLMs (detect | install | status)"

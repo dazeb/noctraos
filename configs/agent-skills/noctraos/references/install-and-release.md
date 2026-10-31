@@ -25,7 +25,6 @@ Orchestrator: logging, `TARGET_USER` resolution, flags `--skip-gui`, `--only <mo
 | `desktop/gnome/09_super_search` | Shell extensions, search app, schemas, help page, index timer, autostarts |
 | `10_boot_theme` | Plymouth + GRUB for non-ISO installs |
 | `07_persistence` | `/etc/skel` defaults, `noc` + Control Panel + privileged helper + updater, root-owned snapshot |
-| `11_hermes` | Hermes Desktop (last; 25+ min) |
 | `optional/local_llm` | GPU stack, Ollama, LLMFIT; run by `noc llm setup` |
 | `03b_ollama_update` | Ollama to newest upstream (root, via panel) |
 
@@ -41,7 +40,7 @@ The first-boot runner fetches the latest provisioner **without needing git**: `g
 - On the Proxmox node (older flow): `iso/build-noctraos-iso.sh`, scratch on `/local-zfs` (HDD-backed, 35-45 min); do not build and run VMs there at once.
 - Release vs unattended: a release build has no seed, no password hash, no unattended entry (an unattended entry wipes the disk). `NOCTRAOS_UNATTENDED=1` + `NOCTRAOS_USER/PASSWORD` bake a seed (`iso/preseed/noctraos.seed.in`) and imply autologin + NOPASSWD sudo. Output is `noctraos-<VERSION>-amd64.iso`; VERSION must match `bin/noc`.
 - **Never repack the squashfs with `-all-root`**; the build checks the launch helper's group after unpacking and repacking. xorriso refuses a non-empty `-outdev`, so the script `rm -f`s the previous ISO (keep that line). The live boot verifies `/cdrom/md5sum.txt`; the build writes it after moving the new squashfs in. casper waits for "remove installation medium" unless the cmdline has `noprompt`. Unattended Ubiquity needs `ubiquity/download_updates`, `use_nonfree` and `no_zorin_os_census` preseeded.
-- `iso/vm-sysprep.sh` runs in a fully provisioned VM before exporting its disk (strips machine id, SSH host keys, Hermes identity/history, logs; refuses bare metal).
+- `iso/vm-sysprep.sh` runs in a fully provisioned VM before exporting its disk (strips machine id, SSH host keys, Hermes identity/history if any, logs; refuses bare metal).
 
 ## Release pipeline
 

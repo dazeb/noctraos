@@ -5,7 +5,8 @@
 #
 # Removes what must not ship in a shared image: machine identity, SSH host keys,
 # the per-user Hermes identity/history, shell history, logs and caches. Keeps the
-# installed system, the Ollama models and the Hermes runtime + app.
+# installed system and the Ollama models, and the Hermes runtime + app when the
+# VM has them (Hermes is optional, so a release image usually does not).
 #
 # DESTRUCTIVE to the VM's identity: do not run it on a machine you want to keep.
 #   sudo bash vm-sysprep.sh [username]        (default: noctraos)

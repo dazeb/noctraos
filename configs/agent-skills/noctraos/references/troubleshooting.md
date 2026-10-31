@@ -25,7 +25,7 @@ Start with `noc doctor` (`--json` for scripts). Rows are `ok`, `warn`, `fail` or
 - **"Authentication required" keyring prompt in Hermes/VS Code/browsers:** keyring already holds secrets so it was not reset; see [privacy-and-accounts](privacy-and-accounts.md).
 - **Hermes Desktop renders blank on a VM:** Electron needs `--no-sandbox --disable-dev-shm-usage` (wrapper seeds it when it detects a VM).
 - **`hermes update` fails with a tag:** it treats the tag as a branch; use `noctraos-hermes update`. An old Hermes tag fails with the current installer.
-- **A second `install.sh` fails the 25 GiB preflight** after Hermes' ~5 GiB build: run single modules (`install.sh --only <module>`) or grow the disk.
+- **A second `install.sh` fails the 25 GiB preflight** after Hermes' ~5 GiB build (only if the person set Hermes up): run single modules (`install.sh --only <module>`) or grow the disk.
 - **Preflight "Only N GiB free" on an enlarged VM disk:** use `noc disk grow` ([hardware](hardware.md)).
 - **`sudo -v` fails headless even with NOPASSWD:** the preflight uses `sudo -n true` first; keep that order.
 - **sudo credentials expire mid-run (~15 min):** interactive first boots block at the next prompt; autologin builds bake NOPASSWD.

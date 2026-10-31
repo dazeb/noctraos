@@ -12,6 +12,7 @@
 | `noc apps [--json] [--refresh]` / `noc apps update [app,app]` | Tracked upstream apps (Hermes, Ollama, AppManager, coding agents): installed vs newest release. Ollama and AppManager ask for sudo. |
 | `noc doctor [--json]` | Health check of the whole stack, problems first. |
 | `noc repair <appmanager\|vm-guest\|hermes>` | Re-run what `noc doctor` found missing. |
+| `noc hermes setup` | Set up Hermes Desktop (optional; about 5 GB and 25 to 40 minutes, no sudo). The Apps page's "Set up Hermes…" runs the same thing. |
 | `noc status` | Overview data as JSON (versions, updates, Ollama, GPU, disk, Hermes, `skipped`, `ollama.autostart`, `disk.can_grow`). |
 | `noc models list [--json] \| default [name] \| presets [--json] \| pull <model> \| rm <model>` | Local models. `default` writes `~/.config/noctraos/model`. |
 | `noc llm setup \| fit \| start \| stop \| autostart [on\|off]` | Optional local AI (see [local-ai](local-ai.md)). |

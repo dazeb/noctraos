@@ -2,20 +2,20 @@
 
 ## Hermes Desktop
 
-Preinstalled by `install/11_hermes.sh` (runs **last**; 25+ minutes, no sudo; builds the Electron app locally with `hermes desktop --build-only` because upstream disabled Linux desktop release builds; adds about 5 GiB). Launcher/installer: `noctraos-hermes`.
+**Optional: nothing installs it on its own** (decided 2026-10-11, "opt in for now"). Setting it up takes 25 to 40 minutes, needs no sudo, builds the Electron app locally with `hermes desktop --build-only` (upstream disabled Linux desktop release builds) and adds about 5 GiB, so it waits until the person asks: the Control Panel's Apps page ("Set up Hermes…", summary and a yes first), `noc hermes setup`, or opening Hermes from its launcher (asks `[y/N]` in a terminal window first). A machine that already has Hermes keeps it. Launcher/installer: `noctraos-hermes`. Only one install runs at a time (a lock in `$XDG_RUNTIME_DIR`; a second one exits 75), and it refuses when the disk has under about 7 GB free (`NOCTRAOS_HERMES_INSTALL_MIN_FREE_KB`). A finished install also links the NoctraOS skill into `~/.hermes/skills`.
 
 ```
-noctraos-hermes                  launch (installs first if missing)
+noctraos-hermes                  launch (asks first when Hermes is not set up yet, then installs)
 noctraos-hermes install          idempotent: runtime + desktop app + model defaults
 noctraos-hermes update           move to the newest release (old code restored on failure)
 noctraos-hermes local [--no-launch]   local-only: Ollama primary, Nous free tier off (persistent)
 noctraos-hermes cloud            back to the Nous free tier (never touches a provider the user set)
-noctraos-hermes mode             print cloud | local | other
+noctraos-hermes mode             print cloud | local | other | none (not set up)
 noctraos-hermes ready            exit 0 when runtime and desktop app are both built
 noctraos-hermes status
 ```
 
-`noc privacy hermes local|cloud|status` is the same switch with the panel's confirmation rules.
+`noc privacy hermes local|cloud|status` is the same switch with the panel's confirmation rules; before Hermes is set up it says so and changes nothing (`local` and `cloud` refuse with "run noc hermes setup"). `noc hermes setup` is the terminal form of the Apps page's "Set up Hermes…" and `noc repair hermes` re-runs it for a half-built install.
 
 ### Truths to keep straight
 

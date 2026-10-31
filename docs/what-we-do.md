@@ -19,13 +19,13 @@ When you install, NoctraOS prepares a complete AI workstation so you do not have
 - **The desktop.** The dark and amber theme, the dock and Start panel, and **Super + Space** search for apps, files, clipboard history and the web.
 - **The everyday apps.** A browser, office apps, media tools, a task manager, VS Code, and support for Flatpaks and AppImages.
 - **Node.js**, because the coding-agent launchers and Hermes Desktop need it, and terminal tools such as lazygit and Starship, through mise.
-- **Hermes Desktop**, an AI assistant that works on first launch. Its free tier is a cloud service, so what you type there leaves your computer. The Privacy page switches it to local only.
-- **Launchers for the coding agents** (Codex, Claude Code, OpenCode, Grok, Gemini CLI, Qwen Code) in the Start panel.
+- **Launchers for Hermes and the coding agents** (Hermes, Codex, Claude Code, OpenCode, Grok, Gemini CLI, Qwen Code) in the Start panel. They are launchers only: see below for what installing each one involves.
 - **Guest tools** when NoctraOS runs inside a virtual machine.
 - **A NoctraOS skill for your AI agents.** One folder of notes in `~/.agents/skills/noctraos` that tells Hermes, Codex and Claude Code how this computer works (the `noc` commands, updates, privacy, local AI), so they can help without guessing. It is only text: it changes no agent setting and signs in to nothing. Edit it and your copy is kept; `noc agent-skills remove` takes it away and keeps it off.
 
 ## What stays yours
 
+- **Hermes Desktop.** It is not part of the install: it adds about 5 GB and takes 25 to 40 minutes to build, so it is there when you want it and not before. Set it up from the Control Panel's Apps page ("Set up Hermes…", with a summary and a yes first), by opening the Hermes launcher (it asks first), or with `noc hermes setup`. Its free tier is a cloud service, so what you type there leaves your computer; the Privacy page switches it to local only. A computer that already has Hermes keeps it.
 - **The coding agents.** A launcher installs the program the first time you open it. Signing in, API keys, subscriptions and each tool's own settings are yours: we do not set them up, store them or manage them.
 - **Your languages.** Only Node.js is installed, because NoctraOS itself uses it. Python, Go and the rest are yours to add with mise (for example `mise use -g python@3.12`), so nothing you do not use sits on the disk.
 - **Your AI models.** No model is downloaded until you pick one on the AI models page.
@@ -43,7 +43,7 @@ A few things are on from the start. The Privacy page explains each one, and most
 | Remote login (an SSH server) | So you can reach the machine from another computer | Privacy page, or `noc privacy remote off` |
 | Clipboard history kept by CopyQ | Super + Space searches it | Privacy page, or `noc privacy clipboard clear` |
 | Saved passwords not locked by a password | You sign in automatically, so there is no password to unlock them with | Privacy page explains the trade-off |
-| Hermes uses the Nous cloud free tier | It works with no account | Privacy page, or `noc privacy hermes local` |
+| Hermes uses the Nous cloud free tier (once you have set Hermes up) | It works with no account | Privacy page, or `noc privacy hermes local` |
 
 ## Updates
 

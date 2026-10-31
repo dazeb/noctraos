@@ -918,7 +918,7 @@ class AppsPage(Page):
             text.add(label(row['detail'], 'muted', chars=70))
         box.pack_start(text, True, True, 0)
         if row['argv']:
-            update = button('Update', 'suggested', on_click=lambda *_: self.update(row))
+            update = button('Set up…' if row['setup'] else 'Update', 'suggested', on_click=lambda *_: self.update(row))
             self.buttons.append(update)
             box.pack_end(update, False, False, 0)
         return box
@@ -926,11 +926,12 @@ class AppsPage(Page):
     def update(self, row):
         if self.running or not row['argv']:
             return
+        verb = 'Set up' if row['setup'] else 'Update'
         if row['confirm']:
             dialog = Gtk.MessageDialog(transient_for=self.window, modal=True, message_type=Gtk.MessageType.QUESTION,
-                                       buttons=Gtk.ButtonsType.NONE, text=f'Update {row["title"]}?')
+                                       buttons=Gtk.ButtonsType.NONE, text=f'{verb} {row["title"]}?')
             dialog.format_secondary_text(row['confirm'])
-            dialog.add_buttons('Cancel', Gtk.ResponseType.CANCEL, 'Update', Gtk.ResponseType.OK)
+            dialog.add_buttons('Cancel', Gtk.ResponseType.CANCEL, verb, Gtk.ResponseType.OK)
             answer = dialog.run()
             dialog.destroy()
             if answer != Gtk.ResponseType.OK:
@@ -939,7 +940,7 @@ class AppsPage(Page):
         for b in self.buttons:
             b.set_sensitive(False)
         self.say(self.note, '')
-        self.run.begin(f'Updating {row["title"]}…')
+        self.run.begin(f'Setting up {row["title"]}…' if row['setup'] else f'Updating {row["title"]}…')
 
         def work():
             code = 1
@@ -963,10 +964,13 @@ class AppsPage(Page):
         problem = panel.exit_message(code)
         if problem:
             self.say(self.note, problem)
+        elif code == 0 and row['setup']:
+            self.say(self.note, f'{row["title"]} is ready. Open it from Start > Agents.')
         elif code == 0:
             self.say(self.note, f'{row["title"]} is up to date.')
         else:
-            self.say(self.note, f'{row["title"]} could not be updated. Open Show details next time for the reason.')
+            self.say(self.note, f'{row["title"]} could not be {"set up" if row["setup"] else "updated"}. '
+                                'Open Show details next time for the reason.')
         self.refresh(force=True)
 
 

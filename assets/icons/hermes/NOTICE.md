@@ -9,4 +9,4 @@ text is in that repository's `LICENSE` file.
 
 Installed system-wide by `install/desktop/gnome/06_desktop_theme.sh` so the Hermes launcher
 (`configs/applications/noctraos-hermes.desktop`, `Icon=hermes`) has its icon for every account,
-before and independent of the Hermes build in module 11.
+before and independent of Hermes being set up (it is optional: `noc hermes setup`).

@@ -162,7 +162,9 @@ some stock icons) are tracked in the coverage table in `theme-design.md`.
 - **Flatpak and AppImage first.** apt is for CLI tools, system tools and
   host-integration apps; the app set and the removals are in `install/04c_app_policy.sh`.
 - **Install only what NoctraOS itself needs.** Node.js is the one language (the coding-agent launchers and Hermes Desktop use it);
-  Python, Go and Ruby are not installed, and no local model is downloaded. The current images contain a deliberate workstation app selection
+  Python, Go and Ruby are not installed, and no local model is downloaded. Hermes Desktop (about 5 GB) is an option too: the Apps page, `noc hermes setup`, or the
+  Hermes launcher set it up when the person asks (decided 2026-10-11: "opt in for now"). Machines that already have it keep it.
+  The current images contain a deliberate workstation app selection
   (Flatpak and AppImage first). Full install and removal control for non-core components is not complete and remains on the
   [public roadmap](roadmap.md). People add their own languages with mise.
 - **Ollama starts with the computer only if the person turns that on.** The

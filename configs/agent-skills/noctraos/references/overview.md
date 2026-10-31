@@ -31,14 +31,14 @@ Vocabulary: **NoctraOS** is the product (never "Zorin edition"); **base** is Zor
 
 - The desktop: dark + amber theme, dock, Start panel, Super+Space search.
 - Everyday apps: browser, office, media, task manager, VS Code, Flatpak and AppImage support.
-- Node.js (agent launchers and the Hermes build need it) plus terminal tools via mise (Starship, lazygit, lazydocker, Herdr).
-- Hermes Desktop (free Nous tier, which is a cloud service) with a local Ollama fallback.
+- Node.js (agent launchers and the optional Hermes build need it) plus terminal tools via mise (Starship, lazygit, lazydocker, Herdr).
 - Launchers for the coding agents (Codex, Claude Code, OpenCode, Grok, Gemini CLI, Qwen Code).
 - VM guest tools when running inside a virtual machine.
 - The `noc` CLI and the Control Panel.
 
 ## What stays yours
 
+- **Hermes Desktop.** Not in the install (about 5 GB, 25 to 40 minutes to build). Set up from the Apps page, `noc hermes setup`, or by opening the Hermes launcher, which asks first. A machine that already has it keeps it.
 - **Coding agents' sign-ins, API keys, subscriptions and settings.** A launcher installs the program on first use; nothing else.
 - **Languages.** Only Node. Python, Go etc. are added with `mise use -g python@3.12`.
 - **AI models.** None is downloaded until the person picks one.
@@ -54,6 +54,6 @@ Vocabulary: **NoctraOS** is the product (never "Zorin edition"); **base** is Zor
 | Remote login (SSH server) | `noc privacy remote off` |
 | Clipboard history (CopyQ) | `noc privacy clipboard clear` |
 | Saved passwords not locked by a password (autologin keyring) | Privacy page explains the trade-off |
-| Hermes on the Nous cloud free tier | `noc privacy hermes local` |
+| Hermes on the Nous cloud free tier (once Hermes is set up) | `noc privacy hermes local` |
 
 User-facing statement of all this: repo `docs/what-we-do.md`. Keep it and `docs/objectives.md` principle 6 current when a default changes.

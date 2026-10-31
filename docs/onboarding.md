@@ -17,8 +17,8 @@ provisioning: a new extension loads at the next login on Wayland) the shortcut s
 and does not gate the tour, and the welcome comes back once at the next login instead of
 retiring itself. The AI screen separates the local model from Hermes and states that Hermes'
 free tier runs on Nous Research's servers, with a local-only button
-(`noctraos-hermes local`); both Hermes buttons stay disabled until the Hermes build
-(module 11) has finished. Goals come from [objectives.md](objectives.md): put **Super+Space**
+(`noctraos-hermes local`); Hermes is optional, so until it has been set up (Control Panel, Apps
+page, about 5 GB) that section offers only "Set up Hermes…", which opens the Apps page. Goals come from [objectives.md](objectives.md): put **Super+Space**
 front and center, without a terminal, without a lecture.
 
 ## Why this matters now
@@ -112,7 +112,7 @@ Onboarding screen 2/3 should not mention it, and must not depend on it.
 3. **Languages.** Copy is English only for now.
 4. **Provisioning offline.** The "full ISO" goal means the model and runtimes
    should eventually be baked in (the Hermes Desktop build alone is 25 to 40
-   minutes), which would shorten or remove the waiting period this design uses.
+   minutes, but it is optional now and no longer part of the first run), which would shorten or remove the waiting period this design uses.
    The welcome flow still stands without it.
 
 ## Shortcut audit (VM 114, 2026-10-04)
