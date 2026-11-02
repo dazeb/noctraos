@@ -37,8 +37,11 @@ OLLAMA_MODEL="${OLLAMA_MODEL:-qwen2.5-coder:7b}"
 INSTALLER_URL="${NOCTRAOS_HERMES_INSTALLER_URL:-https://hermes-agent.nousresearch.com/install.sh}"
 NOC_UPSTREAM="${NOC_UPSTREAM:-/usr/local/bin/noc-upstream}"
 AGENT_SKILLS="${NOC_AGENT_SKILLS:-/usr/local/bin/noc-agent-skills}"
-# Two installers at once would build into the same directory: the lock lives outside ~/.hermes, which the installer owns.
-INSTALL_LOCK="${XDG_RUNTIME_DIR:-/tmp}/noctraos-hermes-$(id -u).lock"
+# Two installers at once would build into the same directory. The lock lives in the person's own state directory: never a
+# shared one like /tmp, where another account could plant a symlink at the predictable name and the open below would
+# truncate whatever it points at. It stays outside ~/.hermes, which the installer owns.
+STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/noctraos"
+INSTALL_LOCK="$STATE_DIR/hermes-install.lock"
 NOUS_URL="https://portal.nousresearch.com"
 ONBOARD_FILE="${NOCTRAOS_HERMES_ONBOARDING:-/usr/local/share/noctraos/hermes/onboarding.md}"
 ONBOARD_DONE="$HERMES_HOME/.noctraos-onboarded"
@@ -234,6 +237,7 @@ enough_room_to_install() {
 
 cmd_install() {
   local rc=0
+  mkdir -p -m 700 "$STATE_DIR" 2>/dev/null || true
   if { exec 9>"$INSTALL_LOCK"; } 2>/dev/null; then
     flock -n 9 || { exec 9>&-; say "Hermes is already being set up in another window. Wait for that to finish."; return 75; }
   else
