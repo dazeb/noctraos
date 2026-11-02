@@ -692,7 +692,7 @@ tail -f /root/noctraos-build.log
   Panel's Apps page ("Set up Hermes…": a summary of the size, the time and the cloud free tier, and a yes first), or by opening Hermes from its launcher
   (the Agents menu entry or the pinned icon; on GNOME that is the Start panel), which asks `[y/N]` in a terminal window it opens itself
   (gnome-terminal, else Konsole, else x-terminal-emulator; none found prints `noc hermes setup`) before downloading anything. All three end in `noctraos-hermes install`, which
-  holds a lock (`$XDG_RUNTIME_DIR/noctraos-hermes-<uid>.lock`, released before `launch` execs Hermes) so two windows never build at once, refuses under 7 GB free whenever the runtime or the app is missing, and links the
+  holds a lock (`~/.local/state/noctraos/hermes-install.lock`, never a shared directory like `/tmp`, and released before `launch` execs Hermes) so two windows never build at once, refuses under 7 GB free whenever the runtime or the app is missing, and links the
   NoctraOS agent skill (`noc-agent-skills install`) once Hermes exists. Until then `noctraos-hermes mode` prints `none`, `local` and `cloud`
   refuse, `noc status --json` has `hermes.installed: false, mode: null`, `noc doctor` shows `info` (never `warn`) when neither the runtime nor
   the app exist and the Overview/Privacy/checklist point at the Apps page (`waiting`, no skip button); the Welcome app shows only "Set up

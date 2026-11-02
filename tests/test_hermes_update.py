@@ -60,6 +60,7 @@ class HermesBox(unittest.TestCase):
         self.home = self.tmp / "home"
         self.hh = self.home / ".hermes"
         self.bin = self.tmp / "bin"
+        self.lock = self.home / ".local/state/noctraos/hermes-install.lock"     # never a shared directory like /tmp
         for d in (self.home / ".local/bin", self.hh, self.bin):
             d.mkdir(parents=True)
         self.script(self.home / ".local/bin/hermes", HERMES_STUB)
@@ -199,7 +200,8 @@ class OptionalInstallTests(HermesBox):
         self.assertEqual(self.installs(), [])
 
     def test_two_installs_never_run_at_once(self):
-        lock = self.tmp / "run" / f"noctraos-hermes-{os.getuid()}.lock"
+        lock = self.lock
+        lock.parent.mkdir(parents=True, exist_ok=True)
         with open(lock, "w") as held:
             fcntl.flock(held, fcntl.LOCK_EX | fcntl.LOCK_NB)             # another window is in the middle of the setup
             r = self.hermes("install")
@@ -208,8 +210,27 @@ class OptionalInstallTests(HermesBox):
         self.assertEqual(self.installs(), [])
         self.assertEqual(self.hermes("install").returncode, 0)           # once it has finished, the next one runs
 
+    def test_a_planted_symlink_at_the_old_shared_lock_path_truncates_nothing(self):
+        """A predictable lock file in a world-writable directory is a truncation primitive: another account plants a
+        symlink at the name and the install's `exec 9>` wipes whatever it points at. The lock lives in the person's own
+        state directory, so the planted link is never opened. This fails if the lock goes back to /tmp."""
+        victim = self.tmp / "victim"
+        victim.write_text("keep me\n")
+        planted = Path("/tmp") / f"noctraos-hermes-{os.getuid()}.lock"        # where the lock used to be
+        if planted.exists() or planted.is_symlink():
+            self.skipTest(f"{planted} already exists on this machine")
+        planted.symlink_to(victim)
+        self.addCleanup(lambda: planted.unlink(missing_ok=True))
+        r = self.hermes("install", NOCTRAOS_HERMES_INSTALL_MIN_FREE_KB="999999999999",   # stops after the lock is opened
+                        XDG_RUNTIME_DIR="")                                              # and with no per-session dir
+        self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
+        self.assertEqual(victim.read_text(), "keep me\n", "the install followed a planted symlink and truncated a file")
+        self.assertTrue(self.lock.exists(), "the install lock is not in the person's state directory")
+
     def test_an_install_lock_that_cannot_be_created_is_said_and_does_not_stop_the_install(self):
-        r = self.hermes("install", XDG_RUNTIME_DIR=str(self.tmp / "no-such-dir"))
+        blocked = self.tmp / "blocked"
+        blocked.write_text("not a directory\n")                              # ~/.local/state cannot be created under this
+        r = self.hermes("install", XDG_STATE_HOME=str(blocked / "state"))
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         self.assertIn("could not create the install lock", r.stdout)
         self.assertNotIn("Bad file descriptor", r.stdout + r.stderr)
@@ -253,7 +274,7 @@ class OptionalInstallTests(HermesBox):
         self.assertEqual(self.installs(), ["--skip-setup --branch v0.21.7"])
 
     def test_the_setup_lock_is_released_before_hermes_starts(self):
-        probe = self.tmp / "run" / f"noctraos-hermes-{os.getuid()}.lock"        # what the app asks: is the setup lock free?
+        probe = self.lock        # what the app asks: is the setup lock free?
         self.env["LOCK_PROBE"] = str(probe)
         code, out = self.launch_in_a_terminal("y\n")
         self.assertEqual(code, 0, out)
