@@ -1,0 +1,104 @@
+file	line	token	text
+install/06_desktop_theme.sh	2	Zorin.	# Module 06: desktop customization — Windows/KDE ergonomics on Zorin.
+install/06_desktop_theme.sh	23	zorin-menu.desktop	zorin-menu.desktop
+install/01_system.sh	33	Zorin	# Optional packages whose names vary across Zorin/Ubuntu releases.
+install/04c_app_policy.sh	38	Zorin	# (gnome-shell itself, not its extensions: the Zorin Connect extension may go, but the
+install/04c_app_policy.sh	40	zorin-os	PROTECTED_RE='^(zorin-os|ubuntu-desktop|ubuntu-standard|ubuntu-minimal|gdm3|nautilus|gnome-control-center|network-manager|systemd|xorg|xserver|plymouth|grub|sud
+install/04c_app_policy.sh	50	zorin-os-something	# zorin-os-something and still be fine to remove. Simulate first: "Remv <pkg> ..." lines are
+install/04c_app_policy.sh	107	Zorin	# Zorin's. Removing Appearance also takes its two "layouts" packages; the menu, taskbar
+install/04c_app_policy.sh	112	zorin-appearance	zorin-appearance zorin-connect webapp-manager \
+install/04c_app_policy.sh	113	zorin-windows-app-support-installation-shortcut	zorin-windows-app-support-installation-shortcut neovim neovim-runtime \
+install/04c_app_policy.sh	114	zorin-gnome-tour-autostart	zorin-gnome-tour-autostart zorin-os-tour-video zorin-os-census
+install/04c_app_policy.sh	116	Zorin	# Zorin's census cron job reports the account count, an install id and the OS version to
+install/04c_app_policy.sh	118	Zorin.	# (iso/strip-census.sh); this covers a machine that took the one-liner on an existing Zorin.
+install/04c_app_policy.sh	120	zorin-os-census	sudo rm -f /etc/cron.daily/zorin-os-census /etc/cron.hourly/zorin-os-census
+install/04c_app_policy.sh	122	Zorin	# Zorin's first-login "Welcome to Zorin OS" tour (GNOME Tour) is started from a per-user
+install/04c_app_policy.sh	125	zorin-gnome-tour-autostart.desktop	for f in /etc/skel/.config/autostart/zorin-gnome-tour-autostart.desktop \
+install/04c_app_policy.sh	126	zorin-gnome-tour-autostart.desktop	"$TARGET_HOME/.config/autostart/zorin-gnome-tour-autostart.desktop"; do
+install/04c_app_policy.sh	130	Zorin	# Vim is the exception: vim-common/vim-tiny are depended on by Zorin's zorin-os-minimal
+install/04c_app_policy.sh	149	zorin.desktop.upgrader.desktop	com.zorin.desktop.upgrader.desktop                # "Upgrade Zorin OS": not our upgrade path
+install/04c_app_policy.sh	152	zorin-appearance.desktop	zorin-appearance.desktop zorin-connect.desktop install-zorin-windows-app-support.desktop
+install/10_boot_theme.sh	4	Zorin	# came from somewhere else (stock Zorin + install.sh) to the same state.
+install/10_boot_theme.sh	28	Zorin	# Priority above Zorin's 200 so the alternative resolves to ours in auto mode;
+install/00_preflight.sh	26	zorin	zorin|ubuntu) os_ok=1 ;;
+install/00_preflight.sh	33	Zorin	die "Unsupported OS: ${PRETTY_NAME:-unknown}. Zorin OS or an Ubuntu-based system is required."
+install/04_workstation_apps.sh	9	Zorin	# Keep this list to packages from the Ubuntu/Zorin archive. Check each package
+install/08_shell_theme.sh	7	ZorinBlue-Dark	BASE_THEME="/usr/share/themes/ZorinBlue-Dark"
+install/08_shell_theme.sh	8	ZorinPurple-Dark	BASE_GTK_THEME="/usr/share/themes/ZorinPurple-Dark"
+install/08_shell_theme.sh	48	Zorin	# Neutral grey icons: Zorin's own ZorinGrey-Dark, plus a small derived theme that
+install/08_shell_theme.sh	50	ZorinGrey-Dark	if [ -d /usr/share/icons/ZorinGrey-Dark ]; then
+install/08_shell_theme.sh	60	ZorinGrey-Dark	warn "ZorinGrey-Dark icon theme not found — icons left as is"
+install/08_shell_theme.sh	78	ZorinBlue-Dark	warn "ZorinBlue-Dark shell CSS not found — shell reskin skipped"
+branding/setup-branding.py	56	zorin-taskbar	schema = Gio.SettingsSchemaSource.get_default().lookup('org.gnome.shell.extensions.zorin-taskbar', True)
+branding/setup-branding.py	62	Zorin	# Zorin's supported scale is 5 px per step; 0 uses the rounder stock theme.
+configs/theme/gnome-shell.css	2	Zorin	* Applied after the installed Zorin shell stylesheet. */
+configs/theme/gnome-shell.css	60	Zorin	/* Installed Zorin Menu/Taskbar extensions add their own stylesheets. */
+configs/theme/gnome-shell.css	61	zorin-menu	.zorin-menu .grid-layout-box .app-item,
+configs/theme/gnome-shell.css	62	zorin-menu	.zorin-menu .session-buttons-section .system-menu-action {
+configs/theme/gnome-shell.css	66	zorin-menu	.zorin-menu .grid-layout-box .app-item:hover,
+configs/theme/gnome-shell.css	67	zorin-menu	.zorin-menu .session-buttons-section .system-menu-action:hover,
+configs/theme/gnome-shell.css	68	zorin-menu	.zorin-menu .session-buttons-section .system-menu-action:focus {
+configs/theme/gnome-shell.css	71	zorin-menu	.zorin-menu .vertical-separator { border-color: #333333; }
+configs/theme/gnome-shell.css	72	zorintaskbarMainPanel	.zorintaskbarMainPanel { background-color: #0d0d0d; color: #bebebe; }
+configs/theme/gnome-shell.css	73	zorintaskbarThumbnailList	#zorintaskbarThumbnailList .popup-menu-item { border-radius: 0px; }
+configs/theme/gnome-shell.css	74	zorintaskbarThumbnailList	#zorintaskbarThumbnailList .window-box { background-color: #1e1e1e; }
+configs/theme/index.theme	8	ZorinPurple-Dark	IconTheme=ZorinPurple-Dark
+configs/theme/gnome-shell.css.in	2	Zorin	* Applied after the installed Zorin shell stylesheet. */
+configs/theme/gnome-shell.css.in	60	Zorin	/* Installed Zorin Menu/Taskbar extensions add their own stylesheets. */
+configs/theme/gnome-shell.css.in	61	zorin-menu	.zorin-menu .grid-layout-box .app-item,
+configs/theme/gnome-shell.css.in	62	zorin-menu	.zorin-menu .session-buttons-section .system-menu-action {
+configs/theme/gnome-shell.css.in	66	zorin-menu	.zorin-menu .grid-layout-box .app-item:hover,
+configs/theme/gnome-shell.css.in	67	zorin-menu	.zorin-menu .session-buttons-section .system-menu-action:hover,
+configs/theme/gnome-shell.css.in	68	zorin-menu	.zorin-menu .session-buttons-section .system-menu-action:focus {
+configs/theme/gnome-shell.css.in	71	zorin-menu	.zorin-menu .vertical-separator { border-color: $border; }
+configs/theme/gnome-shell.css.in	72	zorintaskbarMainPanel	.zorintaskbarMainPanel { background-color: $panel; color: $foreground; }
+configs/theme/gnome-shell.css.in	73	zorintaskbarThumbnailList	#zorintaskbarThumbnailList .popup-menu-item { border-radius: ${radius}px; }
+configs/theme/gnome-shell.css.in	74	zorintaskbarThumbnailList	#zorintaskbarThumbnailList .window-box { background-color: $raised; }
+scripts/build-desktop-theme.py	2	Zorin	"""Compose an installed Zorin theme and our overrides, writing only changes."""
+scripts/build-desktop-theme.py	74	Zorin	# longhands (Zorin rounds a headerbar with `border-top-left-radius`). Keep small radii.
+iso/build-release.sh	7	Zorin-OS-18.1-Core-64-bit.iso	# <build-dir> is the iso/build-local.sh directory (it must hold in/Zorin-OS-18.1-Core-64-bit.iso).
+iso/build-release.sh	54	Zorin-OS-18.1-Core-64-bit.iso	[ -f "$DIR/in/Zorin-OS-18.1-Core-64-bit.iso" ] || { echo "missing $DIR/in/Zorin-OS-18.1-Core-64-bit.iso (the base ISO)" >&2; exit 1; }
+iso/initrd-theme.py	83	zorin-logo	if stale.startswith("zorin-logo")
+iso/build-nightly.sh	8	Zorin-OS-18.1-Core-64-bit.iso	# <build-dir> is the iso/build-local.sh directory (it must hold in/Zorin-OS-18.1-Core-64-bit.iso).
+iso/setup-release-runner.sh	64	Zorin	check "base Zorin ISO in $BUILD_DIR/in" "test -f $BUILD_DIR/in/Zorin-OS-18.1-Core-64-bit.iso" "install seeds it from an earlier build dir if it can find one"
+iso/setup-release-runner.sh	72	Zorin-OS-18.1-Core-64-bit.iso	if [ ! -f "$BUILD_DIR/in/Zorin-OS-18.1-Core-64-bit.iso" ]; then
+iso/setup-release-runner.sh	74	Zorin-OS-18.1-Core-64-bit.iso	if [ -n "$seed" ]; then say "seeding the base ISO from $seed"; cp "$seed" "$BUILD_DIR/in/"; else say "NOTE: put Zorin-OS-18.1-Core-64-bit.iso in $BUILD_DIR/in/ 
+iso/rebrand-labels.sh	10	zorin	# user name. What deliberately does NOT change: `ID=zorin` and `ID_LIKE` in os-release and
+iso/rebrand-labels.sh	11	Zorin	# `DISTRIB_ID` in lsb-release (Zorin's and Ubuntu's own tools key on them), the apt
+iso/rebrand-labels.sh	12	zorin	# origins, package names and the `:zorin` gsettings groups.
+iso/rebrand-labels.sh	66	zorin	.replace('USERNAME="zorin"', 'USERNAME="live"')
+iso/rebrand-labels.sh	72	zorin.desktop	for rel in ("usr/share/wayland-sessions/zorin.desktop", "usr/share/wayland-sessions/zorin-wayland.desktop",
+iso/rebrand-labels.sh	73	zorin.desktop	"usr/share/xsessions/zorin.desktop", "usr/share/xsessions/zorin-xorg.desktop")
+iso/rebrand-labels.sh	79	zorin.desktop.upgrader	for name in ("com.zorin.desktop.upgrader", "zorin-appearance", "zorin-connect",
+iso/rebrand-labels.sh	80	zorin-windows-app-support	"install-zorin-windows-app-support")
+iso/rebrand-labels.sh	87	Zorin	# Settings > Background lists wallpapers named after Zorin; leave the photographs, drop the
+iso/rebrand-labels.sh	88	Zorin	# "Zorin ..." entries, and add ours.
+iso/rebrand-labels.sh	91	Zorin	new = re.sub(r"\s*<wallpaper(?: [^>]*)?>(?:(?!</wallpaper>).)*?<name>Zorin[^<]*</name>.*?</wallpaper>",
+iso/rebrand-labels.sh	109	Zorin	# Zorin's first-login tour ("Welcome to Zorin OS") would open on top of our own welcome; module 04c
+iso/rebrand-labels.sh	111	zorin-gnome-tour-autostart.desktop	rm -f "$root/etc/skel/.config/autostart/zorin-gnome-tour-autostart.desktop"
+iso/rebrand-labels.sh	116	Zorin	# The Start button of Zorin's menu extension draws zorin-icon-symbolic.svg from its own folder.
+iso/rebrand-labels.sh	119	zorin-menu	local menu="$root/usr/share/gnome-shell/extensions/zorin-menu@zorinos.com"
+iso/rebrand-labels.sh	120	zorin-icon-symbolic.svg	[ -f "$menu/zorin-icon-symbolic.svg" ] || { echo "rebrand: zorin-menu icon not found" >&2; return 1; }
+iso/rebrand-labels.sh	121	zorin-icon-symbolic.svg	install -m 644 "$f" "$menu/zorin-icon-symbolic.svg"
+iso/build-local.sh	8	Zorin-OS-18.1-Core-64-bit.iso	#   in/Zorin-OS-18.1-Core-64-bit.iso   the base ISO. Put it there once (the Proxmox node has a copy
+iso/build-local.sh	32	Zorin-OS-18.1-Core-64-bit.iso	BASE="Zorin-OS-18.1-Core-64-bit.iso"
+iso/build-local.sh	81	Zorin-OS-18.1-Core-64-bit.iso	BASE=/host/in/Zorin-OS-18.1-Core-64-bit.iso
+iso/boot-theme.sh	21	zorin	# Stock cfg: `set theme=/boot/grub/themes/zorin/theme.txt` inside the loadfont branch.
+iso/boot-theme.sh	70	Zorin	# Installer slideshow: one dark slide that teaches Super+Space, replacing Zorin's.
+iso/boot-theme.sh	83	Zorin	# Live session and installer: dark grey instead of Zorin's light blue.
+iso/boot-theme.sh	87	Zorin	# Zorin sets its theme keys in `:zorin` session groups, which beat plain groups, so
+iso/boot-theme.sh	90	zorin	[org.gnome.desktop.interface:zorin]
+iso/boot-theme.sh	91	ZorinGrey-Dark	gtk-theme = 'ZorinGrey-Dark'
+iso/boot-theme.sh	92	ZorinGrey-Dark	icon-theme = 'ZorinGrey-Dark'
+iso/boot-theme.sh	97	zorin	[org.gnome.shell.extensions.user-theme:zorin]
+iso/boot-theme.sh	98	ZorinGrey-Dark	name = 'ZorinGrey-Dark'
+iso/boot-theme.sh	101	ZorinGrey-Dark	theme = 'ZorinGrey-Dark'
+iso/boot-theme.sh	108	Zorin	# by which time Software Updater has already read first-run=true and shown "Zorin OS ...".
+iso/strip-census.sh	2	Zorin	# strip-census.sh — takes Zorin's usage census out of the installer and the installed system.
+iso/strip-census.sh	7	Zorin	# Zorin OS counts installs: the zorin-os-census package ships a cron job that posts the
+iso/strip-census.sh	8	zorinos.com	# number of user accounts, an install id and the OS version to census.zorinos.com, and the
+iso/strip-census.sh	11	zorin-os-census	#   - the installer always takes zorin-os-census out of the target (the three places that
+iso/strip-census.sh	24	zorin_os_census	check = re.compile(r"if self\.db\.get\('ubiquity/no_zorin_os_census'\) == 'true':")
+iso/strip-census.sh	42	zorin-os-census	for cron in etc/cron.daily/zorin-os-census etc/cron.hourly/zorin-os-census; do
+iso/strip-census.sh	45	zorin-os-census	rm -rf "$root/var/lib/zorin-os-census"
+control/pages.py	1186	Zorin	self.pack_start(label('Built on Zorin OS, which is built on Ubuntu.', 'muted'), False, False, 0)

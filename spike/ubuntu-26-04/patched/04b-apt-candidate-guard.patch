@@ -1,0 +1,16 @@
+--- a/install/04_workstation_apps.sh
++++ b/install/04_workstation_apps.sh
+@@ -20,8 +20,11 @@
+ )
+ missing=()
+ for package in "${APT_APPS[@]}"; do
+-  if ! apt-cache show "$package" >/dev/null 2>&1; then
+-    warn "Ubuntu package unavailable: $package"
++  # "apt-cache show" succeeds for packages with no installable candidate (e.g. tldr on 26.04,
++  # where tealdeer is the replacement), and one such name aborts the whole apt-get install.
++  candidate="$(apt-cache policy "$package" 2>/dev/null | awk '/^ *Candidate:/ {print $2}')"
++  if [ -z "$candidate" ] || [ "$candidate" = "(none)" ]; then
++    warn "Ubuntu package unavailable (no installable candidate): $package"
+   elif dpkg-query -W -f='${Status}' "$package" 2>/dev/null | grep -Fx 'install ok installed' >/dev/null; then
+     log "OK: $package already installed"
+   else
